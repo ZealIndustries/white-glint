@@ -1,0 +1,150 @@
+<!-- Copyright 2008-2010 StatusNet Inc. and contributors. -->
+<!-- Document licensed under Creative Commons Attribution 3.0 Unported. See -->
+<!-- http://creativecommons.org/licenses/by/3.0/ for details. -->
+
+These are some *Frequently Asked Questions* about this service, with
+some answers.
+
+Using the site
+--------------
+
+### How do I reply to/favorite a post?/What are those black bars in other people's posts? ###
+
+In the bottom-right corner of every post is a set of buttons allowing various operations to be performed 
+on each post. Here is a list of each button, from left to right, as well as the function each is used for.
+
+<a style="font-family: FontAwesome;font-size: 14px">&#xf084;</a> **Decode spoilers**  
+Toggles the appearance of the black bars, or spoilers, in notices, to show what is hidden in them. If there are 
+no spoilers in a notice, this button runs the entire notice text through an [ROT13](http://en.wikipedia.org/wiki/ROT13) 
+filter, which is useful for decoding spoilers in old notices made before the spoiler tags existed.
+
+<a style="font-family: FontAwesome;font-size: 14px">&#xf004;</a> **Favorite this notice**  
+Adds the notice to your list of favorite notices. This also sends an e-mail to the author of the notice, if they 
+have the option enabled. Notices that acquire a lot of favorites in a short time go to the Popular Notices section 
+of the public timeline.
+
+<a style="font-family: FontAwesome;font-size: 16px;display: inline-block;margin-left: 4px;transform:rotate(90deg);-moz-transform:rotate(90deg);-webkit-transform:rotate(90deg);-o-transform:rotate(90deg);-ms-transform:rotate(90deg)">&#xf149;</a> **Reply to this notice**  
+Begins a reply to the notice in question. Replies are linked back to their parent notice, and allow other users to 
+browse the conversation easily at a later date.
+
+<a style="font-family: FontAwesome;font-size: 14px">&#xf079;</a> **Repeat this notice** (only appears on other users' public notices)  
+Reposts the notice, with attribution, to your profile. This also brings the entire conversation to the top of any timeline in 
+which it, as well as your notices, appears. For users who have threaded timelines [disabled](%%action.oldschoolsettings%%), it will duplicate 
+the original notice to any timeline in which your posts appear.
+
+<a style="font-family: FontAwesome;font-size: 14px">&#xf014;</a> **Delete this notice** (only appears on your notices)  
+Removes the notice from the site. Deleting a notice cannot be undone.
+
+### What are those buttons along the top of the page for? ###
+
+Those allow you to access various useful pages around the site. In order, from left to right:
+
+<span style="font-family: FontAwesome;font-size: 16px">&#xf015;</span> **Personal timeline**  
+Your own personal timeline, comprised of people and tags you've subscribed to, groups you are a member of, and conversations you participate in.
+
+<span style="font-family: FontAwesome;font-size: 16px">&#xf06e;</span> **Watched**  
+Drops down to a list of everything you follow: groups, lists, searches, and tags.
+
+<span style="font-family: FontAwesome;font-size: 16px">&#xf112;</span> **Replies**  
+A list of replies by other users made to notices you've posted. Handy for keeping up with responses if your personal timeline is busy.
+
+<span style="font-family: FontAwesome;font-size: 16px">&#xf004;</span> **Favorites**  
+A list of notices you have favorited.
+
+<span style="font-family: FontAwesome;font-size: 16px">&#xf0e0;</span> **Private inbox**  
+Your inbox, where you can receive and send private messages with people you have mutually subscribed to, as well as site staff.
+
+<span style="font-family: FontAwesome;font-size: 16px">&#xf013;</span> **Account settings**  
+Allows you to adjust various settings that affect how you use the site. This is also the place to go to customize your profile.
+
+<span style="font-family: FontAwesome;font-size: 16px">&#xf011;</span> **Logout**  
+Logs you out of the site.
+
+### What are these @, #, !, @# things? ###
+
+Those represent the various methods of interacting through notices on the site. Use each one by typing it as you see it elsewhere. 
+There is no hard limit on how many of each of these may be used in a single notice.
+
+**@mentions**  
+References another user on the site. Often seen at the front of a notice when replying to another user. (When creating replies, it is 
+recommended to use the Reply button by each notice instead of manually inputting a username.) Notices containing a mention show up in the 
+referenced user's Replies page. Clicking on one will open the referenced user's profile.
+
+**#tags**  
+Often used as a method of categorization or description of a notice. These are used to link together notices with common topics, or 
+in some cases as a warning (such as the #<span style="color: red">NSFW</span> tag). Clicking on one will open a page containing other 
+notices with the same tag.
+
+**!groups**  
+A more structured method of categorization than tags. Groups require the user to be a member before posts can be sent to one. In addition, 
+posts sent to groups can be marked as "private", meaning they are only visible to other members of any group tagged in the notice. 
+Notices containing a group tag show up in the referenced group's timeline. (Note that they also show up on all other timelines where 
+such a notice would otherwise show up, including the public timeline.) Notices from all groups you are a member of will show up in your 
+Personal timeline. Clicking on a group tag will open the referenced group's page.
+
+Note that as of December 2013, the preferred method of posting to a group is to use the "To:" dropdown selector to select the group 
+to post to. This is the only way to post a private notice to a non-private group. Use of group tags is still supported, however, and 
+is currently the only method of posting a notice to more than one group, or "grandfathering" a conversation into a group by tagging 
+it in a reply.
+
+**@#lists**  
+References multiple users on the site. Lists are created by tagging other users on their profile pages (tags they've added themselves are 
+not considered; tagging yourself is a method of adding yourself to one of your own lists, among other things). It is possible to subscribe 
+to another user's list, which will cause posts from all users listed to appear on your Personal timeline. Notices containing a list tag 
+appear in the Replies timelines of every user in the list. Clicking on a list tag will open the list's timeline, showing notices from 
+all users in the list.
+
+### I prefer posts in a more linear, Twitter-esque format. How do I change it? ###
+
+If you'd like notices to be displayed in a more linear fashion (where replies show up as their own posts, rather than being attached to the original posts), 
+the [Old-school settings page](%%action.oldschoolsettings%%) allows you to toggle that behavior. You can also switch conversation pages from a 
+linear set of replies to a threaded system, which nests replies within their parent posts, there.
+
+### How do I find a member of site staff? How can I tell if someone is a staff member? ###
+
+The [Staff page](%%action.staff%%) has an up-to-date listing of staff members who enforce rules and maintain the site.
+There is no other external indicator that someone is a staff member. 
+
+The technical stuff
+-------------------
+
+### What is %%site.name%%? ###
+
+%%site.name%% is a stream oriented social network service.
+
+You can use it to write short notices about yourself, where you are,
+and what you're doing, and those notices will be sent to all your friends
+and fans.
+
+You can also post event invitations, bookmarks, polls, and questions or
+other kinds of social broadcasts.
+
+### How is %%site.name%% different from Twitter? ###
+
+Like [Twitter](http://twitter.com/), %%site.name%% is a light service
+with a stream-oriented interface. It uses @-replies, hashtags,
+provides search, and has private messages. It provides an API, and can
+be integrated with SMS systems. You can create lists.
+
+Unlike Twitter, %%site.name%% allows more data than just plain text
+and links to travel across the network. You can install the StatusNet
+software that runs %%site.name%% on your own servers, since it's Free
+and Open Source software. You can make groups, and share privately
+with those groups.
+
+You can make your site available only to people you choose. You can
+customize it with your own themes and plugins, or download plugins
+from the StatusNet site.
+
+### How is %%site.name%% different from Yammer, SocialCast, or Salesforce Chatter? ###
+
+Like some enterprise social software services, StatusNet lets you
+share privately with other people in your company. You can use
+microapps to post richer kinds of data, use public and private groups
+to share with team members, use extended profiles to show more about
+yourself and your company, and review groups and users in a directory.
+
+Unlike those other services, StatusNet is free and open source
+software. You can install it on your own servers. You can customize
+the theme and add plugins.
+

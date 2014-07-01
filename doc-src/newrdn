@@ -1,0 +1,79 @@
+Welcome to the new and improved Rainbow Dash Network! We're pleased to bring you this upgrade to 
+site functionality, which is the result of months of hard <!-- *snort* --> work. There are a variety of new features and 
+changes across the site, and this document intends to cover the most important ones for old users 
+returning to the site.
+
+New, threaded timelines
+-----------------------
+
+![A threaded conversation on the public timeline](/doc-src/img/threadedconvos.png)
+
+Timelines have been given an overhaul in terms of organization. Now, instead of notices being shown 
+in a strictly linear fashion, timelines are organized by conversation, with each conversation having 
+its own spot on the timeline. This allows users to focus on the conversation they are having, 
+without distractions from other topics getting in their way. The most recent responses are shown at 
+the bottom of a conversation, to keep new information readily available for access.
+
+For the users who prefer the old timelines, there is an option in the 
+[Old-school settings](%%action.oldschoolsettings%%) page to revert back to linear timelines. Both 
+options are fully supported across the site.
+
+New ways to share notices
+-------------------------
+
+![New options in the notice form to direct notices around](/doc-src/img/noticesharingopts.png)
+
+Sharing posts to groups is now easier than ever. Instead of having to remember the nicknames of 
+every group you want to post to, they are all listed in a convenient dropdown list when you post a 
+notice. Simply choose the group you want to post to. (The old method of posting to groups is still 
+supported, in case you need to post to multiple groups.)
+
+In addition, you can also share posts privately. This means nobody outside of the group will be able 
+to see what you're posting. (If a private post is directed to "Everyone", it will only appear to 
+users logged into the site.) This is a good way to share more sensitive information with a group, 
+although anyone who joins later will still be able to find your notice.
+
+Profiles and groups can both be set to private. This means all notices from that profile, or all 
+notices to that group, will be forced to be private, and everyone who wishes to join that group, or 
+subscribe to that user, must be approved.
+
+More types of notices
+---------------------
+
+![The new status update form, with all of the different types of updates shown](/doc-src/img/newstatus.png)
+
+In addition to improving notice sharing options, there are also more types of notices, targeted 
+toward different uses. In addition to the standard status update, the new types of notices are:
+
+**Bookmark:** A type of notice that centers around an external link. Great for sharing that news 
+article you found, or any other links you have to share.
+
+**Event:** A notice centered around something that's happening. Allows other members to RSVP as well 
+as comment on the event itself. Great for organizing meetups.
+
+**Poll:** A notice that asks a question. Other users can vote anonymously on up to five answer 
+choices, with the votes being instantly aggregated and the top choices highlighted.
+
+More ways to find notices
+-------------------------
+
+![An example of a user who has been added to some lists](/doc-src/img/usertagging.png)
+
+There are now more ways to find the discussions that interest you the most. Tags and searches can now 
+be subscribed to, bringing every notice with that tag (or every notice that shows up in that search 
+result) to your Personal timeline.
+
+In addition, it is now possible to create your own hand-picked lists of users, to follow all of your 
+friends separately. Lists existed previously as profile tags, but now they've been expanded in 
+numerous ways. Lists now get their own timelines, and can have descriptions set for them in case all 
+of the information can't be relayed within the tag name. It is also possible to subscribe to another 
+person's list, adding those users to your Personal timeline. For more information, refer to [the Tags page](/doc/tags).
+
+Tags and searches you've subscribed to, as well as lists you've created, can all be found quickly under your Watched menu.
+
+A new and improved mobile site
+------------------------------
+
+The mobile site has also received numerous improvements to usability and style, and should now be 
+more convenient to use. The most important new feature is the ability to upload images from the 
+mobile notice form.

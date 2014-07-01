@@ -1,0 +1,235 @@
+*Last updated Mar 13, 2014*
+
+<script type="text/javascript">
+	// jQuery isn't loaded yet, so we need to use raw JS for now
+	// "Can't you just hide them in the markup, without JS?" Yes, but then people with JS disabled wouldn't be able to read them
+	(function() {
+		var e = document.createElement('style');
+		e.setAttribute('type', 'text/css');
+		e.innerHTML = 'blockquote {display: none;}';
+		document.getElementsByTagName('head')[0].appendChild(e);
+	})();
+</script>
+
+## The golden rule: ##
+While these rules attempt to cover as many cases as possible, moderators reserve the right to enforce anything that is or isn't listed at their own discretion, in order to maintain a friendly, welcoming, and kid-friendly atmosphere. Rule lawyering (attempting to find loopholes, unspecified cases, or in any way disrespecting the spirit of the rules) will not be tolerated. Please ask a staff member if you're unsure of the intent of any rule on this list.
+
+Click on the "Can you explain?" or "Why?" subheaders below any rule to view more information and reasonings for that particular rule. Note that these explanations are not intended to prohibit more things than the basic rule covers, but rather to specify exactly what does and does not violate each rule.
+
+<a href="#" onclick="$('blockquote').show()">Expand all</a> | <a href="#" onclick="$('blockquote').hide()">Collapse all</a>
+
+_____
+
+## **Rule 1:** Be civil in your discussions. While disagreements are allowed, attacking others over them is not. Please refrain from saying anything that might offend or insult a reasonable person, and avoid making enemies, lest they hamper your enjoyment of the community.
+
+### [Can you explain?](#) ###
+>Examples of uncivil behavior include, but are not limited to, the following:
+>
+>-	Comments, jokes, or media designed to target and demean or oppress groups (including homophobia, transphobia, racism, demeaning religious groups, religious zealotry, and other similar topics).
+>-	Insulting someone based on their country of residence. (Criticism of another country's government is fine; insulting someone for living in that country, or associating with their principles or culture, is not.)
+>-	Insulting or harassing someone for their culture, tastes, or interests. (Yes, this includes how interested they are in MLP. Some people are less interested in the show and/or fandom than others.)
+>-	Name-calling or personal attacks. (This includes using words for traits, such as "gay", "retard", or "autistic" to insult others.)
+>-	Harassing someone, whether by giving out their personal information ("doxxing" them), nagging them about something they've shown disinterest in, or any other means.
+>-	Discrediting someone's opinion based on the person instead of the opinion (such as elitism toward new users, animosity based on a person's previous behavior, or group-based exclusion).
+>-	Demanding that someone remove a block, communicate with you, or allow you into a private group they administrate, if they do not wish to.
+>-	Circumventing the word filter to post cuss words or other explicit content.
+>-	Impersonation of other users.
+>-	Encouraging another user, whether overtly or implicitly, to violate a site rule (commonly referred to as "baiting").
+>
+>Everyone is entitled to an opinion, but those opinions should be presented in a civil and inoffensive manner, with the intent to learn more about other users' opinions or to improve your own - not to put down or insult them. Bashing other users simply because they have differing opinions is strictly prohibited.
+>
+>If someone disagrees with you or upsets you, responding with insults is unacceptable, even if they did it first. When in doubt over the intention of a post, assume the poster had harmless intentions, and explain civilly why their post upsets you. If you believe someone is breaking a rule without consequences, ask a staff member to look into their behavior, but don't demand they be punished.
+>
+>We understand that accidents happen, things get misinterpreted, and you didn't actually mean to insult someone. Occasional slip-ups can be forgiven. However, we will not tolerate attempts to justify rude behavior toward others. This includes explanations of why your "hilarious" gay joke isn't *actually* offensive to the other person. Take responsibility for your mistake and move on, and the staff will give you a second chance.
+>
+>In addition, please don't get mad at someone on another person's (or group's) behalf. Such behavior will be seen as baiting and will be punished accordingly.
+
+### [Why?](#) ###
+>This site exists to provide its members with entertainment via social interaction. Sharing opinions and having discussions among different people encourage the social interaction that draws people to the community in the first place. Users who act hostile toward others or make them feel unwelcome create an atmosphere that discourages discussion and debate, and encourages isolation from the rest of the community out of fear of retaliation, which makes the site less fun for everyone.
+
+_____
+
+## **Rule 2:** Do not distribute or discuss anything illegal. This includes, for example, links to pirated media or programs, distribution or use of illegal drugs or substances, or discussing how to acquire any of those things. (These are only the most notable examples; avoid anything that might break any law.)
+
+### [Can you explain?](#) ###
+>There are three countries whose laws must be respected and followed: the United States of America and the United Kingdom (as most of our staff, including the head administrator, reside in these countries, as well as a large portion of our userbase), as well as France (the physical location of the site's server). The following is but a short list of the most common types of materials prohibited under this rule:
+>
+>-	Sexually explicit, provocative, or suggestive imagery, writing or discussion involving minors. (Note that as per Rule X, sexually explicit material of any kind is also prohibited on our site.)
+>-	Distribution, use, or discussion thereof of illegal drugs or substances, or misuse of prescription medicine.
+>-	Distribution or discussion of pirated or cracked media or programs. (Note that discussion of hardware or software modification of electronics, games, or other media is allowed, as long as the instructions are not intended to facilitate piracy and do not otherwise violate any laws.)
+>-	Discussion of any illicit means of distributing products, or participation in such.
+>
+>Please review the laws of each country for further clarification, and use common sense when posting. Other countries' laws should be respected as well, where applicable.
+>
+>Staff will use their best judgement and knowledge of their country's laws to enforce this rule, but due to the sheer scope of laws, not all cases will be caught. Please report any uncaught cases you see. Note that in the US's case, state laws usually aren't as big of a concern since they affect fewer users.
+>
+>In addition, using the site to arrange alternate means of communication to get around this rule is strictly prohibited.
+
+### [Why?](#) ###
+>The staff members on the site do not wish to associate themselves, nor the community as a whole, with illegal activities, as being so would impact many users' ability to use or enjoy the site due to legal issues.
+
+_____
+
+## **Rule 3:** Sexually explicit or grotesque content is prohibited on the site. In addition, any questionable content posted must be tagged #<span style="color: red">nsfw</span> and may not be directly uploaded to the site.
+
+### [Can you explain?](#) ###
+>Content posted to the site may not contain the following, whether in visual, audible, written, tactile, subliminal, or any other form: (heretoafter referred to as "non-work-safe content")
+>
+>-	Depictions of nudity, visible genitalia, or sexual acts.
+>-	Graphic depictions of gore, including dismemberment, decapitation, or anything similar.
+>-	Depictions of toys, devices, or other objects designed for (or being used for) any of the above.
+>-	Photography of real life people engaging in, or about to engage in, any of the above.
+>-	Real life photography depicting torture or abuse.
+>-	Any content similarly inappropriate as any of the above.
+>
+>These restrictions apply to all content displayed on any linked pages; for example, if a Tumblr post is in itself work-safe, but an avatar or other such media on the page contains non-work-safe content, linking the post is prohibited. Discussion of prohibited material is also prohibited.
+>
+>If all content on a page is work-safe, and the page is part of a site known primarily for work-safe content, but unrelated links on the page link to content that contains something prohibited above (for example, if a Tumblr blog occasionally contains NSFW content, but the post you want to link contains no rule-breaking content), the link may be posted; however, if said links are not clearly marked as such on the page, it is your responsibility to mention this in your post. This exception does not apply if the page in question is part of a site known primarily for non-work-safe content.
+>
+>Content posted to the site that contains any of the following must be tagged #<span style="color: #800000">nsfw</span>, and may not be used in account-related imagery (avatar, banner, or background for any user or group):
+>
+>-	Sexually provocative or suggestive content.
+>-	Cartoon depictions of torture or abuse. (This does not include "slapstick" comedy such as that seen in cartoons like Tom and Jerry, which may be posted freely.)
+>-	Content that may be offensive to sensitive audiences, such as politically incorrect jokes. (If what you are posting falls under this, reconsider if it may break Rule #1 before posting.)
+>-	Words that are filtered on this site.
+>-	Any content similarly inappropriate as any of the above. (Use your better judgement, or ask a moderator if you're unsure.)
+>
+>(Yes, not all of this content is typically considered unsafe for work. Yes, it must still be tagged as such on this site.)
+>
+>Discussion of such materials is allowed; however, such discussion should be obscured with spoiler markup and tagged  #<span style="color: #800000">nsfw</span> if the discussion hints toward inappropriate aspects of the material.
+
+### [Why?](#) ###
+>Our site is browsed by people of all ages, in a variety of social situations (at home, work, out with friends, and other places). As such, the content presented and discussed on this site must meet standards of appropriateness that will allow everyone to browse the site comfortably in public - even if they're in school and their teacher is watching over their shoulder, the detention slip should read "goofing off in class" and not "browsing pornography in class".
+
+_____
+
+## **Rule 4:** All spoilers regarding show-related content must be tagged #<span style="color: green">spoiler</span>, as well as obscured with spoiler markup (the site will do this for you automatically, assuming you tag a post as #spoiler without manually obscuring a part of the post) for 48 hours after the *air date* of the episode. (This includes previews.) Posts that may spoil other media should be treated in a similar fashion, for as long as the media remains "new" to the community.
+
+### [Can you explain?](#) ###
+>A spoiler is constituted as the following:
+>
+>-	Any post that discusses the plot of the episode, or notable observances from the episode.
+>-	Any screencaps or animated GIFs created from the episode or any previews.
+>-	Any previews for the episode.
+>-	Any fan-created media (including art, music videos, and other content) based on the episode or on characters introduced in the episode.
+>-	Any similar content as relates to the comics, chapter books, or any other official Pony-based media.
+>
+>Content throughout the episode is considered a spoiler, even if it happens in the first thirty seconds of the episode. Vague information about the episode (such as "It's a Fluttershy episode") is not considered a spoiler. However, information such as "Discord returns" or "Daring Do gets a progressive rock ballad about the dangers of chipping your teeth on priceless artifacts" is considered a spoiler, as such information gives away potential surprises in the episode.
+>
+>The 48-hour period starts from the official airing of the episode on the Hub network. If an episode is leaked early, the spoiler rule is still in effect until 48 hours after the official airing. For comics related to the show, the spoiler rule remains in effect until the next issue is released. For movies related to the show, the spoiler rule applies until 48 hours after the release of the movie on DVD or the initial airing on television, whichever comes first.
+>
+>For other content, follow the guidelines listed above and use your best judgement. Generally, if a game has been out for less than a month, avoid posting unmarked spoilers; this timeframe will differ based on the product and what the community deems a reasonable timeframe. Feel free to ask for clarification if you're unsure.
+
+### [Why?](#) ###
+>As our community is formed around *Friendship is Magic* and most of our members are not always able to watch the show as it airs, hiding and marking spoilers allows them to enjoy the episode on their own time without feeling a need to avoid the community until they do. The rule is enforced for 48 hours since most of the people who watch the show and are concerned with spoilers have usually seen the episode within this timeframe.
+
+_____
+
+## **Rule 5:** Spamming, advertising that mooches off of the community, and generally worthless posts are prohibited. Share things you have created, but don't post just to get attention. In addition, posts that are considered incomprehensible to the average user will be deleted.
+
+### [Can you explain?](#) ###
+>Do not advertise in a manner that mooches off of the community. Examples of mooching include:
+>
+>-	Registering on our site just to link something, and never interacting with the community, unless the content is relevant to a specific group (such as information about a local meetup page) and is directed specifically at them.
+>-	Linking the same thing over and over, even if discussion is interspersed between the links.
+>-	Any begging for money or other items. (Selling or bartering is allowed; however, we take no responsibility for any loss that results and encourage users to arrange sales through other means of communication instead.)
+>-	Posting links intended to draw users into supporting something, such as an online petition, without explicit permission from the site administrator.
+>-	Any automated posting, cross-posting, or similar, without explicit permission from the site administrator.
+>
+>You are free to discuss your projects (or projects that you have an interest in) as long as other users are taking interest and participating in discussions. In addition, you are allowed and encouraged to use our site as a discussion hub for meetups, projects, or similar things, as long as the discussion is constructive and does not consist solely of advertisements.
+>
+>If you would like to affiliate your site or project with us, contact the administrator.
+>
+>Posts that serve no use but to beg for attention (such as "Someone say something!" or "Why won't anyone talk to me?") are discouraged. Repeat offenses may result in moderator warning or action. *We are not a chatroom.* If the current discussion or lack thereof doesn't interest you, start one that does. If nobody is talking to you, start talking about something that will get replies.
+>
+>If you post something scrambled through a cipher such as ROT13, mention this alongside your post so that it does not get mistaken as "indecipherable" and deleted.
+
+### [Why?](#) ###
+>We thrive to be a community where every post generates meaningful discussion. If every active discussion consists of "nobody's talking" and unrelated links to other places, there will be no draw for new users to join our community. While we encourage users to share things they've worked on or things they find interesting, we also want the sharing of those things to inspire commentary and discussion instead of simply occupying server space.
+
+_____
+
+## **Rule 6:** Roleplaying is not permitted on the site. Numerous other communities exist for role-playing, such as Equestria RP, and this site is not one of them. Occasional emoting of actions is acceptable, as long as they don't go overboard.
+
+### [Can you explain?](#) ###
+>The kind of roleplaying prohibited on this site involves a person acting out actions of one or more characters other than themselves, often with the intention of acting out some sort of story or scenario. Isolated action emoting (such as "\*falls over\*") or light-hearted impressons of other characters or people (such as "Look guys, I'm Twilight Sparkle, BOOKS BOOKS BOOKS") are allowed, as long as they fit into a normal discussion.
+
+### [Why?](#) ###
+>Roleplaying is a very niche form of entertainment that, by its nature, draws a lot of attention to itself. Discussions around roleplaying can easily overpower the public timeline, making it difficult for others not interested in roleplaying to find others to communicate with. Limiting it to other sites enables other types of discussion, that don't individually mandate as much control over the site, to flourish here in its place.
+
+_____
+
+## **Rule 7:** Do not promote reckless behaviors. Do not give users advice or instructions that would potentially cause harm to themselves or others. If someone comes to the community looking for medical or mental advice, refer them to a professional instead of trying to diagnose the problem yourself.
+
+### [Can you explain?](#) ###
+>Do not give dangerous or reckless medical advice to other users. Such advice includes suggestions to cease taking, or alter the dosage of, anything prescribed to them by a doctor. If another user requests such advice, you are still not allowed to give it; such advice needs to be left to professionals who are well-prepared to give it.
+>
+>Promotion of other reckless or life-threatening behaviors (such as street racing, or playing with fire) is also prohibited. It should be common sense not to take such endorsements seriously, but regardless, they will not be tolerated.
+>
+>If someone is threatening suicide on the site, don't joke about it. Get someone who can help involved. <a onclick="$('blockquote blockquote').toggle(); return false;" href="#">Click to expand a list of counseling and prevention resources that may be of use. (Note that we are not affiliated with any of these.)</a>
+>
+>>___
+>>**In the United States:**
+>><ul>
+>><li>Chat anonymously with an Active Listener: <a title="7 Cups of Tea" href="http://www.7cupsoftea.com" target="_blank" rel="external nofollow">7 Cups of Tea</a>
+>><li>Live Chats: <a href="http://www.crisischat.org/chat" target="_blank" rel="external nofollow">crisischat.org</a> (2pm-2am ET) or <a href="https://www.imalive.org/" target="_blank" rel="external nofollow">imalive.org</a></li>
+>><li><a href="http://www.nationaleatingdisorders.org/find-help-support" target="_blank" rel="external nofollow">National Eating Disorders Association</a>&nbsp;or 1-800-931-2237</li>
+>><li><a href="http://www.selfinjury.com/about/" target="_blank" rel="external nofollow">S.A.F.E. Alternatives for Stopping Self Abuse</a>&nbsp;or 1-800-DONT-CUT (366-8288)</li>
+>><li><a href="http://www.youmatter.suicidepreventionlifeline.org/home/get-help/getting-hel/" target="_blank" rel="external nofollow">National Suicide Prevention Lifeline&nbsp;</a>or 1-800-273-TALK (8255) or <a href="http://www.suicidepreventionlifeline.org/gethelp/spanish.aspx" target="_blank" rel="external nofollow">en Espanol</a></li>
+>><li><a href="http://www.thetrevorproject.org/pages/get-help-now">The Trevor Project</a>&nbsp;(LGBT crisis intervention) or 1-866-488-7386</li>
+>><li><a title="Rape Abuse &amp; Incest National Network" href="http://www.rainn.org" target="_blank" rel="external nofollow">Rape Abuse &amp; Incest National Network</a>&nbsp;or 800-656-HOPE (4673)</li>
+>></ul>
+>>**In the United Kingdom:**
+>><ul>
+>><li><a href="http://www.samaritans.org/how-we-can-help-you/contact-us" target="_blank" rel="external nofollow">The Samaritans</a> or 08457 90 90 90</li>
+>></ul>
+>>**In Australia:**
+>><ul>
+>><li><a href="http://www.lifeline.org.au/Get-Help/" target="_blank" rel="external nofollow">Lifeline Australia</a> or 13 11 14</li>
+>><li><a title="beyondblue" href="http://www.beyondblue.org.au" target="_blank" rel="external nofollow">beyondblue</a> or 1300 22 4939</li>
+>></ul>
+>>**Other countries:**
+>><ul>
+>><li><a title="7 Cups of Tea" href="http://www.7cupsoftea.com/BrowseListeners/" target="_blank" rel="external nofollow">7 Cups of Tea</a> -&nbsp;find your country in the drop-down menu</li>
+>><li><a href="http://www.befrienders.org" target="_blank" rel="external nofollow">Befrienders Worldwide</a>&nbsp;-&nbsp;find your country in the drop-down menu on the top right</li>
+>><li><a href="http://www.iasp.info/resources/Crisis_Centres" target="_blank" rel="external nofollow">International Association for Suicide Prevention</a> - find your nearest crisis center</li>
+>><li><a href="http://unsuicide.wikispaces.com/Online+Suicide+Help#.UmdCphYlu5s" target="_blank" rel="external nofollow">Unsuicide</a> - online suicide help directory</li>
+>></ul>
+>>___
+>
+>This rule is designed not to prohibit discussions of these topics, but to protect our users. Discussion of topics covered in this rule are perfectly allowed, as long as reckless behaviors are not promoted and no other rules are broken.
+
+### [Why?](#) ###
+>Our community is not an adequate medium for assessing a person's physical or mental health. Performing such behaviors on the site endangers other users, particularly those who are most in need of professional advice. While we realize that some people may be hesitant to see a doctor and will ask the internet for advice instead, such behavior poses a risk to their well-being and should be discouraged.
+
+_____
+
+## **Rule 8:** If you feel that someone is participating in bad behavior, or is attempting to bait a user into bad behavior, report it privately to staff. Similarly, if you disagree with a moderator's action, let another member of staff know in private. Do not air your grievances publicly, as it encourages the behavior by acknowledging it, consumes your energy, and wastes everyone's time.
+
+### [Can you explain?](#) ###
+>Reports and complaints should be filed in private, using the direct messaging function on the site, email, or some other form of private two-way communication. The staff encourages our users to tell us when they see something wrong. However, if nothing is done in response to a report, please do not nag other staff members to look into it, as this wastes their time and yours.
+>
+>Simple clarifications of rules may be requested either in public or in private, as long as it does not relate to a specific user (including yourself). Staff members are happy to answer any questions to improve the site experience for anyone in the community.
+
+### [Why?](#) ###
+>Calling out another user in public is the fastest way for the timeline to devolve into arguments about who is in the right, which often result in insult-slinging contests that push users away from the site. Limiting complaints to private discussions allows them to be resolved peacefully and without drama.
+
+_____
+
+## In closing ##
+Be civil to each other. Discuss things that matter to you, but don't get in fights with other users. Be a good example to the rest of the community. Your discussions can either attract new users to the site or push them away, so it's important that you give people a reason to stick around. Be inquisitive, ask questions, and if you don't see something you like being talked about, start the discussion!
+
+
+
+<script type="text/javascript">
+	// Wait until page is fully loaded so that we have access to jQuery
+	window.onload = function() {
+		// Just in case the bit at the start of the page didn't work
+		$('blockquote').hide();
+		// Enable element toggles
+		$('h3 a').bind('click', function() {
+			$(this).parent().next('blockquote').toggle();
+			return false;
+		});
+	};
+</script>

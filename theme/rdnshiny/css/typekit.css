@@ -1,0 +1,11 @@
+html body {font-family: 'ff-meta-web-pro', sans-serif; font-size: 95%;}
+h1, h2, h3, h4, h5, h6, #site_nav_global_primary, .nickname .fn {font-family: 'myriad-pro', sans-serif;}
+#site_nav_global_primary ul.nav {margin-top: -1px;}
+.notice-options {line-height: 16px;}
+input, select, .input_form label, .form_settings input.submit, .form_notice #notice_action-submit,
+	#form_new_bookmark #bookmark-submit, #form_new_event #event-submit, #form_new_poll #poll-submit
+	{font-family: "DejaVu Sans", "Bitstream Vera Sans", Geneva, Verdana, sans-serif; font-size: 85%}
+#videosync_btn {font-size: 0.8em;}
+.message_to_selector {bottom: 3px;}
+.profile_block_nickname {font-size: 85%;}
+.profile_block .profile_block_name {line-height: 1;}
