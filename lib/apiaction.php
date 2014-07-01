@@ -119,7 +119,6 @@ class ApiAction extends Action
     const READ_ONLY  = 1;
     const READ_WRITE = 2;
 
-    var $format    = null;
     var $user      = null;
     var $auth_user = null;
     var $page      = null;
@@ -140,7 +139,7 @@ class ApiAction extends Action
      *
      * @return boolean false if user doesn't exist
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         StatusNet::setApi(true); // reduce exception reports to aid in debugging
         parent::prepare($args);
@@ -172,10 +171,10 @@ class ApiAction extends Action
      *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
         header('Access-Control-Allow-Origin: *');
-        parent::handle($args);
+        parent::handle();
     }
 
     /**
@@ -202,7 +201,11 @@ class ApiAction extends Action
     {
         $twitter_user = array();
 
-        $user = $profile->getUser();
+        try {
+            $user = $profile->getUser();
+        } catch (NoSuchUserException $e) {
+            $user = null;
+        }
 
         $twitter_user['id'] = intval($profile->id);
         $twitter_user['name'] = $profile->getBestName();
@@ -210,9 +213,23 @@ class ApiAction extends Action
         $twitter_user['location'] = ($profile->location) ? $profile->location : null;
         $twitter_user['description'] = ($profile->bio) ? $profile->bio : null;
 
-        $avatar = $profile->getAvatar(AVATAR_STREAM_SIZE);
-        $twitter_user['profile_image_url'] = ($avatar) ? $avatar->displayUrl() :
-            Avatar::defaultImage(AVATAR_STREAM_SIZE);
+        // TODO: avatar url template (example.com/user/avatar?size={x}x{y})
+        $twitter_user['profile_image_url'] = Avatar::urlByProfile($profile, AVATAR_STREAM_SIZE);
+        // START introduced by qvitter API, not necessary for StatusNet API
+        $twitter_user['profile_image_url_profile_size'] = Avatar::urlByProfile($profile, AVATAR_PROFILE_SIZE);
+        try {
+            $avatar  = Avatar::getUploaded($profile);
+            $origurl = $avatar->displayUrl();
+        } catch (Exception $e) {
+            $origurl = $twitter_user['profile_image_url_profile_size'];
+        }
+        $twitter_user['profile_image_url_original'] = $origurl;
+
+        $twitter_user['groups_count'] = $profile->getGroupCount();
+        foreach (array('linkcolor', 'backgroundcolor') as $key) {
+            $twitter_user[$key] = Profile_prefs::getConfigData($profile, 'theme', $key);
+        }
+        // END introduced by qvitter API, not necessary for StatusNet API
 
         $twitter_user['url'] = ($profile->homepage) ? $profile->homepage : null;
         $twitter_user['protected'] = (!empty($user) && $user->private_stream) ? true : false;
@@ -261,7 +278,7 @@ class ApiAction extends Action
 
         if ($get_notice) {
             $notice = $profile->getCurrentNotice();
-            if ($notice) {
+            if ($notice instanceof Notice) {
                 // don't get user!
                 $twitter_user['status'] = $this->twitterStatusArray($notice, false);
             }
@@ -279,7 +296,7 @@ class ApiAction extends Action
         $base = $this->twitterSimpleStatusArray($notice, $include_user);
 
         if (!empty($notice->repeat_of)) {
-            $original = Notice::staticGet('id', $notice->repeat_of);
+            $original = Notice::getKV('id', $notice->repeat_of);
             if (!empty($original)) {
                 $original_array = $this->twitterSimpleStatusArray($original, $include_user);
                 $base['retweeted_status'] = $original_array;
@@ -297,8 +314,15 @@ class ApiAction extends Action
         $twitter_status['text'] = $notice->content;
         $twitter_status['truncated'] = false; # Not possible on StatusNet
         $twitter_status['created_at'] = $this->dateTwitter($notice->created);
-        $twitter_status['in_reply_to_status_id'] = ($notice->reply_to) ?
-            intval($notice->reply_to) : null;
+        try {
+            // We could just do $notice->reply_to but maybe the future holds a
+            // different story for parenting.
+            $parent = $notice->getParent();
+            $in_reply_to = $parent->id;
+        } catch (Exception $e) {
+            $in_reply_to = null;
+        }
+        $twitter_status['in_reply_to_status_id'] = $in_reply_to;
 
         $source = null;
 
@@ -315,13 +339,14 @@ class ApiAction extends Action
             }
         }
 
+        $twitter_status['uri'] = $notice->getUri();
         $twitter_status['source'] = $source;
         $twitter_status['id'] = intval($notice->id);
 
         $replier_profile = null;
 
         if ($notice->reply_to) {
-            $reply = Notice::staticGet(intval($notice->reply_to));
+            $reply = Notice::getKV(intval($notice->reply_to));
             if ($reply) {
                 $replier_profile = $reply->getProfile();
             }
@@ -341,10 +366,12 @@ class ApiAction extends Action
             $twitter_status['geo'] = null;
         }
 
-        if (isset($this->auth_user)) {
-            $twitter_status['favorited'] = $this->auth_user->hasFave($notice);
+        if (!is_null($this->scoped)) {
+            $twitter_status['favorited'] = $this->scoped->hasFave($notice);
+            $twitter_status['repeated']  = $this->scoped->hasRepeated($notice);
         } else {
             $twitter_status['favorited'] = false;
+            $twitter_status['repeated'] = false;
         }
 
         // Enclosures
@@ -397,6 +424,7 @@ class ApiAction extends Action
             );
         }
 
+        $twitter_group['admin_count'] = $group->getAdminCount();
         $twitter_group['member_count'] = $group->getMemberCount();
         $twitter_group['original_logo'] = $group->original_logo;
         $twitter_group['homepage_logo'] = $group->homepage_logo;
@@ -431,7 +459,7 @@ class ApiAction extends Action
 
     function twitterListArray($list)
     {
-        $profile = Profile::staticGet('id', $list->tagger);
+        $profile = Profile::getKV('id', $list->tagger);
 
         $twitter_list = array();
         $twitter_list['id'] = $list->id;
@@ -958,9 +986,9 @@ class ApiAction extends Action
         $to_profile = $message->getTo();
 
         $dmsg['id'] = intval($message->id);
-        $dmsg['sender_id'] = intval($from_profile);
+        $dmsg['sender_id'] = intval($from_profile->id);
         $dmsg['text'] = trim($message->content);
-        $dmsg['recipient_id'] = intval($to_profile);
+        $dmsg['recipient_id'] = intval($to_profile->id);
         $dmsg['created_at'] = $this->dateTwitter($message->created);
         $dmsg['sender_screen_name'] = $from_profile->nickname;
         $dmsg['recipient_screen_name'] = $to_profile->nickname;
@@ -991,10 +1019,13 @@ class ApiAction extends Action
         $entry['author-name'] = $from->getBestName();
         $entry['author-uri'] = $from->homepage;
 
-        $avatar = $from->getAvatar(AVATAR_STREAM_SIZE);
-
-        $entry['avatar']      = (!empty($avatar)) ? $avatar->url : Avatar::defaultImage(AVATAR_STREAM_SIZE);
-        $entry['avatar-type'] = (!empty($avatar)) ? $avatar->mediatype : 'image/png';
+        $entry['avatar'] = $from->avatarUrl(AVATAR_STREAM_SIZE);
+        try {
+            $avatar = $from->getAvatar(AVATAR_STREAM_SIZE);
+            $entry['avatar-type'] = $avatar->mediatype;
+        } catch (Exception $e) {
+            $entry['avatar-type'] = 'image/png';
+        }
 
         // RSS item specific
 
@@ -1323,86 +1354,6 @@ class ApiAction extends Action
         return;
     }
 
-    function clientError($msg, $code = 400, $format = null)
-    {
-        $action = $this->trimmed('action');
-        if ($format === null) {
-            $format = $this->format;
-        }
-
-        common_debug("User error '$code' on '$action': $msg", __FILE__);
-
-        if (!array_key_exists($code, ClientErrorAction::$status)) {
-            $code = 400;
-        }
-
-        $status_string = ClientErrorAction::$status[$code];
-
-        // Do not emit error header for JSONP
-        if (!isset($this->callback)) {
-            header('HTTP/1.1 ' . $code . ' ' . $status_string);
-        }
-
-        switch($format) {
-        case 'xml':
-            $this->initDocument('xml');
-            $this->elementStart('hash');
-            $this->element('error', null, $msg);
-            $this->element('request', null, $_SERVER['REQUEST_URI']);
-            $this->elementEnd('hash');
-            $this->endDocument('xml');
-            break;
-        case 'json':
-            $this->initDocument('json');
-            $error_array = array('error' => $msg, 'request' => $_SERVER['REQUEST_URI']);
-            print(json_encode($error_array));
-            $this->endDocument('json');
-            break;
-        case 'text':
-            header('Content-Type: text/plain; charset=utf-8');
-            print $msg;
-            break;
-        default:
-            // If user didn't request a useful format, throw a regular client error
-            throw new ClientException($msg, $code);
-        }
-    }
-
-    function serverError($msg, $code = 500, $content_type = null)
-    {
-        $action = $this->trimmed('action');
-        if ($content_type === null) {
-            $content_type = $this->format;
-        }
-
-        common_debug("Server error '$code' on '$action': $msg", __FILE__);
-
-        if (!array_key_exists($code, ServerErrorAction::$status)) {
-            $code = 400;
-        }
-
-        $status_string = ServerErrorAction::$status[$code];
-
-        // Do not emit error header for JSONP
-        if (!isset($this->callback)) {
-            header('HTTP/1.1 '.$code.' '.$status_string);
-        }
-
-        if ($content_type == 'xml') {
-            $this->initDocument('xml');
-            $this->elementStart('hash');
-            $this->element('error', null, $msg);
-            $this->element('request', null, $_SERVER['REQUEST_URI']);
-            $this->elementEnd('hash');
-            $this->endDocument('xml');
-        } else {
-            $this->initDocument('json');
-            $error_array = array('error' => $msg, 'request' => $_SERVER['REQUEST_URI']);
-            print(json_encode($error_array));
-            $this->endDocument('json');
-        }
-    }
-
     function initTwitterRss()
     {
         $this->startXML();
@@ -1468,29 +1419,29 @@ class ApiAction extends Action
         if (empty($id)) {
             // Twitter supports these other ways of passing the user ID
             if (self::is_decimal($this->arg('id'))) {
-                return User::staticGet($this->arg('id'));
+                return User::getKV($this->arg('id'));
             } else if ($this->arg('id')) {
                 $nickname = common_canonical_nickname($this->arg('id'));
-                return User::staticGet('nickname', $nickname);
+                return User::getKV('nickname', $nickname);
             } else if ($this->arg('user_id')) {
                 // This is to ensure that a non-numeric user_id still
                 // overrides screen_name even if it doesn't get used
                 if (self::is_decimal($this->arg('user_id'))) {
-                    return User::staticGet('id', $this->arg('user_id'));
+                    return User::getKV('id', $this->arg('user_id'));
                 }
             } else if ($this->arg('screen_name')) {
                 $nickname = common_canonical_nickname($this->arg('screen_name'));
-                return User::staticGet('nickname', $nickname);
+                return User::getKV('nickname', $nickname);
             } else {
                 // Fall back to trying the currently authenticated user
                 return $this->auth_user;
             }
 
         } else if (self::is_decimal($id)) {
-            return User::staticGet($id);
+            return User::getKV($id);
         } else {
             $nickname = common_canonical_nickname($id);
-            return User::staticGet('nickname', $nickname);
+            return User::getKV('nickname', $nickname);
         }
     }
 
@@ -1500,28 +1451,31 @@ class ApiAction extends Action
 
             // Twitter supports these other ways of passing the user ID
             if (self::is_decimal($this->arg('id'))) {
-                return Profile::staticGet($this->arg('id'));
+                return Profile::getKV($this->arg('id'));
             } else if ($this->arg('id')) {
                 // Screen names currently can only uniquely identify a local user.
                 $nickname = common_canonical_nickname($this->arg('id'));
-                $user = User::staticGet('nickname', $nickname);
+                $user = User::getKV('nickname', $nickname);
                 return $user ? $user->getProfile() : null;
             } else if ($this->arg('user_id')) {
                 // This is to ensure that a non-numeric user_id still
                 // overrides screen_name even if it doesn't get used
                 if (self::is_decimal($this->arg('user_id'))) {
-                    return Profile::staticGet('id', $this->arg('user_id'));
+                    return Profile::getKV('id', $this->arg('user_id'));
                 }
             } else if ($this->arg('screen_name')) {
                 $nickname = common_canonical_nickname($this->arg('screen_name'));
-                $user = User::staticGet('nickname', $nickname);
-                return $user ? $user->getProfile() : null;
+                $user = User::getKV('nickname', $nickname);
+                return $user instanceof User ? $user->getProfile() : null;
+            } else {
+                // Fall back to trying the currently authenticated user
+                return $this->scoped;
             }
         } else if (self::is_decimal($id)) {
-            return Profile::staticGet($id);
+            return Profile::getKV($id);
         } else {
             $nickname = common_canonical_nickname($id);
-            $user = User::staticGet('nickname', $nickname);
+            $user = User::getKV('nickname', $nickname);
             return $user ? $user->getProfile() : null;
         }
     }
@@ -1530,21 +1484,23 @@ class ApiAction extends Action
     {
         if (empty($id)) {
             if (self::is_decimal($this->arg('id'))) {
-                return User_group::staticGet('id', $this->arg('id'));
+                return User_group::getKV('id', $this->arg('id'));
             } else if ($this->arg('id')) {
                 return User_group::getForNickname($this->arg('id'));
             } else if ($this->arg('group_id')) {
                 // This is to ensure that a non-numeric group_id still
                 // overrides group_name even if it doesn't get used
                 if (self::is_decimal($this->arg('group_id'))) {
-                    return User_group::staticGet('id', $this->arg('group_id'));
+                    return User_group::getKV('id', $this->arg('group_id'));
                 }
             } else if ($this->arg('group_name')) {
                 return User_group::getForNickname($this->arg('group_name'));
             }
 
         } else if (self::is_decimal($id)) {
-            return User_group::staticGet('id', $id);
+            return User_group::getKV('id', $id);
+        } else if ($this->arg('uri')) { // FIXME: move this into empty($id) check?
+            return User_group::getKV('uri', urldecode($this->arg('uri')));
         } else {
             return User_group::getForNickname($id);
         }
@@ -1561,7 +1517,7 @@ class ApiAction extends Action
 
         if($id) {
             if (is_numeric($id)) {
-                $list = Profile_list::staticGet('id', $id);
+                $list = Profile_list::getKV('id', $id);
 
                 // only if the list with the id belongs to the tagger
                 if(empty($list) || $list->tagger != $tagger->id) {

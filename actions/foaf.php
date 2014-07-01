@@ -54,7 +54,7 @@ class FoafAction extends Action
             return false;
         }
 
-        $this->user = User::staticGet('nickname', $this->nickname);
+        $this->user = User::getKV('nickname', $this->nickname);
 
         if (!$this->user) {
             // TRANS: Client error displayed when requesting Friends of a Friend feed for an object that is not a user.
@@ -141,20 +141,24 @@ class FoafAction extends Action
             $this->elementEnd('based_near');
         }
 
-        $avatar = $this->profile->getOriginalAvatar();
-        if ($avatar) {
+        try {
+            $avatar = Avatar::getUploaded($this->profile);
             $this->elementStart('img');
-            $this->elementStart('Image', array('rdf:about' => $avatar->url));
+            $this->elementStart('Image', array('rdf:about' => $avatar->displayUrl()));
             foreach (array(AVATAR_PROFILE_SIZE, AVATAR_STREAM_SIZE, AVATAR_MINI_SIZE) as $size) {
-                $scaled = $this->profile->getAvatar($size);
-                if (!$scaled->original) { // sometimes the original has one of our scaled sizes
+                try {
+                    $scaled = $this->profile->getAvatar($size);
                     $this->elementStart('thumbnail');
-                    $this->element('Image', array('rdf:about' => $scaled->url));
+                    $this->element('Image', array('rdf:about' => $scaled->displayUrl()));
                     $this->elementEnd('thumbnail');
+                } catch (Exception $e) {
+                    // This avatar did not exist
                 }
             }
             $this->elementEnd('Image');
             $this->elementEnd('img');
+        } catch (NoAvatarException $e) {
+            // No avatar for this user!
         }
 
         $person = $this->showMicrobloggingAccount($this->profile,
@@ -170,12 +174,11 @@ class FoafAction extends Action
 
         if ($sub->find()) {
             while ($sub->fetch()) {
-                $profile = Profile::staticGet('id', $sub->subscriber);
+                $profile = Profile::getKV('id', $sub->subscriber);
                 if (empty($profile)) {
                     common_debug('Got a bad subscription: '.print_r($sub,true));
                     continue;
                 }
-                $user = $profile->getUser();
                 $other_uri = $profile->getUri();
                 if (array_key_exists($other_uri, $person)) {
                     $person[$other_uri][0] = BOTH;
@@ -183,7 +186,7 @@ class FoafAction extends Action
                     $person[$other_uri] = array(LISTENER,
                                                 $profile->id,
                                                 $profile->nickname,
-                                                $user ? 'local' : 'remote');
+                                                $profile->isLocal() ? 'local' : 'remote');
                 }
                 unset($profile);
             }
@@ -207,7 +210,7 @@ class FoafAction extends Action
             if ($local == 'local') {
                 $foaf_url = common_local_url('foaf', array('nickname' => $nickname));
             }
-            $profile = Profile::staticGet($id);
+            $profile = Profile::getKV($id);
             $this->elementStart('Agent', array('rdf:about' => $uri));
             if ($type == BOTH) {
                 $this->element('knows', array('rdf:resource' => $this->user->uri));
@@ -284,18 +287,17 @@ class FoafAction extends Action
 
             if ($sub->find()) {
                 while ($sub->fetch()) {
-                    $profile = Profile::staticGet('id', $sub->subscribed);
+                    $profile = Profile::getKV('id', $sub->subscribed);
                     if (empty($profile)) {
                         common_debug('Got a bad subscription: '.print_r($sub,true));
                         continue;
                     }
-                    $user = $profile->getUser();
                     $other_uri = $profile->getUri();
                     $this->element('sioc:follows', array('rdf:resource' => $other_uri.'#acct'));
                     $person[$other_uri] = array(LISTENEE,
                                                 $profile->id,
                                                 $profile->nickname,
-                                                $user ? 'local' : 'remote');
+                                                $profile->isLocal() ? 'local' : 'remote');
                     unset($profile);
                 }
             }

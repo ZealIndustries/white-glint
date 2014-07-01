@@ -118,18 +118,17 @@ class OAuthClient
 
             if (isset($confirm)) {
                 if ($confirm == 'true') {
-                    common_debug('Twitter bridge - callback confirmed.');
                     return $token;
                 } else {
                     throw new OAuthClientException(
-                        'Callback was not confirmed by Twitter.'
+                        'Callback was not confirmed by remote OAuth side.'
                     );
                 }
             }
             return $token;
         } else {
             throw new OAuthClientException(
-                'Could not get a request token from Twitter.'
+                'Could not get a request token from remote OAuth side.'
             );
         }
     }
@@ -181,7 +180,7 @@ class OAuthClient
             return $token;
         } else {
             throw new OAuthClientException(
-                'Could not get a access token from Twitter.'
+                'Could not get a access token from remote OAuth side.'
             );
         }
     }
@@ -242,8 +241,9 @@ class OAuthClient
             'ssl_verify_host' => false
         ));
 
-        // Twitter is strict about accepting invalid "Expect" headers
-        $request->setHeader('Expect', '');
+        // Twitter was strict about accepting invalid "Expect" headers
+        // between 2008ish and October 2012. Caused "417 Expectation failed"
+        //$request->setHeader('Expect', '');
 
         if (isset($params)) {
             $request->setMethod(HTTP_Request2::METHOD_POST);

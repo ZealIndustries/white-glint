@@ -29,11 +29,9 @@ class UserrssAction extends Rss10Action
 
     function prepare($args)
     {
-        common_debug("UserrssAction");
-
         parent::prepare($args);
         $nickname   = $this->trimmed('nickname');
-        $this->user = User::staticGet('nickname', $nickname);
+        $this->user = User::getKV('nickname', $nickname);
         $this->tag  = $this->trimmed('tag');
 
         if (!$this->user) {
@@ -102,16 +100,8 @@ class UserrssAction extends Rss10Action
 
     function getImage()
     {
-        $user = $this->user;
-        $profile = $user->getProfile();
-        if (!$profile) {
-            common_log_db_error($user, 'SELECT', __FILE__);
-            // TRANS: Error message displayed when referring to a user without a profile.
-            $this->serverError(_('User has no profile.'));
-            return null;
-        }
-        $avatar = $profile->getAvatar(AVATAR_PROFILE_SIZE);
-        return ($avatar) ? $avatar->url : null;
+        $profile = $this->user->getProfile();
+        return $profile->avatarUrl(AVATAR_PROFILE_SIZE);
     }
 
     // override parent to add X-SUP-ID URL

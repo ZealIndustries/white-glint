@@ -31,9 +31,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-require_once INSTALLDIR . '/lib/mediafile.php';
-
 /**
  * Show up to 100 repeats of a notice
  *
@@ -63,7 +60,7 @@ class ApiStatusesRetweetsAction extends ApiAuthAction
 
         $id = $this->trimmed('id');
 
-        $this->original = Notice::staticGet('id', $id);
+        $this->original = Notice::getKV('id', $id);
 
         if (empty($this->original)) {
             // TRANS: Client error displayed trying to display redents of a non-exiting notice.

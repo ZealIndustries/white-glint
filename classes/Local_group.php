@@ -14,9 +14,6 @@ class Local_group extends Managed_DataObject
     public $created;                         // datetime   not_null default_0000-00-00%2000%3A00%3A00
     public $modified;                        // timestamp   not_null default_CURRENT_TIMESTAMP
 
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('Local_group',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -39,6 +36,20 @@ class Local_group extends Managed_DataObject
                 'local_group_nickname_key' => array('nickname'),
             ),
         );
+    }
+
+    public function getProfile()
+    {
+        $group = $this->getGroup();
+        if (!$group instanceof User_group) {
+            return null;    // TODO: Throw exception when other code is ready
+        }
+        return $group->getProfile();
+    }
+
+    public function getGroup()
+    {
+        return User_group::getKV('id', $this->group_id);
     }
 
     function setNickname($nickname)

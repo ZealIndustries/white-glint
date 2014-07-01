@@ -28,7 +28,7 @@
  * @link      http://status.net/
  */
 
-if (!defined('STATUSNET') && !defined('LACONICA')) {
+if (!defined('STATUSNET')) {
     exit(1);
 }
 
@@ -65,13 +65,13 @@ abstract class UAPPlugin extends Plugin
      *
      * @return boolean hook flag
      */
-   /* function onEndShowStatusNetStyles($action)
+    public function onEndShowStylesheets(Action $action)
     {
         // XXX: allow override by theme
-        $action->cssLink('themes/RDN/css/uap.css', 'base', 'screen, projection, tv');
+        $action->cssLink('css/uap.css', 'base', 'screen, projection, tv');
         return true;
     }
-*/
+
     /**
      * Add a medium rectangle ad at the beginning of sidebar
      *
@@ -84,7 +84,7 @@ abstract class UAPPlugin extends Plugin
         if (!is_null($this->mediumRectangle)) {
 
             $action->elementStart('div',
-                                  array('id' => 'img_medium-rectangle',
+                                  array('id' => 'ad_medium-rectangle',
                                         'class' => 'ad'));
 
             $this->showMediumRectangle($action);
@@ -125,7 +125,7 @@ abstract class UAPPlugin extends Plugin
     {
         if (!is_null($this->leaderboard)) {
             $action->elementStart('div',
-                                  array('id' => 'img_leaderboard',
+                                  array('id' => 'ad_leaderboard',
                                         'class' => 'ad'));
             $this->showLeaderboard($action);
             $action->elementEnd('div');
@@ -145,7 +145,7 @@ abstract class UAPPlugin extends Plugin
     {
         if (!is_null($this->rectangle)) {
             $action->elementStart('div',
-                                  array('id' => 'img_rectangle',
+                                  array('id' => 'ad_rectangle',
                                         'class' => 'ad'));
             $this->showRectangle($action);
             $action->elementEnd('div');
@@ -165,7 +165,7 @@ abstract class UAPPlugin extends Plugin
     {
         if (!is_null($this->wideSkyscraper)) {
             $action->elementStart('div',
-                                  array('id' => 'img_wide-skyscraper',
+                                  array('id' => 'ad_wide-skyscraper',
                                         'class' => 'ad'));
 
             $this->showWideSkyscraper($action);

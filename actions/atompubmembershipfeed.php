@@ -34,8 +34,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-
 /**
  * Feed of group memberships for a user, in ActivityStreams format
  *
@@ -64,7 +62,7 @@ class AtompubmembershipfeedAction extends ApiAuthAction
 
         $profileId = $this->trimmed('profile');
 
-        $this->_profile = Profile::staticGet('id', $profileId);
+        $this->_profile = Profile::getKV('id', $profileId);
 
         if (empty($this->_profile)) {
             // TRANS: Client exception.
@@ -250,7 +248,7 @@ class AtompubmembershipfeedAction extends ApiAuthAction
                 return;
             }
 
-            $group = User_group::staticGet('uri', $groupObj->id);
+            $group = User_group::getKV('uri', $groupObj->id);
 
             if (empty($group)) {
                 // XXX: import from listed URL or something

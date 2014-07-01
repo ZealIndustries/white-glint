@@ -55,46 +55,8 @@ class EmailSummaryPlugin extends Plugin
         $schema = Schema::get();
 
         // For storing user-submitted flags on profiles
-        $schema->ensureTable('email_summary_status',
-                             array(new ColumnDef('user_id', 'integer', null,
-                                                 false, 'PRI'),
-                                   new ColumnDef('send_summary', 'tinyint', null,
-                                                 false, null, 1),
-                                   new ColumnDef('last_summary_id', 'integer', null,
-                                                 true),
-                                   new ColumnDef('created', 'datetime', null,
-                                                 false),
-                                   new ColumnDef('modified', 'datetime', null,
-                                                 false),
-                             )
-        );
+        $schema->ensureTable('email_summary_status', Email_summary_status::schemaDef());
         return true;
-    }
-
-    /**
-     * Load related modules when needed
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value; true means continue processing, false means stop.
-     *
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-            {
-            case 'SiteEmailSummaryHandler':
-            case 'UserEmailSummaryHandler':
-                include_once $dir . '/'.strtolower($cls).'.php';
-            return false;
-            case 'Email_summary_status':
-                include_once $dir . '/'.$cls.'.php';
-                return false;
-            default:
-                return true;
-            }
     }
 
     /**
@@ -107,7 +69,7 @@ class EmailSummaryPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'EmailSummary',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Evan Prodromou',
                             'homepage' => 'http://status.net/wiki/Plugin:EmailSummary',
                             'rawdescription' =>
@@ -165,7 +127,7 @@ class EmailSummaryPlugin extends Plugin
 
         if (!empty($user)) {
 
-            $ess = Email_summary_status::staticGet('user_id', $user->id);
+            $ess = Email_summary_status::getKV('user_id', $user->id);
 
             if (empty($ess)) {
 

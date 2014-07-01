@@ -29,8 +29,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apibareauth.php';
-
 class ApiListUsersAction extends ApiBareAuthAction
 {
     var $list   = null;
@@ -42,7 +40,7 @@ class ApiListUsersAction extends ApiBareAuthAction
     var $prev_cursor = 0;
     var $users = null;
 
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         // delete list member if method is DELETE or if method is POST and an argument
         // _method is set to DELETE
@@ -54,8 +52,8 @@ class ApiListUsersAction extends ApiBareAuthAction
         $this->create = (!$this->delete &&
                          $_SERVER['REQUEST_METHOD'] == 'POST');
 
-        if($this->arg('id')) {
-            $this->user = $this->getTargetUser($this->arg('id'));
+        if ($this->arg('id')) {
+            $this->target = $this->getTargetProfile($this->arg('id'));
         }
 
         parent::prepare($args);
@@ -80,9 +78,9 @@ class ApiListUsersAction extends ApiBareAuthAction
             $this->create || $this->delete;
     }
 
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
+        parent::handle();
 
         if($this->delete) {
             return $this->handleDelete();

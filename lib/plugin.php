@@ -80,6 +80,57 @@ class Plugin
     }
 
     /**
+     * Load related modules when needed
+     *
+     * Most non-trivial plugins will require extra modules to do their work. Typically
+     * these include data classes, action classes, widget classes, or external libraries.
+     *
+     * This method receives a class name and loads the PHP file related to that class. By
+     * tradition, action classes typically have files named for the action, all lower-case.
+     * Data classes are in files with the data class name, initial letter capitalized.
+     *
+     * Note that this method will be called for *all* overloaded classes, not just ones
+     * in this plugin! So, make sure to return true by default to let other plugins, and
+     * the core code, get a chance.
+     *
+     * @param string $cls Name of the class to be loaded
+     *
+     * @return boolean hook value; true means continue processing, false means stop.
+     */
+    public function onAutoload($cls) {
+        $cls = basename($cls);
+        $basedir = INSTALLDIR . '/local/plugins/' . mb_substr(get_called_class(), 0, -6);
+        if (!file_exists($basedir)) {
+            $basedir = INSTALLDIR . '/plugins/' . mb_substr(get_called_class(), 0, -6);
+        }
+
+        $file = null;
+
+        if (preg_match('/^(\w+)(Action|Form)$/', $cls, $type)) {
+            $type = array_map('strtolower', $type);
+            $file = "$basedir/{$type[2]}s/{$type[1]}.php";
+        }
+        if (!file_exists($file)) {
+            $file = "$basedir/classes/{$cls}.php";
+
+            // library files can be put into subdirs ('_'->'/' conversion)
+            // such as LRDDMethod_WebFinger -> lib/lrddmethod/webfinger.php
+            if (!file_exists($file)) {
+                $type = strtolower($cls);
+                $type = str_replace('_', '/', $type);
+                $file = "$basedir/lib/{$type}.php";
+            }
+        }
+
+        if (!is_null($file) && file_exists($file)) {
+            require_once($file);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Checks if this plugin has localization that needs to be set up.
      * Gettext localizations can be called via the _m() helper function.
      */
@@ -111,10 +162,20 @@ class Plugin
         $this->log(LOG_DEBUG, $msg);
     }
     
-    function name()
+    public function name()
     {
         $cls = get_class($this);
         return mb_substr($cls, 0, -6);
+    }
+
+    public function version()
+    {
+        return GNUSOCIAL_VERSION;
+    }
+
+    protected function userAgent() {
+        return HTTPClient::userAgent()
+                . ' (' . get_class($this) . ' v' . $this->version() . ')';
     }
 
     function onPluginVersion(&$versions)
@@ -159,7 +220,12 @@ class Plugin
         }
 
         if (empty($path)) {
-            $path = common_config('site', 'path') . '/plugins/';
+            // XXX: extra stat().
+            if (@file_exists(INSTALLDIR.'/local/plugins/'.$plugin.'/'.$relative)) {
+                $path = common_config('site', 'path') . '/local/plugins/';
+            } else {
+                $path = common_config('site', 'path') . '/plugins/';
+            }
         }
 
         if ($path[strlen($path)-1] != '/') {

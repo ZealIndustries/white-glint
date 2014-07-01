@@ -102,7 +102,7 @@ class ActivityImporter extends QueueHandler
             }
 
             $other = $activity->actor;
-            $otherUser = User::staticGet('uri', $other->id);
+            $otherUser = User::getKV('uri', $other->id);
 
             if (!empty($otherUser)) {
                 $otherProfile = $otherUser->getProfile();
@@ -139,7 +139,7 @@ class ActivityImporter extends QueueHandler
 
         $uri = $activity->objects[0]->id;
 
-        $group = User_group::staticGet('uri', $uri);
+        $group = User_group::getKV('uri', $uri);
 
         if (empty($group)) {
             $oprofile = Ostatus_profile::ensureActivityObjectProfile($activity->objects[0]);
@@ -168,7 +168,7 @@ class ActivityImporter extends QueueHandler
 
         $sourceUri = $note->id;
 
-        $notice = Notice::staticGet('uri', $sourceUri);
+        $notice = Notice::getKV('uri', $sourceUri);
 
         if (!empty($notice)) {
 
@@ -244,7 +244,7 @@ class ActivityImporter extends QueueHandler
             // Maintain direct reply associations
             // @fixme what about conversation ID?
             if (!empty($activity->context->replyToID)) {
-                $orig = Notice::staticGet('uri',
+                $orig = Notice::getKV('uri',
                                           $activity->context->replyToID);
                 if (!empty($orig)) {
                     $options['reply_to'] = $orig->id;
@@ -290,19 +290,19 @@ class ActivityImporter extends QueueHandler
         return $saved;
     }
 
-    function filterAttention($attn)
+    protected function filterAttention(array $attn)
     {
-        $groups = array();
-        $replies = array();
+        $groups = array();  // TODO: context->attention
+        $replies = array(); // TODO: context->attention
 
-        foreach (array_unique($attn) as $recipient) {
+        foreach ($attn as $recipient=>$type) {
 
             // Is the recipient a local user?
 
-            $user = User::staticGet('uri', $recipient);
+            $user = User::getKV('uri', $recipient);
 
-            if ($user) {
-                // @fixme sender verification, spam etc?
+            if ($user instanceof User) {
+                // TODO: @fixme sender verification, spam etc?
                 $replies[] = $recipient;
                 continue;
             }
@@ -319,12 +319,12 @@ class ActivityImporter extends QueueHandler
             }
 
             // Is the recipient a local group?
-            // @fixme uri on user_group isn't reliable yet
-            // $group = User_group::staticGet('uri', $recipient);
+            // TODO: @fixme uri on user_group isn't reliable yet
+            // $group = User_group::getKV('uri', $recipient);
             $id = OStatusPlugin::localGroupFromUrl($recipient);
 
             if ($id) {
-                $group = User_group::staticGet('id', $id);
+                $group = User_group::getKV('id', $id);
                 if ($group) {
                     // Deliver to all members of this local group if allowed.
                     $profile = $sender->localProfile();

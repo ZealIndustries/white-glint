@@ -60,17 +60,7 @@ class UserFlagPlugin extends Plugin
         $schema = Schema::get();
 
         // For storing user-submitted flags on profiles
-
-        $schema->ensureTable('user_flag_profile',
-                             array(new ColumnDef('profile_id', 'integer', null,
-                                                 false, 'PRI'),
-                                   new ColumnDef('user_id', 'integer', null,
-                                                 false, 'PRI'),
-                                   new ColumnDef('created', 'datetime', null,
-                                                 false, 'MUL'),
-                                   new ColumnDef('cleared', 'datetime', null,
-                                                 true, 'MUL')));
-
+        $schema->ensureTable('user_flag_profile', User_flag_profile::schemaDef());
         return true;
     }
 
@@ -87,35 +77,6 @@ class UserFlagPlugin extends Plugin
         $m->connect('main/flag/clear', array('action' => 'clearflag'));
         $m->connect('panel/profile/flag', array('action' => 'adminprofileflag'));
         return true;
-    }
-
-    /**
-     * Auto-load our classes if called
-     *
-     * @param string $cls Class to load
-     *
-     * @return boolean hook return
-     */
-    function onAutoload($cls)
-    {
-        switch (strtolower($cls))
-        {
-        case 'flagprofileaction':
-        case 'adminprofileflagaction':
-        case 'clearflagaction':
-            include_once INSTALLDIR.'/plugins/UserFlag/' .
-              strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'flagprofileform':
-        case 'clearflagform':
-            include_once INSTALLDIR.'/plugins/UserFlag/' . strtolower($cls . '.php');
-            return false;
-        case 'user_flag_profile':
-            include_once INSTALLDIR.'/plugins/UserFlag/'.ucfirst(strtolower($cls)).'.php';
-            return false;
-        default:
-            return true;
-        }
     }
 
     /**
@@ -170,7 +131,7 @@ class UserFlagPlugin extends Plugin
             if (User_flag_profile::exists($profile->id, $user->id)) {
                 // @todo FIXME: Add a title explaining what 'flagged' means?
                 // TRANS: Message added to a profile if it has been flagged for review.
-                $action->element('p', 'flagged', _m('Flagged') . ": $user->nickname");
+                $action->element('p', 'flagged', _m('Flagged'));
             } else {
                 $form = new FlagProfileForm($action, $profile, $returnToArgs);
                 $form->show();
@@ -271,7 +232,7 @@ class UserFlagPlugin extends Plugin
         $url = 'http://status.net/wiki/Plugin:UserFlag';
 
         $versions[] = array('name' => 'UserFlag',
-            'version' => STATUSNET_VERSION,
+            'version' => GNUSOCIAL_VERSION,
             'author' => 'Evan Prodromou',
             'homepage' => $url,
             'rawdescription' =>

@@ -1,10 +1,12 @@
-# Translation of StatusNet - Poll to French (Français)
+# Translation of StatusNet - Poll to French (français)
 # Exported from translatewiki.net
 #
 # Author: Brunoperel
 # Author: Crochet.david
+# Author: Gomoko
 # Author: Iketsi
 # Author: Od1n
+# Author: Valeryan 24
 # --
 # This file is distributed under the same license as the StatusNet package.
 #
@@ -12,14 +14,14 @@ msgid ""
 msgstr ""
 "Project-Id-Version: StatusNet - Poll\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2011-09-25 21:42+0000\n"
-"PO-Revision-Date: 2011-09-25 21:44:58+0000\n"
+"POT-Creation-Date: 2012-06-30 11:07+0000\n"
+"PO-Revision-Date: 2012-06-30 11:09:37+0000\n"
 "Language-Team: French <https://translatewiki.net/wiki/Portal:fr>\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "X-POT-Import-Date: 2011-06-05 21:51:15+0000\n"
-"X-Generator: MediaWiki 1.19alpha (r98079); Translate extension (2011-09-22)\n"
-"X-Translation-Project: translatewiki.net at https://translatewiki.net\n"
+"X-Generator: MediaWiki 1.20alpha (233fc08); Translate 2012-06-21\n"
+"X-Translation-Project: translatewiki.net <https://translatewiki.net>\n"
 "X-Language-Code: fr\n"
 "X-Message-Group: #out-statusnet-plugin-poll\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
@@ -30,7 +32,7 @@ msgstr "Sondage non trouvé."
 
 #. TRANS: Client exception thrown trying to view a non-existing poll notice.
 msgid "No such poll notice."
-msgstr ""
+msgstr "Aucun avis de sondage."
 
 #. TRANS: Page title for a poll.
 #. TRANS: %1$s is the nickname of the user that created the poll, %2$s is the poll question.
@@ -95,7 +97,7 @@ msgstr "Sélection de sondage invalide."
 #. TRANS: %s a link to the poll with the chosen option as link description.
 #, php-format
 msgid "voted for \"%s\""
-msgstr "ont voté pour \"%s\""
+msgstr "a voté pour \"%s\""
 
 #. TRANS: Button text for submitting a poll response.
 msgctxt "BUTTON"

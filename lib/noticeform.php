@@ -131,7 +131,7 @@ class NoticeForm extends Form
 
         if (empty($this->to_profile) &&
             !empty($this->inreplyto)) {
-            $notice = Notice::staticGet('id', $this->inreplyto);
+            $notice = Notice::getKV('id', $this->inreplyto);
             if (!empty($notice)) {
                 $this->to_profile = $notice->getProfile();
             }
@@ -204,7 +204,8 @@ class NoticeForm extends Form
         if (Event::handle('StartShowNoticeFormData', array($this))) {
             $this->out->element('label', array('for' => 'notice_data-text',
                                                'id' => 'notice_data-text-label'),
-            sprintf(common_config('site', 'prompttext') ? common_config('site', 'prompttext') : _('What\'s up, %s?'), $this->user->nickname));
+                                // TRANS: Title for notice label. %s is the user's nickname.
+                                sprintf(_('What\'s up, %s?'), $this->user->nickname));
             // XXX: vary by defined max size
             $this->out->element('textarea', array('class' => 'notice_data-text',
                                                   'cols' => 35,
@@ -245,7 +246,7 @@ class NoticeForm extends Form
             $toWidget->show();
             $this->out->elementEnd('div');
 
-            if ($this->user->shareLocation()) {
+            if ($this->profile->shareLocation()) {
                 $this->out->hidden('notice_data-lat', empty($this->lat) ? (empty($this->profile->lat) ? null : $this->profile->lat) : $this->lat, 'lat');
                 $this->out->hidden('notice_data-lon', empty($this->lon) ? (empty($this->profile->lon) ? null : $this->profile->lon) : $this->lon, 'lon');
                 $this->out->hidden('notice_data-location_id', empty($this->location_id) ? (empty($this->profile->location_id) ? null : $this->profile->location_id) : $this->location_id, 'location_id');

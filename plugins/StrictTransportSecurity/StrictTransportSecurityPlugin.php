@@ -2,7 +2,7 @@
 /**
  * StatusNet, the distributed open-source microblogging tool
  *
- * Plugin to enable Single Sign On via CAS (Central Authentication Service)
+ * Plugin to enable Strict Transport Security headers
  *
  * PHP version 5
  *
@@ -52,7 +52,7 @@ class StrictTransportSecurityPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'StrictTransportSecurity',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Craig Andrews',
                             'homepage' => 'http://status.net/wiki/Plugin:StrictTransportSecurity',
                             'rawdescription' =>

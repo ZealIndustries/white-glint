@@ -71,40 +71,8 @@ class NoticeTitlePlugin extends Plugin
         $schema = Schema::get();
 
         // For storing titles for notices
-
-        $schema->ensureTable('notice_title',
-                             array(new ColumnDef('notice_id',
-                                                 'integer',
-                                                 null,
-                                                 true,
-                                                 'PRI'),
-                                   new ColumnDef('title',
-                                                 'varchar',
-                                                 Notice_title::MAXCHARS,
-                                                 false)));
-
+        $schema->ensureTable('notice_title', Notice_title::schemaDef());
         return true;
-    }
-
-    /**
-     * Load related modules when needed
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value; true means continue processing, false means stop.
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'Notice_title':
-            include_once $dir . '/'.$cls.'.php';
-            return false;
-        default:
-            return true;
-        }
     }
 
     /**
@@ -279,7 +247,7 @@ class NoticeTitlePlugin extends Plugin
      */
     function onNoticeDeleteRelated($notice)
     {
-        $nt = Notice_title::staticGet('notice_id', $notice->id);
+        $nt = Notice_title::getKV('notice_id', $notice->id);
 
         if (!empty($nt)) {
             $nt->delete();

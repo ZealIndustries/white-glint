@@ -63,13 +63,7 @@ class DefaultProfileBlock extends AccountProfileBlock
 
     function avatar()
     {
-        $avatar = $this->profile->getAvatar($this->avatarSize());
-        if (empty($avatar)) {
-            $avatar = $this->profile->getAvatar(73);
-        }
-        return (!empty($avatar)) ? 
-            $avatar->displayUrl() : 
-            Avatar::defaultImage($this->avatarSize());
+        return $this->profile->avatarUrl(AVATAR_STREAM_SIZE);
     }
 
     function location()
@@ -87,17 +81,8 @@ class DefaultProfileBlock extends AccountProfileBlock
         return null;
     }
 
-    function show()
+    function otherProfiles()
     {
-        //$this->showActions();
-		$this->out->elementStart('span', array('id' => 'usercard_avatar'));
-        $this->showAvatar();
-		$this->out->element('a', array('title' => _('Edit avatar'), 'href' => common_local_url('avatarsettings')), _('Edit avatar'));
-		$this->out->elementEnd('span');
-        $this->showName();
-        //$this->showLocation();
-        //$this->showHomepage();
-        //$this->showDescription();
-        //$this->showTags();
+        return array();
     }
 }

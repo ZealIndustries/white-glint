@@ -32,8 +32,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-
 /**
  * Un-blocks the user specified in the ID parameter for the authenticating user.
  * Returns the un-blocked user in the requested format when successful.
@@ -47,6 +45,8 @@ require_once INSTALLDIR . '/lib/apiauth.php';
  */
 class ApiBlockDestroyAction extends ApiAuthAction
 {
+    protected $needPost = true;
+
     var $other   = null;
 
     /**
@@ -56,11 +56,10 @@ class ApiBlockDestroyAction extends ApiAuthAction
      *
      * @return boolean success flag
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
-        $this->user   = $this->auth_user;
         $this->other  = $this->getTargetProfile($this->arg('id'));
 
         return true;
@@ -71,28 +70,15 @@ class ApiBlockDestroyAction extends ApiAuthAction
      *
      * Save the new message
      *
-     * @param array $args $_REQUEST data (unused)
-     *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
-
-        if ($_SERVER['REQUEST_METHOD'] != 'POST') {
-            $this->clientError(
-                // TRANS: Client error. POST is a HTTP command. It should not be translated.
-                _('This method requires a POST.'),
-                400,
-                $this->format
-            );
-            return;
-        }
+        parent::handle();
 
         if (empty($this->user) || empty($this->other)) {
             // TRANS: Client error when user not found for an API action to remove a block for a user.
-            $this->clientError(_('No such user.'), 404, $this->format);
-            return;
+            $this->clientError(_('No such user.'), 404);
         }
 
         if ($this->user->hasBlocked($this->other)) {

@@ -67,18 +67,6 @@ class Subscription extends Managed_DataObject
                 'subscription_token_idx' => array('token'),
             ),
         );
-    }    
-
-    /* Static get */
-    function staticGet($k,$v=null)
-    { return Memcached_DataObject::staticGet('Subscription',$k,$v); }
-
-    /* the code above is auto generated do not remove the tag below */
-    ###END_AUTOCODE
-
-    function pkeyGet($kv)
-    {
-        return Memcached_DataObject::pkeyGet('Subscription', $kv);
     }
 
     /**
@@ -91,16 +79,8 @@ class Subscription extends Managed_DataObject
      * @return mixed Subscription or Subscription_queue: new subscription info
      */
 
-    static function start($subscriber, $other, $force=false)
+    static function start(Profile $subscriber, Profile $other, $force=false)
     {
-        // @fixme should we enforce this as profiles in callers instead?
-        if ($subscriber instanceof User) {
-            $subscriber = $subscriber->getProfile();
-        }
-        if ($other instanceof User) {
-            $other = $other->getProfile();
-        }
-
         if (!$subscriber->hasRight(Right::SUBSCRIBE)) {
             // TRANS: Exception thrown when trying to subscribe while being banned from subscribing.
             throw new Exception(_('You have been banned from subscribing.'));
@@ -117,7 +97,7 @@ class Subscription extends Managed_DataObject
         }
 
         if (Event::handle('StartSubscribe', array($subscriber, $other))) {
-            $otherUser = User::staticGet('id', $other->id);
+            $otherUser = User::getKV('id', $other->id);
             if ($otherUser && $otherUser->subscribe_policy == User::SUBSCRIBE_POLICY_MODERATE && !$force) {
                 $sub = Subscription_queue::saveNew($subscriber, $other);
                 $sub->notify();
@@ -191,11 +171,11 @@ class Subscription extends Managed_DataObject
 
     function notifyEmail()
     {
-        $subscribedUser = User::staticGet('id', $this->subscribed);
+        $subscribedUser = User::getKV('id', $this->subscribed);
 
         if (!empty($subscribedUser)) {
 
-            $subscriber = Profile::staticGet('id', $this->subscriber);
+            $subscriber = Profile::getKV('id', $this->subscriber);
 
             mail_subscribe_notify_profile($subscribedUser, $subscriber);
         }
@@ -205,7 +185,7 @@ class Subscription extends Managed_DataObject
      * Cancel a subscription
      *
      */
-    function cancel($subscriber, $other)
+    static function cancel(Profile $subscriber, Profile $other)
     {
         if (!self::exists($subscriber, $other)) {
             // TRANS: Exception thrown when trying to unsibscribe without a subscription.
@@ -250,7 +230,7 @@ class Subscription extends Managed_DataObject
         return;
     }
 
-    function exists($subscriber, $other)
+    static function exists(Profile $subscriber, Profile $other)
     {
         $sub = Subscription::pkeyGet(array('subscriber' => $subscriber->id,
                                            'subscribed' => $other->id));
@@ -259,8 +239,16 @@ class Subscription extends Managed_DataObject
 
     function asActivity()
     {
-        $subscriber = Profile::staticGet('id', $this->subscriber);
-        $subscribed = Profile::staticGet('id', $this->subscribed);
+        $subscriber = Profile::getKV('id', $this->subscriber);
+        $subscribed = Profile::getKV('id', $this->subscribed);
+
+        if (empty($subscriber)) {
+            throw new Exception(sprintf(_('No profile for the subscriber: %d'), $this->subscriber));
+        }
+
+        if (empty($subscribed)) {
+            throw new Exception(sprintf(_('No profile for the subscribed: %d'), $this->subscribed));
+        }
 
         $act = new Activity();
 
@@ -299,117 +287,100 @@ class Subscription extends Managed_DataObject
      * chronological order. Has offset & limit to make paging
      * easy.
      *
-     * @param integer $subscriberId Profile ID of the subscriber
+     * @param integer $profile_id   ID of the subscriber profile
      * @param integer $offset       Offset from latest
      * @param integer $limit        Maximum number to fetch
      *
      * @return Subscription stream of subscriptions; use fetch() to iterate
      */
-    static function bySubscriber($subscriberId,
-                                 $offset = 0,
-                                 $limit = PROFILES_PER_PAGE)
+    public static function bySubscriber($profile_id, $offset = 0, $limit = PROFILES_PER_PAGE)
     {
-        if ($offset + $limit > self::CACHE_WINDOW) {
-            return new ArrayWrapper(self::realBySubscriber($subscriberId,
-                                                           $offset,
-                                                           $limit));
-        } else {
-            $key = 'subscription:by-subscriber:'.$subscriberId;
-            $window = self::cacheGet($key);
-            if ($window === false) {
-                $window = self::realBySubscriber($subscriberId,
-                                                 0,
-                                                 self::CACHE_WINDOW);
-                self::cacheSet($key, $window);
-            }
-            return new ArrayWrapper(array_slice($window,
-                                                $offset,
-                                                $limit));
-        }
-    }
-
-    private static function realBySubscriber($subscriberId,
-                                             $offset,
-                                             $limit)
-    {
-        $sub = new Subscription();
-
-        $sub->subscriber = $subscriberId;
-
-        $sub->whereAdd('subscribed != ' . $subscriberId);
-
-        $sub->orderBy('created DESC');
-        $sub->limit($offset, $limit);
-
-        $sub->find();
-
-        $subs = array();
-
-        while ($sub->fetch()) {
-            $subs[] = clone($sub);
-        }
-
-        return $subs;
+        // "by subscriber" means it is the list of subscribed users we want
+        $ids = self::getSubscribedIDs($profile_id, $offset, $limit);
+        return Subscription::listFind('subscribed', $ids);
     }
 
     /**
-     * Stream of subscriptions with the same subscribed profile
+     * Stream of subscriptions with the same subscriber
      *
-     * Useful for showing pages that list subscribers in reverse
+     * Useful for showing pages that list subscriptions in reverse
      * chronological order. Has offset & limit to make paging
      * easy.
      *
-     * @param integer $subscribedId Profile ID of the subscribed
+     * @param integer $profile_id   ID of the subscribed profile
      * @param integer $offset       Offset from latest
      * @param integer $limit        Maximum number to fetch
      *
      * @return Subscription stream of subscriptions; use fetch() to iterate
      */
-    static function bySubscribed($subscribedId,
-                                 $offset = 0,
-                                 $limit = PROFILES_PER_PAGE)
+    public static function bySubscribed($profile_id, $offset = 0, $limit = PROFILES_PER_PAGE)
     {
-        if ($offset + $limit > self::CACHE_WINDOW) {
-            return new ArrayWrapper(self::realBySubscribed($subscribedId,
-                                                           $offset,
-                                                           $limit));
-        } else {
-            $key = 'subscription:by-subscribed:'.$subscribedId;
-            $window = self::cacheGet($key);
-            if ($window === false) {
-                $window = self::realBySubscribed($subscribedId,
-                                                 0,
-                                                 self::CACHE_WINDOW);
-                self::cacheSet($key, $window);
-            }
-            return new ArrayWrapper(array_slice($window,
-                                                $offset,
-                                                $limit));
-        }
+        // "by subscribed" means it is the list of subscribers we want
+        $ids = self::getSubscriberIDs($profile_id, $offset, $limit);
+        return Subscription::listFind('subscriber', $ids);
     }
 
-    private static function realBySubscribed($subscribedId,
-                                             $offset,
-                                             $limit)
+
+    // The following are helper functions to the subscription lists,
+    // notably the public ones get used in places such as Profile
+    public static function getSubscribedIDs($profile_id, $offset, $limit) {
+        return self::getSubscriptionIDs('subscribed', $profile_id, $offset, $limit);
+    }
+
+    public static function getSubscriberIDs($profile_id, $offset, $limit) {
+        return self::getSubscriptionIDs('subscriber', $profile_id, $offset, $limit);
+    }
+
+    private static function getSubscriptionIDs($get_type, $profile_id, $offset, $limit)
     {
-        $sub = new Subscription();
-
-        $sub->subscribed = $subscribedId;
-
-        $sub->whereAdd('subscriber != ' . $subscribedId);
-
-        $sub->orderBy('created DESC');
-        $sub->limit($offset, $limit);
-
-        $sub->find();
-
-        $subs = array();
-
-        while ($sub->fetch()) {
-            $subs[] = clone($sub);
+        switch ($get_type) {
+        case 'subscribed':
+            $by_type  = 'subscriber';
+            break;
+        case 'subscriber':
+            $by_type  = 'subscribed';
+            break;
+        default:
+            throw new Exception('Bad type argument to getSubscriptionIDs');
         }
 
-        return $subs;
+        $cacheKey = 'subscription:by-'.$by_type.':'.$profile_id;
+
+        $queryoffset = $offset;
+        $querylimit = $limit;
+
+        if ($offset + $limit <= self::CACHE_WINDOW) {
+            // Oh, it seems it should be cached
+            $ids = self::cacheGet($cacheKey);
+            if (is_array($ids)) {
+                return array_slice($ids, $offset, $limit);
+            }
+            // Being here indicates we didn't find anything cached
+            // so we'll have to fill it up simultaneously
+            $queryoffset = 0;
+            $querylimit  = self::CACHE_WINDOW;
+        }
+
+        $sub = new Subscription();
+        $sub->$by_type = $profile_id;
+        $sub->selectAdd($get_type);
+        $sub->whereAdd("{$get_type} != {$profile_id}");
+        $sub->orderBy('created DESC');
+        $sub->limit($queryoffset, $querylimit);
+
+        if (!$sub->find()) {
+            return array();
+        }
+
+        $ids = $sub->fetchAll($get_type);
+
+        // If we're simultaneously filling up cache, remember to slice
+        if ($offset === 0 && $querylimit === self::CACHE_WINDOW) {
+            self::cacheSet($cacheKey, $ids);
+            return array_slice($ids, $offset, $limit);
+        }
+
+        return $ids;
     }
 
     /**
@@ -418,18 +389,16 @@ class Subscription extends Managed_DataObject
      * Because we cache subscriptions, it's useful to flush them
      * here.
      *
-     * @param mixed $orig Original version of object
+     * @param mixed $dataObject Original version of object
      *
      * @return boolean success flag.
      */
-    function update($orig=null)
+    function update($dataObject=false)
     {
-        $result = parent::update($orig);
-
         self::blow('subscription:by-subscriber:'.$this->subscriber);
         self::blow('subscription:by-subscribed:'.$this->subscribed);
 
-        return $result;
+        return parent::update($dataObject);
     }
 
     function getURI()

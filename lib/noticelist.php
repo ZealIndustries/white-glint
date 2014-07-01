@@ -81,8 +81,7 @@ class NoticeList extends Widget
     function show()
     {
         $this->out->elementStart('div', array('id' =>'notices_primary'));
-		$user = common_current_user();
-        $this->out->elementStart('ol', array('class' => 'notices xoxo' . ((!empty($user) && $user->streamModeOnly()) ? ' oldschool_stream' : '')));
+        $this->out->elementStart('ol', array('class' => 'notices xoxo'));
 
 		$notices = $this->notice->fetchAll();
 		$total   = count($notices);
@@ -125,29 +124,32 @@ class NoticeList extends Widget
     
     static function prefill(&$notices, $avatarSize=AVATAR_STREAM_SIZE)
     {
-        // Prefill attachments
-        Notice::fillAttachments($notices);
-        // Prefill attachments
-        Notice::fillFaves($notices);
-        // Prefill repeat data
-        Notice::fillRepeats($notices);
-    	// Prefill the profiles
-    	$profiles = Notice::fillProfiles($notices);
-    	// Prefill the avatars
-    	Profile::fillAvatars($profiles, $avatarSize);
-    	
-    	$p = Profile::current();
-    	
-    	if (!empty($p)) {
+        if (Event::handle('StartNoticeListPrefill', array(&$notices, $avatarSize))) {
 
-            $ids = array();
+            // Prefill attachments
+            Notice::fillAttachments($notices);
+            // Prefill attachments
+            Notice::fillFaves($notices);
+            // Prefill repeat data
+            Notice::fillRepeats($notices);
+            // Prefill the profiles
+            $profiles = Notice::fillProfiles($notices);
     	
-            foreach ($notices as $notice) {
-                $ids[] = $notice->id;
+            $p = Profile::current();
+    	
+            if (!empty($p)) {
+
+                $ids = array();
+    	
+                foreach ($notices as $notice) {
+                    $ids[] = $notice->id;
+                }
+    	
+                Fave::pivotGet('notice_id', $ids, array('user_id' => $p->id));
+                Notice::pivotGet('repeat_of', $ids, array('profile_id' => $p->id));
             }
-    	
-    		Memcached_DataObject::pivotGet('Fave', 'notice_id', $ids, array('user_id' => $p->id));
-    		Memcached_DataObject::pivotGet('Notice', 'repeat_of', $ids, array('profile_id' => $p->id));
-    	}
+
+            Event::handle('EndNoticeListPrefill', array(&$notices, &$profiles, $avatarSize));
+        }
     }
 }

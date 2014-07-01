@@ -8,10 +8,9 @@ people for %%site.name%%.
 Bugs
 ----
 
-If you think you've found a bug in the Rainbow Dash Network software, or if there's a new feature you'd like to see, 
-alert an administrator through either of the options listed below. Note that our software is heavily modified from 
-the original distribution of [StatusNet](http://status.net), so bugs encountered here should not be filed with their 
-bug tracker.
+If you think you've found a bug in the [StatusNet](http://status.net/) software,
+or if there's a new feature you'd like to see, add it into the [StatusNet bug database](http://status.net/bugs/). Don't forget to check the list of
+existing bugs to make sure it hasn't already been reported!
 
 Email
 -----
@@ -22,6 +21,6 @@ Post a notice
 -------------
 
 If you have a question about how to do something, just post a notice
-with your question. Watch your inbox or the [public timeline](%%action.top%%)
+with your question. Watch your inbox [public timeline](%%action.top%%)
 for answers.
 

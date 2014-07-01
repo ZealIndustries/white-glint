@@ -35,14 +35,13 @@ class OStatusInitAction extends Action
     var $profile;
     var $err;
 
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
         if (common_logged_in()) {
             // TRANS: Client error.
             $this->clientError(_m('You can use the local subscription!'));
-            return false;
         }
 
         // Local user or group the remote wants to subscribe to
@@ -57,9 +56,9 @@ class OStatusInitAction extends Action
         return true;
     }
 
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
+        parent::handle();
 
         if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             /* Use a session token for CSRF protection. */
@@ -80,9 +79,7 @@ class OStatusInitAction extends Action
     {
         $this->err = $err;
         if ($this->boolean('ajax')) {
-            header('Content-Type: text/xml;charset=utf-8');
-            $this->xw->startDocument('1.0', 'UTF-8');
-            $this->elementStart('html');
+            $this->startHTML('text/xml;charset=utf-8');
             $this->elementStart('head');
             // TRANS: Form title.
             $this->element('title', null, _m('TITLE','Subscribe to user'));
@@ -90,7 +87,7 @@ class OStatusInitAction extends Action
             $this->elementStart('body');
             $this->showContent();
             $this->elementEnd('body');
-            $this->elementEnd('html');
+            $this->endHTML();
         } else {
             $this->showPage();
         }
@@ -98,6 +95,7 @@ class OStatusInitAction extends Action
 
     function showContent()
     {
+    
         if ($this->group) {
             // TRANS: Form legend. %s is a group name.
             $header = sprintf(_m('Join group %s'), $this->group);
@@ -145,7 +143,7 @@ class OStatusInitAction extends Action
         // TRANS: Field label.
         $this->input('profile', _m('Profile Account'), $this->profile,
                       // TRANS: Tooltip for field label "Profile Account".
-                     _m('Your account ID (e.g. user@identi.ca).'));
+                     _m('Your account ID (e.g. user@example.com).'));
         $this->elementEnd('li');
         $this->elementEnd('ul');
         $this->submit('submit', $submit);
@@ -176,20 +174,18 @@ class OStatusInitAction extends Action
         $target_profile = $this->targetProfile();
 
         $disco = new Discovery;
-        $result = $disco->lookup($acct);
-        if (!$result) {
-            // TRANS: Client error.
-            $this->clientError(_m('Could not look up OStatus account profile.'));
-        }
+        $xrd = $disco->lookup($acct);
 
-        foreach ($result->links as $link) {
-            if ($link['rel'] == 'http://ostatus.org/schema/1.0/subscribe') {
-                // We found a URL - let's redirect!
-                $url = Discovery::applyTemplate($link['template'], $target_profile);
-                common_log(LOG_INFO, "Sending remote subscriber $acct to $url");
-                common_redirect($url, 303);
+        $link = $xrd->get('http://ostatus.org/schema/1.0/subscribe');
+        if (!is_null($link)) {
+            // We found a URL - let's redirect!
+            if (!empty($link->template)) {
+                $url = Discovery::applyTemplate($link->template, $target_profile);
+            } else {
+                $url = $link->href;
             }
-
+            common_log(LOG_INFO, "Sending remote subscriber $acct to $url");
+            common_redirect($url, 303);
         }
         // TRANS: Client error.
         $this->clientError(_m('Could not confirm remote profile address.'));
@@ -213,7 +209,7 @@ class OStatusInitAction extends Action
     function targetProfile()
     {
         if ($this->nickname) {
-            $user = User::staticGet('nickname', $this->nickname);
+            $user = User::getKV('nickname', $this->nickname);
             if ($user) {
                 return common_local_url('userbyid', array('id' => $user->id));
             } else {
@@ -221,7 +217,7 @@ class OStatusInitAction extends Action
                 $this->clientError(_m('No such user.'));
             }
         } else if ($this->group) {
-            $group = Local_group::staticGet('nickname', $this->group);
+            $group = Local_group::getKV('nickname', $this->group);
             if ($group) {
                 return common_local_url('groupbyid', array('id' => $group->group_id));
             } else {
@@ -229,7 +225,7 @@ class OStatusInitAction extends Action
                 $this->clientError(_m('No such group.'));
             }
         } else if ($this->peopletag && $this->tagger) {
-            $user = User::staticGet('nickname', $this->tagger);
+            $user = User::getKV('nickname', $this->tagger);
             if (empty($user)) {
                 // TRANS: Client error.
                 $this->clientError(_m('No such user.'));

@@ -45,7 +45,8 @@ if (!defined('STATUSNET') && !defined('LACONICA')) {
  * @author    Craig Andrews <candrews@integralblue.com>
  * @author    Brion Vibber <brion@status.net>
  * @author    Evan Prodromou <evan@status.net>
- * @copyright 2009 Free Software Foundation, Inc http://www.fsf.org
+ * @author    Mikael Nordfeldth <mmn@hethane.se>
+ * @copyright 2009-2013 Free Software Foundation, Inc http://www.fsf.org
  * @copyright 2009-2010 StatusNet, Inc.
  * @license   http://www.fsf.org/licensing/licenses/agpl-3.0.html GNU Affero General Public License version 3.0
  * @link      http://status.net/
@@ -79,20 +80,6 @@ class RequireValidatedEmailPlugin extends Plugin
      */
     public $disallowLogin = false;
 
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'ConfirmfirstemailAction':
-            include_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        default:
-            return true;
-        }
-    }
-
     function onRouterInitialized($m)
     {
         $m->connect('main/confirmfirst/:code',
@@ -110,7 +97,7 @@ class RequireValidatedEmailPlugin extends Plugin
      */
     function onStartNoticeSave($notice)
     {
-        $user = User::staticGet('id', $notice->profile_id);
+        $user = User::getKV('id', $notice->profile_id);
         if (!empty($user)) { // it's a remote notice
             if (!$this->validated($user)) {
                 // TRANS: Client exception thrown when trying to post notices before validating an e-mail address.
@@ -226,7 +213,7 @@ class RequireValidatedEmailPlugin extends Plugin
     {
         $versions[] =
           array('name' => 'Require Validated Email',
-                'version' => STATUSNET_VERSION,
+                'version' => GNUSOCIAL_VERSION,
                 'author' => 'Craig Andrews, '.
                 'Evan Prodromou, '.
                 'Brion Vibber',
@@ -240,19 +227,20 @@ class RequireValidatedEmailPlugin extends Plugin
     }
 
     /**
-     * Hide the notice form if the user isn't able to post.
+     * Show an error message about validating user email before posting
      *
+     * @param string $tag    Current tab tag value
      * @param Action $action action being shown
+     * @param Form   $form   object producing the form
      *
      * @return boolean hook value
      */
-    function onStartShowNoticeForm($action)
+    function onStartMakeEntryForm($tag, $action, &$form)
     {
         $user = common_current_user();
-        if (!empty($user)) { // it's a remote notice
+        if (!empty($user)) {
             if (!$this->validated($user)) {
-                $action->raw('<div style="clear: both;" class="error">Remember to validate your email first!</div>');
-                return false;
+                $action->element('div', array('class'=>'error'), _m('You must validate an email address before posting!'));
             }
         }
         return true;
@@ -270,7 +258,7 @@ class RequireValidatedEmailPlugin extends Plugin
     {
         if ($right == Right::CREATEGROUP ||
             ($this->disallowLogin && ($right == Right::WEBLOGIN || $right == Right::API))) {
-            $user = User::staticGet('id', $profile->id);
+            $user = User::getKV('id', $profile->id);
             if ($user && !$this->validated($user)) {
                 $result = false;
                 return false;

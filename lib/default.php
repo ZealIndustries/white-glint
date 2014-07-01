@@ -20,17 +20,17 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * @category  Config
- * @package   StatusNet
+ * @package   GNUsocial
  * @author    Evan Prodromou <evan@status.net>
  * @copyright 2008-9 StatusNet, Inc.
  * @license   http://www.fsf.org/licensing/licenses/agpl-3.0.html GNU Affero General Public License version 3.0
- * @link      http://status.net/
+ * @link      http://www.gnu.org/software/social/
  */
 
 $default =
     array('site' =>
-        array('name' => 'Just another StatusNet microblog',
-              'nickname' => 'statusnet',
+        array('name' => 'Just another GNU social node',
+              'nickname' => 'gnusocial',
               'wildcard' => null,
               'server' => $_server,
               'theme' => 'neo',
@@ -56,17 +56,16 @@ $default =
               'private' => true,
               'ssl' => 'never',
               'sslserver' => null,
-              'shorturllength' => 30,
               'dupelimit' => 60, // default for same person saying the same thing
               'textlimit' => 0, // in chars; 0 == no limit
               'indent' => true,
               'use_x_sendfile' => false,
               'notice' => null, // site wide notice text
               'build' => 1, // build number, for code-dependent cache
-              'minify' => true, // true to use the minified versions of JS files; false to use orig files. Can aid during development
+              'minify' => false, // true to use the minified versions of JS files; false to use orig files. Can aid during development
               ),
         'db' =>
-        array('database' => 'YOU HAVE TO SET THIS IN config.php',
+          array('database' => null, // must be set
               'schema_location' => INSTALLDIR . '/classes',
               'class_location' => INSTALLDIR . '/classes',
               'require_prefix' => 'classes/',
@@ -86,7 +85,7 @@ $default =
               'priority' => 'debug', # XXX: currently ignored
               'facility' => LOG_USER),
         'queue' =>
-        array('enabled' => false,
+        array('enabled' => true,
               'subsystem' => 'db', # default to database, or 'stomp'
               'stomp_server' => null,
               'queue_basename' => '/queue/statusnet/',
@@ -132,11 +131,14 @@ $default =
               'restore' => true,
               'delete' => false,
               'move' => true),
+        'image' =>
+        array('jpegquality' => 85),
         'avatar' =>
         array('server' => null,
               'dir' => INSTALLDIR . '/avatar/',
               'path' => $_path . '/avatar/',
-              'ssl' => null),
+              'ssl' => null,
+              'maxsize' => 300),
         'background' =>
         array('server' => null,
               'dir' => INSTALLDIR . '/background/',
@@ -151,6 +153,9 @@ $default =
               'dir' => null,
               'path'=> null,
               'ssl' => null),
+        'usertheme' =>
+        array('linkcolor' => 'black',
+              'backgroundcolor' => 'black'),
         'theme_upload' =>
         array('enabled' => extension_loaded('zip')),
         'javascript' =>
@@ -167,17 +172,6 @@ $default =
         array('enabled' => false, // whether to throttle edits; false by default
               'count' => 20, // number of allowed messages in timespan
               'timespan' => 600), // timespan for throttling
-        'xmpp' =>
-        array('enabled' => false,
-              'server' => 'INVALID SERVER',
-              'port' => 5222,
-              'user' => 'update',
-              'encryption' => true,
-              'resource' => 'uniquename',
-              'password' => 'blahblahblah',
-              'host' => null, # only set if != server
-              'debug' => false, # print extra debug info
-              'public' => array()), # JIDs of users who want to receive the public stream
         'invite' =>
         array('enabled' => true),
         'tag' =>
@@ -248,8 +242,8 @@ $default =
                                    'application/vnd.oasis.opendocument.formula-template',
                                    'application/vnd.oasis.opendocument.text-master',
                                    'application/vnd.oasis.opendocument.text-web',
-                                   //'application/x-zip',
-                                   //'application/zip',
+                                   'application/x-zip',
+                                   'application/zip',
                                    'text/plain',
                                    'video/mpeg',
                                    'video/mp4',
@@ -288,44 +282,34 @@ $default =
               'gc_limit' => 1000), // max sessions to expire at a time
         'notice' =>
         array('contentlimit' => null,
-              'defaultscope' => null), // null means 1 if site/private, 0 otherwise
+              'defaultscope' => null, // null means 1 if site/private, 0 otherwise
+              'hidespam' => false), // Whether to hide silenced users from timelines
         'message' =>
         array('contentlimit' => null),
         'location' =>
         array('share' => 'user', // whether to share location; 'always', 'user', 'never'
-              'sharedefault' => true),
-        'omb' =>
-        array('timeout' => 5), // HTTP request timeout in seconds when contacting remote hosts for OMB updates
+              'sharedefault' => false),
         'logincommand' =>
         array('disabled' => true),
         'plugins' =>
-        array('default' => array('LilUrl' => array('shortenerName'=>'ur1.ca',
-                                                   'freeService' => true,
-                                                   'serviceUrl'=>'http://ur1.ca/'),
-                                 'PtitUrl' => array('shortenerName' => 'ptiturl.com',
-                                                    'serviceUrl' => 'http://ptiturl.com/?creer=oui&action=Reduire&url=%1$s'),
-                                 'SimpleUrl' => array(array('shortenerName' => 'is.gd', 'serviceUrl' => 'http://is.gd/api.php?longurl=%1$s'),
-                                                      array('shortenerName' => 'snipr.com', 'serviceUrl' => 'http://snipr.com/site/snip?r=simple&link=%1$s'),
-                                                      array('shortenerName' => 'metamark.net', 'serviceUrl' => 'http://metamark.net/api/rest/simple?long_url=%1$s'),
-                                                      array('shortenerName' => 'tinyurl.com', 'serviceUrl' => 'http://tinyurl.com/api-create.php?url=%1$s')),
-                                 'TightUrl' => array('shortenerName' => '2tu.us', 'freeService' => true,'serviceUrl'=>'http://2tu.us/?save=y&url=%1$s'),
-                                 'Mapstraction' => null,
-                                 'OStatus' => null,
-                                 //'WikiHashtags' => null,
-                                 'ClientSideShorten' => null,
-                                 /*'StrictTransportSecurity' => null,*/
-                                 'Bookmark' => null,
-                                 'Event' => null,
-                                 'Poll' => null,
-                                 /*'QnA' => null,*/
-                                 'SearchSub' => null,
-                                 'TagSub' => null,
-                                 /*'Directory' => null,
-                                 'ExtendedProfile' => null,*/
-                                 'RSSCloud' => null,
-                                 'Geonames' => null,
-                                 'Activity' => null,
-                                 'OpenID' => null),
+        array('core' => array(
+                            'AuthCrypt' => array(),
+                            'Cronish' => array(),
+                            'LRDD' => array(),
+                            'OpportunisticQM' => array(),
+                            'StrictTransportSecurity' => array(),
+                        ),
+              'default' => array(
+                            'Activity' => array(),
+                            'Bookmark' => array(),
+                            'ClientSideShorten' => array(),
+                            'Event' => array(),
+                            'OpenID' => array(),
+                            'Poll' => array(),
+                            'QnA' => array(),
+                            'SearchSub' => array(),
+                            'TagSub' => array(),
+                        ),
               'locale_path' => false, // Set to a path to use *instead of* each plugin's own locale subdirectories
               'server' => null,
               'sslserver' => null,
@@ -334,7 +318,7 @@ $default =
               ),
         'pluginlist' => array(),
         'admin' =>
-        array('panels' => array('site', 'user', 'paths', 'access', 'design', 'sessions', 'sitenotice', 'license', 'plugins')),
+        array('panels' => array('site', 'user', 'paths', 'access', 'sessions', 'sitenotice', 'license', 'plugins')),
         'singleuser' =>
         array('enabled' => false,
               'nickname' => null),
@@ -350,8 +334,8 @@ $default =
               'peopletag' => true,
               'external' => 'sometimes'), // Options: 'sometimes', 'never', default = 'sometimes'
         'url' =>
-        array('shortener' => 'ur1.ca',
-              'maxlength' => 25,
+        array('shortener' => 'internal',
+              'maxurllength' => 100,
               'maxnoticelength' => -1),
         'http' => // HTTP client settings when contacting other sites
         array('ssl_cafile' => false, // To enable SSL cert validation, point to a CA bundle (eg '/usr/lib/ssl/certs/ca-certificates.crt')

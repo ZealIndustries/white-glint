@@ -52,6 +52,24 @@ class ForceGroupPlugin extends Plugin
     function onStartNoticeDistribute($notice)
     {
         $profile = $notice->getProfile();
+
+        $isRemote = !(User::getKV('id', $profile->id));
+        if ($isRemote) {
+            /*
+             * Notices from remote users on other sites
+             * will normally not end up here unless they're
+             * specifically directed here, e.g.: via explicit
+             * post to a remote (to them) group. But remote
+             * notices can also be `pulled in' as a result of
+             * local users subscribing to the remote user;
+             * from the remote user's perspective, this results
+             * in group-forcing appearing effectively random.
+             * So let's be consistent, and just never force
+             * incoming remote notices into a ForceGroup:
+             */
+            return true;
+        }
+
         foreach ($this->post as $nickname) {
             $group = User_group::getForNickname($nickname);
             if ($group && $profile->isMember($group)) {
@@ -61,9 +79,8 @@ class ForceGroupPlugin extends Plugin
         return true;
     }
 
-    function onEndUserRegister($profile, $user)
+    public function onEndUserRegister(Profile $profile)
     {
-        $profile = $user->getProfile();
         foreach ($this->join as $nickname) {
             $group = User_group::getForNickname($nickname);
             if ($group && !$profile->isMember($group)) {
@@ -73,7 +90,7 @@ class ForceGroupPlugin extends Plugin
                     // TRANS: Server exception.
                     // TRANS: %1$s is a user nickname, %2$s is a group nickname.
                     throw new ServerException(sprintf(_m('Could not join user %1$s to group %2$s.'),
-                                               $user->nickname, $group->nickname));
+                                               $profile->nickname, $group->nickname));
                 }
             }
         }
@@ -93,7 +110,7 @@ class ForceGroupPlugin extends Plugin
         $url = 'http://status.net/wiki/Plugin:ForceGroup';
 
         $versions[] = array('name' => 'ForceGroup',
-            'version' => STATUSNET_VERSION,
+            'version' => GNUSOCIAL_VERSION,
             'author' => 'Brion Vibber',
             'homepage' => $url,
             'rawdescription' =>

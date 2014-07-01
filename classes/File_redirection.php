@@ -17,11 +17,7 @@
  * along with this program.     If not, see <http://www.gnu.org/licenses/>.
  */
 
-if (!defined('STATUSNET') && !defined('LACONICA')) { exit(1); }
-
-require_once INSTALLDIR.'/classes/Memcached_DataObject.php';
-require_once INSTALLDIR.'/classes/File.php';
-require_once INSTALLDIR.'/classes/File_oembed.php';
+if (!defined('GNUSOCIAL')) { exit(1); }
 
 /**
  * Table Definition for file_redirection
@@ -38,9 +34,6 @@ class File_redirection extends Managed_DataObject
     public $redirections;                    // int(4)
     public $httpcode;                        // int(4)
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
-
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('File_redirection',$k,$v); }
 
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
@@ -168,16 +161,16 @@ class File_redirection extends Managed_DataObject
      */
     public function where($in_url, $discover=true) {
         // let's see if we know this...
-        $a = File::staticGet('url', $in_url);
+        $a = File::getKV('url', $in_url);
 
         if (!empty($a)) {
             // this is a direct link to $a->url
             return $a->url;
         } else {
-            $b = File_redirection::staticGet('url', $in_url);
+            $b = File_redirection::getKV('url', $in_url);
             if (!empty($b)) {
                 // this is a redirect to $b->file_id
-                $a = File::staticGet('id', $b->file_id);
+                $a = File::getKV('id', $b->file_id);
                 return $a->url;
             }
         }
@@ -253,8 +246,10 @@ class File_redirection extends Managed_DataObject
         if (!empty($short_url) && $short_url != $long_url) {
             $short_url = (string)$short_url;
             // store it
-            $file = File::staticGet('url', $long_url);
-            if (empty($file)) {
+            $file = File::getKV('url', $long_url);
+            if ($file instanceof File) {
+                $file_id = $file->id;
+            } else {
                 // Check if the target URL is itself a redirect...
                 $redir_data = File_redirection::where($long_url);
                 if (is_array($redir_data)) {
@@ -267,7 +262,7 @@ class File_redirection extends Managed_DataObject
                     }
                 } else if (is_string($redir_data)) {
                     // The file is a known redirect target.
-                    $file = File::staticGet('url', $redir_data);
+                    $file = File::getKV('url', $redir_data);
                     if (empty($file)) {
                         // @fixme should we save a new one?
                         // this case was triggering sometimes for redirects
@@ -278,11 +273,9 @@ class File_redirection extends Managed_DataObject
                     }
                     $file_id = $file->id;
                 }
-            } else {
-                $file_id = $file->id;
             }
-            $file_redir = File_redirection::staticGet('url', $short_url);
-            if (empty($file_redir)) {
+            $file_redir = File_redirection::getKV('url', $short_url);
+            if (!$file_redir instanceof File_redirection) {
                 $file_redir = new File_redirection;
                 $file_redir->url = $short_url;
                 $file_redir->file_id = $file_id;
@@ -311,7 +304,7 @@ class File_redirection extends Managed_DataObject
         $p = parse_url($out_url);
         if (empty($p['host']) || empty($p['scheme'])) {
             list($scheme) = explode(':', $in_url, 2);
-            switch ($scheme) {
+            switch (strtolower($scheme)) {
             case 'fax':
             case 'tel':
                 $out_url = str_replace('.-()', '', $out_url);

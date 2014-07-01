@@ -49,7 +49,7 @@ class UserLimitPlugin extends Plugin
 {
     public $maxUsers = null;
 
-    function onStartUserRegister(&$user, &$profile)
+    public function onStartUserRegister(Profile $profile)
     {
         $this->_checkMaxUsers();
         return true;
@@ -84,7 +84,7 @@ class UserLimitPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'UserLimit',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Evan Prodromou',
                             'homepage' => 'http://status.net/wiki/Plugin:UserLimit',
                             'description' =>

@@ -32,8 +32,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-
 /**
  * Sets which channel (device) StatusNet delivers updates to for
  * the authenticating user. Sending none as the device parameter
@@ -47,6 +45,8 @@ require_once INSTALLDIR . '/lib/apiauth.php';
  */
 class ApiAccountUpdateDeliveryDeviceAction extends ApiAuthAction
 {
+    protected $needPost = true;
+
     /**
      * Take arguments for running
      *
@@ -77,15 +77,6 @@ class ApiAccountUpdateDeliveryDeviceAction extends ApiAuthAction
     {
         parent::handle($args);
 
-        if ($_SERVER['REQUEST_METHOD'] != 'POST') {
-            $this->clientError(
-                // TRANS: Client error message. POST is a HTTP command. It should not be translated.
-                _('This method requires a POST.'),
-                400, $this->format
-            );
-            return;
-        }
-
         if (!in_array($this->format, array('xml', 'json'))) {
             $this->clientError(
                 // TRANS: Client error displayed when coming across a non-supported API method.
@@ -107,8 +98,7 @@ class ApiAccountUpdateDeliveryDeviceAction extends ApiAuthAction
 
         if (empty($this->user)) {
             // TRANS: Client error displayed when no existing user is provided for a user's delivery device setting.
-            $this->clientError(_('No such user.'), 404, $this->format);
-            return;
+            $this->clientError(_('No such user.'), 404);
         }
 
         $original = clone($this->user);

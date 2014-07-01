@@ -18,7 +18,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-define('INSTALLDIR', realpath(dirname(__FILE__) . '/..'));
+define('INSTALLDIR', realpath(dirname(__FILE__) . '/../../..'));
 
 $shortoptions = 'u:a';
 $longoptions = array('uri=', 'all');
@@ -157,13 +157,13 @@ class LooseOstatusProfile extends Ostatus_profile
         // Check if they've got an LRDD header
 
         $lrdd = LinkHeader::getLink($response, 'lrdd', 'application/xrd+xml');
-
-        if (!empty($lrdd)) {
-
-            $xrd = Discovery::fetchXrd($lrdd);
+        try {
+            $xrd = new XML_XRD();
+            $xrd->loadFile($lrdd);
             $xrdHints = DiscoveryHints::fromXRD($xrd);
-
             $hints = array_merge($hints, $xrdHints);
+        } catch (Exception $e) {
+            // No hints available from XRD
         }
 
         // If discovery found a feedurl (probably from LRDD), use it.
@@ -319,7 +319,7 @@ while($lop->fetch()) {
         }
     } catch (Exception $e) {
         if (!$quiet) { print $e->getMessage() . "\n"; }
-        common_log(LOG_WARN, $e->getMessage(), __FILE__);
+        common_log(LOG_WARNING, $e->getMessage(), __FILE__);
         // continue on error
     }
 }

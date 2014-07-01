@@ -70,7 +70,7 @@ class ShownoticeAction extends Action
      *
      * @return success flag
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
         if ($this->boolean('ajax')) {
@@ -100,9 +100,13 @@ class ShownoticeAction extends Action
             return false;
         }
 
-        $this->user = User::staticGet('id', $this->profile->id);
+        $this->user = User::getKV('id', $this->profile->id);
 
-        $this->avatar = $this->profile->getAvatar(AVATAR_PROFILE_SIZE);
+        try {
+            $this->avatar = $this->profile->getAvatar(AVATAR_PROFILE_SIZE);
+        } catch (Exception $e) {
+            $this->avatar = null;
+        }
 
         return true;
     }
@@ -113,16 +117,16 @@ class ShownoticeAction extends Action
      *
      * @return Notice
      */
-    function getNotice()
+    protected function getNotice()
     {
         $id = $this->arg('notice');
 
-        $notice = Notice::staticGet('id', $id);
+        $notice = Notice::getKV('id', $id);
 
-        if (empty($notice)) {
+        if (!$notice instanceof Notice) {
             // Did we used to have it, and it got deleted?
-            $deleted = Deleted_notice::staticGet($id);
-            if (!empty($deleted)) {
+            $deleted = Deleted_notice::getKV($id);
+            if ($deleted instanceof Deleted_notice) {
                 // TRANS: Client error displayed trying to show a deleted notice.
                 $this->clientError(_('Notice deleted.'), 410);
             } else {
@@ -207,9 +211,9 @@ class ShownoticeAction extends Action
      *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
+        parent::handle();
 
         if ($this->boolean('ajax')) {
             $this->showAjax();
@@ -250,9 +254,7 @@ class ShownoticeAction extends Action
 
     function showAjax()
     {
-        header('Content-Type: text/xml;charset=utf-8');
-        $this->xw->startDocument('1.0', 'UTF-8');
-        $this->elementStart('html');
+        $this->startHTML('text/xml;charset=utf-8');
         $this->elementStart('head');
         // TRANS: Title for page that shows a notice.
         $this->element('title', null, _m('TITLE','Notice'));
@@ -261,7 +263,7 @@ class ShownoticeAction extends Action
         $nli = new NoticeListItem($this->notice, $this);
         $nli->show();
         $this->elementEnd('body');
-        $this->elementEnd('html');
+        $this->endHTML();
     }
 
     /**
@@ -290,7 +292,7 @@ class ShownoticeAction extends Action
      */
     function extraHead()
     {
-        $user = User::staticGet($this->profile->id);
+        $user = User::getKV($this->profile->id);
 
         if (!$user) {
             return;
@@ -319,10 +321,7 @@ class ShownoticeAction extends Action
             'title'=>'oEmbed'),null);
 
         // Extras to aid in sharing notices to Facebook
-        $avatar = $this->profile->getAvatar(AVATAR_PROFILE_SIZE);
-        $avatarUrl = ($avatar) ?
-                     $avatar->displayUrl() :
-                     Avatar::defaultImage(AVATAR_PROFILE_SIZE);
+        $avatarUrl = $this->profile->avatarUrl(AVATAR_PROFILE_SIZE);
         $this->element('meta', array('property' => 'og:image',
                                      'content' => $avatarUrl));
         $this->element('meta', array('property' => 'og:description',

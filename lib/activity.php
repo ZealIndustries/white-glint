@@ -100,12 +100,13 @@ class Activity
     public $title;   // title of the activity
     public $categories = array(); // list of AtomCategory objects
     public $enclosures = array(); // list of enclosure URL references
+    public $attachments = array(); // list of attachments
 
     public $extra = array(); // extra elements as array(tag, attrs, content)
     public $source;  // ActivitySource object representing 'home feed'
     public $selfLink; // <link rel='self' type='application/atom+xml'>
     public $editLink; // <link rel='edit' type='application/atom+xml'>
-
+    public $generator; // ActivityObject representing the generating application
     /**
      * Turns a regular old Atom <entry> into a magical activity
      *
@@ -364,10 +365,12 @@ class Activity
 
         // content
         $activity['content'] = $this->content;
-        $activity['body'] = $this->content;
 
-        // generator <-- We could use this when we know a notice is created
-        //               locally. Or if we know the upstream Generator.
+        // generator
+
+        if (!empty($this->generator)) {
+            $activity['generator'] = $this->generator->asArray();
+        }
 
         // icon <-- possibly a mini object representing verb?
 
@@ -375,88 +378,85 @@ class Activity
         $activity['id'] = $this->id;
 
         // object
-        if ($this->verb == ActivityVerb::POST && count($this->objects) == 1) {
-            $activity['object'] = $this->objects[0]->asArray();
 
-            // Context stuff. For now I'm just sticking most of it
-            // in a property called "context"
-
-            if (!empty($this->context)) {
-
-                if (!empty($this->context->location)) {
-                    $loc = $this->context->location;
-
-                    // GeoJSON
-
-                    $activity['geopoint'] = array(
-                        'type'        => 'Point',
-                        'coordinates' => array($loc->lat, $loc->lon)
-                    );
-
-                }
-
-                $activity['to']      = $this->context->getToArray();
-                $activity['context'] = $this->context->asArray();
-            }
-
-            // Instead of adding enclosures as an extension to JSON
-            // Activities, it seems like we should be using the
-            // attachements property of ActivityObject
-
-            $attachments = array();
-
-            // XXX: OK, this is kinda cheating. We should probably figure out
-            // what kind of objects these are based on mime-type and then
-            // create specific object types. Right now this rely on
-            // duck-typing.  Also, we should include an embed code for
-            // video attachments.
-
-            foreach ($this->enclosures as $enclosure) {
-
-                if (is_string($enclosure)) {
-
-                    $attachments[]['id']  = $enclosure;
-
-                } else {
-
-                    $attachments[]['id']  = $enclosure->url;
-
-                    $mediaLink = new ActivityStreamsMediaLink(
-                        $enclosure->url,
-                        null,
-                        null,
-                        $enclosure->mimetype
-                        // XXX: Add 'size' as an extension to MediaLink?
-                    );
-
-                    $attachments[]['mediaLink'] = $mediaLink->asArray(); // extension
-
-                    if ($enclosure->title) {
-                        $attachments[]['displayName'] = $enclosure->title;
-                    }
-               }
-            }
-
-            if (!empty($attachments)) {
-                $activity['object']['attachments'] = $attachments;
-            }
-
+        if (count($this->objects) == 0) {
+            common_log(LOG_ERR, "Can't save " . $this->id);
         } else {
-            $activity['object'] = array();
-            foreach($this->objects as $object) {
-                $oa = $object->asArray();
-                if ($object instanceof Activity) {
-                    // throw in a type
-                    // XXX: hackety-hack
-                    $oa['objectType'] = 'activity';
+            if (count($this->objects) > 1) {
+                common_log(LOG_WARNING, "Ignoring " . (count($this->objects) - 1) . " extra objects in JSON output for activity " . $this->id);
+            }
+            $object = $this->objects[0];
+
+            if ($object instanceof Activity) {
+                // Sharing a post activity is more like sharing the original object
+                if (ActivityVerb::canonical($this->verb) == ActivityVerb::canonical(ActivityVerb::SHARE) &&
+                    ActivityVerb::canonical($object->verb) == ActivityVerb::canonical(ActivityVerb::POST)) {
+                    // XXX: Here's one for the obfuscation record books
+                    $object = $object->objects[0];
                 }
-                $activity['object'][] = $oa;
+            }
+
+            $activity['object'] = $object->asArray();
+
+            if ($object instanceof Activity) {
+                $activity['object']['objectType'] = 'activity';
+            }
+
+            foreach ($this->attachments as $attachment) {
+                if (empty($activity['object']['attachments'])) {
+                    $activity['object']['attachments'] = array();
+                }
+                $activity['object']['attachments'][] = $attachment->asArray();
+            }
+        }
+        
+        // Context stuff.
+
+        if (!empty($this->context)) {
+
+            if (!empty($this->context->location)) {
+                $loc = $this->context->location;
+
+                $activity['location'] = array(
+                    'objectType' => 'place',
+                    'position' => sprintf("%+02.5F%+03.5F/", $loc->lat, $loc->lon),
+                    'lat' => $loc->lat,
+                    'lon' => $loc->lon
+                );
+
+                $name = $loc->getName();
+
+                if ($name) {
+                    $activity['location']['displayName'] = $name;
+                }
+                    
+                $url = $loc->getURL();
+
+                if ($url) {
+                    $activity['location']['url'] = $url;
+                }
+            }
+
+            $activity['to']      = $this->context->getToArray();
+
+            $ctxarr = $this->context->asArray();
+
+            if (array_key_exists('inReplyTo', $ctxarr)) {
+                $activity['object']['inReplyTo'] = $ctxarr['inReplyTo'];
+                unset($ctxarr['inReplyTo']);
+            }
+
+            if (!array_key_exists('status_net', $activity)) {
+                $activity['status_net'] = array();
+            }
+
+            foreach ($ctxarr as $key => $value) {
+                $activity['status_net'][$key] = $value;
             }
         }
 
         // published
         $activity['published'] = self::iso8601Date($this->time);
-        $activity['postedTime'] = self::iso8601Date($this->time);
 
         // provider
         $provider = array(
@@ -479,24 +479,29 @@ class Activity
         //             eceived a remote notice? Probably not.
 
         // verb
-        //
-        // We can probably use the whole schema URL here but probably the
-        // relative simple name is easier to parse
-        $activity['verb'] = substr($this->verb, strrpos($this->verb, '/') + 1);
+
+        $activity['verb'] = ActivityVerb::canonical($this->verb);
 
         // url
-        $activity['url'] = $this->id;
+        if ($this->link) {
+            $activity['url'] = $this->link;
+        }
 
         /* Purely extensions hereafter */
 
-        $tags = array();
-
-        // Use an Activity Object for term? Which object? Note?
-        foreach ($this->categories as $cat) {
-            $tags[] = $cat->term;
+        if ($activity['verb'] == 'post') {
+            $tags = array();
+            foreach ($this->categories as $cat) {
+                if (mb_strlen($cat->term) > 0) {
+                    // Couldn't figure out which object type to use, so...
+                    $tags[] = array('objectType' => 'http://activityschema.org/object/hashtag',
+                                    'displayName' => $cat->term);
+                }
+            }
+            if (count($tags) > 0) {
+                $activity['object']['tags'] = $tags;
+            }
         }
-
-        $activity['tags'] = $tags;
 
         // XXX: a bit of a hack... Since JSON isn't namespaced we probably
         // shouldn't be using 'statusnet:notice_info', but this will work
@@ -505,7 +510,15 @@ class Activity
         foreach ($this->extra as $e) {
             list($objectName, $props, $txt) = $e;
             if (!empty($objectName)) {
-                $activity[$objectName] = $props;
+                $parts = explode(":", $objectName);
+                if (count($parts) == 2 && $parts[0] == "statusnet") {
+                    if (!array_key_exists('status_net', $activity)) {
+                        $activity['status_net'] = array();
+                    }
+                    $activity['status_net'][$parts[1]] = $props;
+                } else {
+                    $activity[$objectName] = $props;
+                }
             }
         }
 
@@ -547,7 +560,13 @@ class Activity
 
         } else {
             $xs->element('id', null, $this->id);
-            $xs->element('title', null, $this->title);
+
+            if ($this->title) {
+                $xs->element('title', null, $this->title);
+            } else {
+                // Require element
+                $xs->element('title', null, "");
+            }
 
             $xs->element('content', array('type' => 'html'), $this->content);
 
@@ -603,28 +622,14 @@ class Activity
             }
 
             if (!empty($this->context->conversation)) {
-                $xs->element('link', array('rel' => 'ostatus:conversation',
+                $xs->element('link', array('rel' => ActivityContext::CONVERSATION,
                                            'href' => $this->context->conversation));
             }
 
-            foreach ($this->context->attention as $attnURI) {
-                $xs->element('link', array('rel' => 'ostatus:attention',
+            foreach ($this->context->attention as $attnURI=>$type) {
+                $xs->element('link', array('rel' => ActivityContext::MENTIONED,
+                                           ActivityContext::OBJECTTYPE => $type,  // FIXME: undocumented 
                                            'href' => $attnURI));
-                $xs->element('link', array('rel' => 'mentioned',
-                                           'href' => $attnURI));
-            }
-
-            // XXX: shoulda used ActivityVerb::SHARE
-
-            if (!empty($this->context->forwardID)) {
-                if (!empty($this->context->forwardUrl)) {
-                    $xs->element('ostatus:forward',
-                                 array('ref' => $this->context->forwardID,
-                                       'href' => $this->context->forwardUrl));
-                } else {
-                    $xs->element('ostatus:forward',
-                                 array('ref' => $this->context->forwardID));
-                }
             }
 
             if (!empty($this->context->location)) {

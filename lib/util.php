@@ -210,14 +210,18 @@ function common_language()
 /**
  * Salted, hashed passwords are stored in the DB.
  */
-function common_munge_password($password, $id)
+function common_munge_password($password, $id, Profile $profile=null)
 {
-    if (is_object($id) || is_object($password)) {
-        $e = new Exception();
-        common_log(LOG_ERR, __METHOD__ . ' object in param to common_munge_password ' .
-                   str_replace("\n", " ", $e->getTraceAsString()));
+    $hashed = null;
+
+    if (Event::handle('StartHashPassword', array(&$hashed, $password, $profile))) {
+        Event::handle('EndHashPassword', array(&$hashed, $password, $profile));
     }
-    return md5($password . $id);
+    if (empty($hashed)) {
+        throw new PasswordHashException();
+    }
+
+    return $hashed;
 }
 
 /**
@@ -235,18 +239,16 @@ function common_check_user($nickname, $password)
     if (Event::handle('StartCheckPassword', array($nickname, $password, &$authenticatedUser))) {
 
         if (common_is_email($nickname)) {
-            $user = User::staticGet('email', common_canonical_email($nickname));
+            $user = User::getKV('email', common_canonical_email($nickname));
         } else {
-            $user = User::staticGet('nickname', common_canonical_nickname($nickname));
+            $user = User::getKV('nickname', Nickname::normalize($nickname));
         }
 
-        if (!empty($user)) {
-            if (!empty($password)) { // never allow login with blank password
-                if (0 == strcmp(common_munge_password($password, $user->id),
-                                $user->password)) {
-                    //internal checking passed
-                    $authenticatedUser = $user;
-                }
+        if ($user instanceof User && !empty($password)) {
+            if (0 == strcmp(common_munge_password($password, $user->id),
+                            $user->password)) {
+                //internal checking passed
+                $authenticatedUser = $user;
             }
         }
         Event::handle('EndCheckPassword', array($nickname, $password, $authenticatedUser));
@@ -278,9 +280,9 @@ function common_ensure_session()
         if (common_config('sessions', 'handle')) {
             Session::setSaveHandler();
         }
-	/*if (array_key_exists(session_name(), $_GET)) {
+	if (array_key_exists(session_name(), $_GET)) {
 	    $id = $_GET[session_name()];
-	} else */if (array_key_exists(session_name(), $_COOKIE)) {
+	} else if (array_key_exists(session_name(), $_COOKIE)) {
 	    $id = $_COOKIE[session_name()];
 	}
 	if (isset($id)) {
@@ -315,8 +317,8 @@ function common_set_user($user)
         return true;
     } else if (is_string($user)) {
         $nickname = $user;
-        $user = User::staticGet('nickname', $nickname);
-    } else if (!($user instanceof User)) {
+        $user = User::getKV('nickname', $nickname);
+    } else if (!$user instanceof User) {
         return false;
     }
 
@@ -370,7 +372,7 @@ function common_rememberme($user=null)
 
     $rm = new Remember_me();
 
-    $rm->code = common_good_rand(16);
+    $rm->code = common_random_hexstr(16);
     $rm->user_id = $user->id;
 
     // Wrap the insert in some good ol' fashioned transaction code
@@ -413,7 +415,7 @@ function common_remembered_user()
         return null;
     }
 
-    $rm = Remember_me::staticGet('code', $code);
+    $rm = Remember_me::getKV('code', $code);
 
     if (!$rm) {
         common_log(LOG_WARNING, 'No such remember code: ' . $code);
@@ -427,9 +429,9 @@ function common_remembered_user()
         return null;
     }
 
-    $user = User::staticGet('id', $rm->user_id);
+    $user = User::getKV('id', $rm->user_id);
 
-    if (!$user) {
+    if (!$user instanceof User) {
         common_log(LOG_WARNING, 'No such user for rememberme: ' . $rm->user_id);
         common_forgetme();
         return null;
@@ -484,11 +486,9 @@ function common_current_user()
             common_ensure_session();
             $id = isset($_SESSION['userid']) ? $_SESSION['userid'] : false;
             if ($id) {
-                $user = User::staticGet($id);
-                if ($user) {
+                $user = User::getKV('id', $id);
+                if ($user instanceof User) {
                 	$_cur = $user;
-					if ($_cur->hasRole(Profile_role::DEVELOPER))
-						error_reporting(E_ERROR|E_WARNING);
                 	return $_cur;
                 }
             }
@@ -502,9 +502,6 @@ function common_current_user()
             $_SESSION['userid'] = $_cur->id;
         }
     }
-	
-	if ($_cur && $_cur->hasRole(Profile_role::DEVELOPER))
-		error_reporting(E_ERROR|E_WARNING);
 
     return $_cur;
 }
@@ -585,13 +582,10 @@ function common_canonical_email($email)
  * @param Notice $notice in whose context we're working
  * @return string partially rendered HTML
  */
-function common_render_content($text, $notice)
+function common_render_content($text, Notice $notice)
 {
     $r = common_render_text($text);
-    $id = $notice->profile_id;
     $r = common_linkify_mentions($r, $notice);
-    $r = preg_replace('/(^|[\s\.\,\:\;]+)!(' . Nickname::DISPLAY_FMT . ')/e',
-                      "'\\1!'.common_group_link($id, '\\2')", $r);
     return $r;
 }
 
@@ -649,7 +643,7 @@ function common_linkify_mention($mention)
 
         $xs->elementStart('span', 'vcard');
         $xs->elementStart('a', $attrs);
-        $xs->element('span', 'fn nickname mention', $mention['text']);
+        $xs->element('span', 'fn nickname '.$mention['type'], $mention['text']);
         $xs->elementEnd('a');
         $xs->elementEnd('span');
 
@@ -678,35 +672,41 @@ function common_linkify_mention($mention)
  */
 function common_find_mentions($text, $notice)
 {
-    $mentions = array();
-
-    $sender = Profile::staticGet('id', $notice->profile_id);
-
-    if (empty($sender)) {
-        return $mentions;
+    try {
+        $sender = Profile::getKV('id', $notice->profile_id);
+    } catch (NoProfileException $e) {
+        return array();
     }
+
+    $mentions = array();
 
     if (Event::handle('StartFindMentions', array($sender, $text, &$mentions))) {
         // Get the context of the original notice, if any
-        $originalAuthor   = null;
-        $originalNotice   = null;
-        $originalMentions = array();
+        $origAuthor   = null;
+        $origNotice   = null;
+        $origMentions = array();
 
         // Is it a reply?
 
-        if (!empty($notice) && !empty($notice->reply_to)) {
-            $originalNotice = Notice::staticGet('id', $notice->reply_to);
-            if (!empty($originalNotice)) {
-                $originalAuthor = Profile::staticGet('id', $originalNotice->profile_id);
+        if ($notice instanceof Notice) {
+            try {
+                $origNotice = $notice->getParent();
+                $origAuthor = $origNotice->getProfile();
 
-                $ids = $originalNotice->getReplies();
+                $ids = $origNotice->getReplies();
 
                 foreach ($ids as $id) {
-                    $repliedTo = Profile::staticGet('id', $id);
-                    if (!empty($repliedTo)) {
-                        $originalMentions[$repliedTo->nickname] = $repliedTo;
+                    $repliedTo = Profile::getKV('id', $id);
+                    if ($repliedTo instanceof Profile) {
+                        $origMentions[$repliedTo->nickname] = $repliedTo;
                     }
                 }
+            } catch (NoProfileException $e) {
+                common_log(LOG_WARNING, sprintf('Notice %d author profile id %d does not exist', $origNotice->id, $origNotice->profile_id));
+            } catch (ServerException $e) {
+                // Probably just no parent. Should get a specific NoParentException
+            } catch (Exception $e) {
+                common_log(LOG_WARNING, __METHOD__ . ' got exception ' . get_class($e) . ' : ' . $e->getMessage());
             }
         }
 
@@ -724,25 +724,26 @@ function common_find_mentions($text, $notice)
             // Start with conversation context, then go to
             // sender context.
 
-            if (!empty($originalAuthor) && $originalAuthor->nickname == $nickname) {
-                $mentioned = $originalAuthor;
-            } else if (!empty($originalMentions) &&
-                       array_key_exists($nickname, $originalMentions)) {
-                $mentioned = $originalMentions[$nickname];
+            if ($origAuthor instanceof Profile && $origAuthor->nickname == $nickname) {
+                $mentioned = $origAuthor;
+            } else if (!empty($origMentions) &&
+                       array_key_exists($nickname, $origMentions)) {
+                $mentioned = $origMentions[$nickname];
             } else {
                 $mentioned = common_relative_profile($sender, $nickname);
             }
 
-            if (!empty($mentioned)) {
-                $user = User::staticGet('id', $mentioned->id);
+            if ($mentioned instanceof Profile) {
+                $user = User::getKV('id', $mentioned->id);
 
-                if ($user) {
+                if ($user instanceof User) {
                     $url = common_local_url('userbyid', array('id' => $user->id));
                 } else {
                     $url = $mentioned->profileurl;
                 }
 
                 $mention = array('mentioned' => array($mentioned),
+                                 'type' => 'mention',
                                  'text' => $match[0],
                                  'position' => $match[1],
                                  'url' => $url);
@@ -758,26 +759,44 @@ function common_find_mentions($text, $notice)
         // @#tag => mention of all subscriptions tagged 'tag'
 
         preg_match_all('/(?:^|[\s\.\,\:\;]+)@#([\pL\pN_\-\.]{1,64})/',
-                       $text,
-                       $hmatches,
-                       PREG_OFFSET_CAPTURE);
-
+                       $text, $hmatches, PREG_OFFSET_CAPTURE);
         foreach ($hmatches[1] as $hmatch) {
-
             $tag = common_canonical_tag($hmatch[0]);
             $plist = Profile_list::getByTaggerAndTag($sender->id, $tag);
-            if (!empty($plist) && !$plist->private) {
-                $tagged = $sender->getTaggedSubscribers($tag);
-
-                $url = common_local_url('showprofiletag',
-                                        array('tagger' => $sender->nickname,
-                                              'tag' => $tag));
-
-                $mentions[] = array('mentioned' => $tagged,
-                                    'text' => $hmatch[0],
-                                    'position' => $hmatch[1],
-                                    'url' => $url);
+            if (!$plist instanceof Profile_list || $plist->private) {
+                continue;
             }
+            $tagged = $sender->getTaggedSubscribers($tag);
+
+            $url = common_local_url('showprofiletag',
+                                    array('tagger' => $sender->nickname,
+                                          'tag' => $tag));
+
+            $mentions[] = array('mentioned' => $tagged,
+                                'type'      => 'list',
+                                'text' => $hmatch[0],
+                                'position' => $hmatch[1],
+                                'url' => $url);
+        }
+
+        preg_match_all('/(?:^|[\s\.\,\:\;]+)!(' . Nickname::DISPLAY_FMT . ')/',
+                       $text, $hmatches, PREG_OFFSET_CAPTURE);
+        foreach ($hmatches[1] as $hmatch) {
+            $nickname = Nickname::normalize($hmatch[0]);
+            $group = User_group::getForNickname($nickname, $sender);
+
+            if (!$group instanceof User_group || !$sender->isMember($group)) {
+                continue;
+            }
+
+            $profile = $group->getProfile();
+
+            $mentions[] = array('mentioned' => array($profile),
+                                'type'      => 'group',
+                                'text'      => $hmatch[0],
+                                'position'  => $hmatch[1],
+                                'url'       => $group->permalink(),
+                                'title'     => $group->getFancyName());
         }
 
         Event::handle('EndFindMentions', array($sender, $text, &$mentions));
@@ -817,7 +836,8 @@ function common_render_text($text)
 
     $r = preg_replace('/[\x{0}-\x{8}\x{b}-\x{c}\x{e}-\x{19}]/', '', $r);
     $r = common_replace_urls_callback($r, 'common_linkify');
-    $r = preg_replace('/(^|\&quot\;|\'|\(|\[|\{|\s+)#([\pL\pN_\-\.]{1,64})/ue', "'\\1#'.common_tag_link('\\2')", $r);
+    $r = preg_replace_callback('/(^|\&quot\;|\'|\(|\[|\{|\s+)#([\pL\pN_\-\.]{1,64})/u',
+                function ($m) { return "{$m[1]}#".common_tag_link($m[2]); }, $r);
     // XXX: machine tags
     return $r;
 }
@@ -984,7 +1004,7 @@ function common_linkify($url) {
 
     // Check to see whether this is a known "attachment" URL.
 
-    $f = File::staticGet('url', $longurl);
+    $f = File::getKV('url', $longurl);
 
     if (empty($f)) {
         if (common_config('attachments', 'process_links')) {
@@ -998,7 +1018,7 @@ function common_linkify($url) {
             $is_attachment = true;
             $attachment_id = $f->id;
 
-            $thumb = File_thumbnail::staticGet('file_id', $f->id);
+            $thumb = File_thumbnail::getKV('file_id', $f->id);
             if (!empty($thumb)) {
                 $has_thumb = true;
             }
@@ -1045,11 +1065,13 @@ function common_linkify($url) {
  */
 function common_shorten_links($text, $always = false, User $user=null)
 {
-    $user = common_current_user();
+    if ($user === null) {
+        $user = common_current_user();
+    }
 
     $maxLength = User_urlshortener_prefs::maxNoticeLength($user);
 
-    if ($always || mb_strlen($text) > $maxLength) {
+    if ($always || ($maxLength != -1 && mb_strlen($text) > $maxLength)) {
         return common_replace_urls_callback($text, array('File_redirection', 'forceShort'), $user);
     } else {
         return common_replace_urls_callback($text, array('File_redirection', 'makeShort'), $user);
@@ -1145,35 +1167,6 @@ function common_valid_profile_tag($str)
 }
 
 /**
- *
- * @param <type> $sender_id
- * @param <type> $nickname
- * @return <type>
- * @access private
- */
-function common_group_link($sender_id, $nickname)
-{
-    $sender = Profile::staticGet($sender_id);
-    $group = User_group::getForNickname($nickname, $sender);
-    if ($sender && $group && $sender->isMember($group)) {
-        $attrs = array('href' => $group->permalink(),
-                       'class' => 'url');
-        if (!empty($group->fullname)) {
-            $attrs['title'] = $group->getFancyName();
-        }
-        $xs = new XMLStringer();
-        $xs->elementStart('span', 'vcard');
-        $xs->elementStart('a', $attrs);
-        $xs->element('span', 'fn nickname group', $nickname);
-        $xs->elementEnd('a');
-        $xs->elementEnd('span');
-        return $xs->getString();
-    } else {
-        return $nickname;
-    }
-}
-
-/**
  * Resolve an ambiguous profile nickname reference, checking in following order:
  * - profiles that $sender subscribes to
  * - profiles that subscribe to $sender
@@ -1220,10 +1213,10 @@ function common_relative_profile($sender, $nickname, $dt=null)
         return $recipient;
     }
     // If this is a local user, try to find a local user with that nickname.
-    $sender = User::staticGet($sender->id);
-    if ($sender) {
-        $recipient_user = User::staticGet('nickname', $nickname);
-        if ($recipient_user) {
+    $sender = User::getKV('id', $sender->id);
+    if ($sender instanceof User) {
+        $recipient_user = User::getKV('nickname', $nickname);
+        if ($recipient_user instanceof User) {
             return $recipient_user->getProfile();
         }
     }
@@ -1239,7 +1232,9 @@ function common_local_url($action, $args=null, $params=null, $fragment=null, $ad
         $r = Router::get();
         $path = $r->build($action, $args, $params, $fragment);
 
-        $ssl = common_is_sensitive($action);
+        $ssl = common_config('site', 'ssl') === 'always'
+                || StatusNet::isHTTPS()
+                || common_is_sensitive($action);
 
         if (common_config('site','fancy')) {
             $url = common_path($path, $ssl, $addSession);
@@ -1262,10 +1257,10 @@ function common_is_sensitive($action)
         'register',
         'passwordsettings',
         'api',
-        'ApiOauthRequestToken',
-        'ApiOauthAccessToken',
-        'ApiOauthAuthorize',
-        'ApiOauthPin',
+        'ApiOAuthRequestToken',
+        'ApiOAuthAccessToken',
+        'ApiOAuthAuthorize',
+        'ApiOAuthPin',
         'showapplication'
     );
     $ssl = null;
@@ -1309,29 +1304,29 @@ function common_path($relative, $ssl=false, $addSession=true)
 }
 
 function common_inject_session($url, $serverpart = null)
-{/*
-    if (common_have_session()) {
+{
+    if (!common_have_session()) {
+        return $url;
+    }
 
-	if (empty($serverpart)) {
-	    $serverpart = parse_url($url, PHP_URL_HOST);
-	}
+    if (empty($serverpart)) {
+        $serverpart = parse_url($url, PHP_URL_HOST);
+    }
 
-        $currentServer = $_SERVER['HTTP_HOST'];
+    $currentServer = (array_key_exists('HTTP_HOST', $_SERVER)) ? $_SERVER['HTTP_HOST'] : null;
 
-        // Are we pointing to another server (like an SSL server?)
+    // Are we pointing to another server (like an SSL server?)
 
-        if (!empty($currentServer) &&
-            0 != strcasecmp($currentServer, $serverpart)) {
-            // Pass the session ID as a GET parameter
-            $sesspart = session_name() . '=' . session_id();
-            $i = strpos($url, '?');
-            if ($i === false) { // no GET params, just append
-                $url .= '?' . $sesspart;
-            } else {
-                $url = substr($url, 0, $i + 1).$sesspart.'&'.substr($url, $i + 1);
-            }
+    if (!empty($currentServer) && 0 != strcasecmp($currentServer, $serverpart)) {
+        // Pass the session ID as a GET parameter
+        $sesspart = session_name() . '=' . session_id();
+        $i = strpos($url, '?');
+        if ($i === false) { // no GET params, just append
+            $url .= '?' . $sesspart;
+        } else {
+            $url = substr($url, 0, $i + 1).$sesspart.'&'.substr($url, $i + 1);
         }
-    }*/
+    }
 
     return $url;
 }
@@ -1509,21 +1504,6 @@ function common_enqueue_notice($notice)
     return true;
 }
 
-/**
- * Legacy function to broadcast profile updates to OMB remote subscribers.
- *
- * XXX: This probably needs killing, but there are several bits of code
- *      that broadcast profile changes that need to be dealt with. AFAIK
- *      this function is only used for OMB. -z
- *
- * Since this may be slow with a lot of subscribers or bad remote sites,
- * this is run through the background queues if possible.
- */
-function common_broadcast_profile(Profile $profile)
-{
-    Event::handle('BroadcastProfile', array($profile));
-}
-
 function common_profile_url($nickname)
 {
     return common_local_url('showstream', array('nickname' => $nickname),
@@ -1545,16 +1525,18 @@ function common_root_url($ssl=false)
 
 /**
  * returns $bytes bytes of random data as a hexadecimal string
- * "good" here is a goal and not a guarantee
  */
-function common_good_rand($bytes)
+function common_random_hexstr($bytes)
 {
-    // XXX: use random.org...?
-    if (@file_exists('/dev/urandom')) {
-        return common_urandom($bytes);
-    } else { // FIXME: this is probably not good enough
-        return common_mtrand($bytes);
+    $str = @file_exists('/dev/urandom')
+            ? common_urandom($bytes)
+            : common_mtrand($bytes);
+
+    $hexstr = '';
+    for ($i = 0; $i < $bytes; $i++) {
+        $hexstr .= sprintf("%02x", ord($str[$i]));
     }
+    return $hexstr;
 }
 
 function common_urandom($bytes)
@@ -1563,20 +1545,16 @@ function common_urandom($bytes)
     // should not block
     $src = fread($h, $bytes);
     fclose($h);
-    $enc = '';
-    for ($i = 0; $i < $bytes; $i++) {
-        $enc .= sprintf("%02x", (ord($src[$i])));
-    }
-    return $enc;
+    return $src;
 }
 
 function common_mtrand($bytes)
 {
-    $enc = '';
+    $str = '';
     for ($i = 0; $i < $bytes; $i++) {
-        $enc .= sprintf("%02x", mt_rand(0, 255));
+        $str .= chr(mt_rand(0, 255));
     }
-    return $enc;
+    return $str;
 }
 
 /**
@@ -1691,8 +1669,10 @@ function common_debug($msg, $filename=null)
 
 function common_log_db_error(&$object, $verb, $filename=null)
 {
+    global $_PEAR;
+
     $objstr = common_log_objstring($object);
-    $last_error = &PEAR::getStaticProperty('DB_DataObject','lastError');
+    $last_error = &$_PEAR->getStaticProperty('DB_DataObject','lastError');
     if (is_object($last_error)) {
         $msg = $last_error->message;
     } else {
@@ -1722,9 +1702,13 @@ function common_log_objstring(&$object)
     return $objstring;
 }
 
-function common_valid_http_url($url)
+function common_valid_http_url($url, $secure=false)
 {
-    return Validate::uri($url, array('allowed_schemes' => array('http', 'https')));
+    // If $secure is true, only allow https URLs to pass
+    // (if false, we use '?' in 'https?' to say the 's' is optional)
+    $regex = $secure ? '/^https$/' : '/^https?$/';
+    return filter_var($url, FILTER_VALIDATE_URL)
+            && preg_match($regex, parse_url($url, PHP_URL_SCHEME));
 }
 
 function common_valid_tag($tag)
@@ -1961,7 +1945,7 @@ function common_confirmation_code($bits)
     $code = '';
     for ($i = 0; $i < $chars; $i++) {
         // XXX: convert to string and back
-        $num = hexdec(common_good_rand(1));
+        $num = hexdec(common_random_hexstr(1));
         // XXX: randomness is too precious to throw away almost
         // 40% of the bits we get!
         $code .= $codechars[$num%32];
@@ -1973,6 +1957,10 @@ function common_confirmation_code($bits)
 
 function common_markup_to_html($c, $args=null)
 {
+    if ($c === null) {
+        return '';
+    }
+
     if (is_null($args)) {
         $args = array();
     }
@@ -1983,10 +1971,10 @@ function common_markup_to_html($c, $args=null)
         $c = preg_replace('/%%arg.'.$name.'%%/', $value, $c);
     }
 
-    $c = preg_replace('/%%user.(\w+)%%/e', "common_user_property('\\1')", $c);
-    $c = preg_replace('/%%action.(\w+)%%/e', "common_local_url('\\1')", $c);
-    $c = preg_replace('/%%doc.(\w+)%%/e', "common_local_url('doc', array('title'=>'\\1'))", $c);
-    $c = preg_replace('/%%(\w+).(\w+)%%/e', 'common_config(\'\\1\', \'\\2\')', $c);
+    $c = preg_replace_callback('/%%user.(\w+)%%/', function ($m) { return common_user_property($m[1]); }, $c);
+    $c = preg_replace_callback('/%%action.(\w+)%%/', function ($m) { return common_local_url($m[1]); }, $c);
+    $c = preg_replace_callback('/%%doc.(\w+)%%/', function ($m) { return common_local_url('doc', array('title'=>$m[1])); }, $c);
+    $c = preg_replace_callback('/%%(\w+).(\w+)%%/', function ($m) { return common_config($m[1], $m[2]); }, $c);
     return Markdown($c);
 }
 
@@ -2007,7 +1995,11 @@ function common_user_property($property)
         return $profile->$property;
         break;
     case 'avatar':
-        return $profile->getAvatar(AVATAR_STREAM_SIZE);
+        try {
+            return $profile->getAvatar(AVATAR_STREAM_SIZE);
+        } catch (Exception $e) {
+            return null;
+        }
         break;
     case 'bestname':
         return $profile->getBestName();
@@ -2023,8 +2015,8 @@ function common_profile_uri($profile)
 
     if (!empty($profile)) {
         if (Event::handle('StartCommonProfileURI', array($profile, &$uri))) {
-            $user = User::staticGet($profile->id);
-            if (!empty($user)) {
+            $user = User::getKV('id', $profile->id);
+            if ($user instanceof User) {
                 $uri = $user->uri;
             }
             Event::handle('EndCommonProfileURI', array($profile, &$uri));
@@ -2089,7 +2081,7 @@ function common_session_token()
 {
     common_ensure_session();
     if (!array_key_exists('token', $_SESSION)) {
-        $_SESSION['token'] = common_good_rand(64);
+        $_SESSION['token'] = common_random_hexstr(64);
     }
     return $_SESSION['token'];
 }
@@ -2153,13 +2145,9 @@ function common_shorten_url($long_url, User $user=null, $force = false)
     // $force forces shortening even if it's not strictly needed
     // I doubt URL shortening is ever 'strictly' needed. - ESP
 
-    if (mb_strlen($long_url) < $maxUrlLength && !$force) {
+    if (($maxUrlLength == -1 || mb_strlen($long_url) < $maxUrlLength) && !$force) {
         return $long_url;
     }
-	
-	// return on emails
-	if(strpos($long_url, 'mailto:') !== false || preg_match('/.+\@.+\..+/i', $long_url))
-		return $long_url;
 
     $shortenerName = User_urlshortener_prefs::urlShorteningService($user);
 
@@ -2281,8 +2269,11 @@ function common_url_to_nickname($url)
 
 function common_nicknamize($str)
 {
-    $str = preg_replace('/\W/', '', $str);
-    return strtolower($str);
+    try {
+        return Nickname::normalize($str);
+    } catch (NicknameException $e) {
+        return null;
+    }
 }
 
 function common_perf_counter($key, $val=null)

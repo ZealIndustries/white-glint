@@ -22,7 +22,7 @@
  * @maintainer Brion Vibber <brion@status.net>
  */
 
-class SubMirror extends Memcached_DataObject
+class SubMirror extends Managed_DataObject
 {
     public $__table = 'submirror';
 
@@ -33,11 +33,6 @@ class SubMirror extends Memcached_DataObject
 
     public $created;
     public $modified;
-
-    public /*static*/ function staticGet($k, $v=null)
-    {
-        return parent::staticGet(__CLASS__, $k, $v);
-    }
 
     /**
      * return table definition for DB_DataObject
@@ -153,11 +148,11 @@ class SubMirror extends Memcached_DataObject
      * @param Notice $notice
      * @return mixed Notice on successful mirroring, boolean if not
      */
-    public function mirrorNotice($notice)
+    public function mirrorNotice(Notice $notice)
     {
-        $profile = Profile::staticGet('id', $this->subscriber);
-        if (!$profile) {
-            common_log(LOG_ERROR, "SubMirror plugin skipping auto-repeat of notice $notice->id for missing user $profile->id");
+        $profile = Profile::getKV('id', $this->subscriber);
+        if (!($profile instanceof Profile)) {
+            common_log(LOG_ERR, "SubMirror plugin skipping auto-repeat of notice $notice->id for missing user $profile->id");
             return false;
         }
 
@@ -177,9 +172,9 @@ class SubMirror extends Memcached_DataObject
      * @param Notice $notice
      * @return mixed Notice on successful repeat, true if already repeated, false on failure
      */
-    protected function repeatNotice($profile, $notice)
+    protected function repeatNotice(Profile $profile, Notice $notice)
     {
-        if($profile->hasRepeated($notice->id)) {
+        if($profile->hasRepeated($notice)) {
             common_log(LOG_INFO, "SubMirror plugin skipping auto-repeat of notice $notice->id for user $profile->id; already repeated.");
             return true;
         } else {
@@ -207,11 +202,6 @@ class SubMirror extends Memcached_DataObject
                                  'feed',
                                  $options);
         return $saved;
-    }
-
-    public /*static*/ function pkeyGet($v)
-    {
-        return parent::pkeyGet(__CLASS__, $v);
     }
 
     /**

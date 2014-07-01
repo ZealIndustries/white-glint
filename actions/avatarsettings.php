@@ -109,8 +109,6 @@ class AvatarsettingsAction extends SettingsAction
             return;
         }
 
-        $original = $profile->getOriginalAvatar();
-
         $this->elementStart('form', array('enctype' => 'multipart/form-data',
                                           'method' => 'post',
                                           'id' => 'form_settings_avatar',
@@ -124,29 +122,32 @@ class AvatarsettingsAction extends SettingsAction
 
         if (Event::handle('StartAvatarFormData', array($this))) {
             $this->elementStart('ul', 'form_data');
-            if ($original) {
+            try {
+                $original = Avatar::getUploaded($profile);
+
                 $this->elementStart('li', array('id' => 'avatar_original',
                                                 'class' => 'avatar_view'));
                 // TRANS: Header on avatar upload page for thumbnail of originally uploaded avatar (h2).
                 $this->element('h2', null, _("Original"));
                 $this->elementStart('div', array('id'=>'avatar_original_view'));
-                $this->element('img', array('src' => $original->url,
+                $this->element('img', array('src' => $original->displayUrl(),
                                             'width' => $original->width,
                                             'height' => $original->height,
                                             'alt' => $user->nickname));
                 $this->elementEnd('div');
                 $this->elementEnd('li');
+            } catch (NoAvatarException $e) {
+                // No original avatar found!
             }
 
-            $avatar = $profile->getAvatar(AVATAR_PROFILE_SIZE);
-
-            if ($avatar) {
+            try {
+                $avatar = $profile->getAvatar(AVATAR_PROFILE_SIZE);
                 $this->elementStart('li', array('id' => 'avatar_preview',
                                                 'class' => 'avatar_view'));
                 // TRANS: Header on avatar upload page for thumbnail of to be used rendition of uploaded avatar (h2).
                 $this->element('h2', null, _("Preview"));
                 $this->elementStart('div', array('id'=>'avatar_preview_view'));
-                $this->element('img', array('src' => $avatar->url,
+                $this->element('img', array('src' => $avatar->displayUrl(),
                                             'width' => AVATAR_PROFILE_SIZE,
                                             'height' => AVATAR_PROFILE_SIZE,
                                             'alt' => $user->nickname));
@@ -156,6 +157,8 @@ class AvatarsettingsAction extends SettingsAction
                     $this->submit('delete', _m('BUTTON','Delete'));
                 }
                 $this->elementEnd('li');
+            } catch (NoAvatarException $e) {
+                // No previously uploaded avatar to preview.
             }
 
             $this->elementStart('li', array ('id' => 'settings_attach'));
@@ -166,16 +169,6 @@ class AvatarsettingsAction extends SettingsAction
             $this->element('input', array('name' => 'avatarfile',
                                           'type' => 'file',
                                           'id' => 'avatarfile'));
-            $this->elementEnd('li');
-            $this->elementStart('li');
-			$this->input(
-				'avatar_by_url',
-				// TRANS: Label for site-wide notice text field in admin panel.
-				_('Upload from URL'),
-				null,
-				// TRANS: Tooltip for site-wide notice text field in admin panel.
-				_('Paste a direct URL to an image file. This will not be used if a file is uploaded directly.')
-			);
             $this->elementEnd('li');
             $this->elementEnd('ul');
 
@@ -204,8 +197,6 @@ class AvatarsettingsAction extends SettingsAction
             $this->serverError(_('User has no profile.'));
             return;
         }
-
-        $original = $profile->getOriginalAvatar();
 
         $this->elementStart('form', array('method' => 'post',
                                           'id' => 'form_settings_avatar',
@@ -298,14 +289,14 @@ class AvatarsettingsAction extends SettingsAction
         if (Event::handle('StartAvatarSaveForm', array($this))) {
             if ($this->arg('upload')) {
                 $this->uploadAvatar();
-			} else if ($this->arg('crop')) {
-				$this->cropAvatar();
-			} else if ($this->arg('delete')) {
-				$this->deleteAvatar();
-			} else {
-				// TRANS: Unexpected validation error on avatar upload form.
-				$this->showForm(_('Unexpected form submission.'));
-			}
+                } else if ($this->arg('crop')) {
+                    $this->cropAvatar();
+                } else if ($this->arg('delete')) {
+                    $this->deleteAvatar();
+                } else {
+                    // TRANS: Unexpected validation error on avatar upload form.
+                    $this->showForm(_('Unexpected form submission.'));
+                }
             Event::handle('EndAvatarSaveForm', array($this));
         }
     }
@@ -327,40 +318,9 @@ class AvatarsettingsAction extends SettingsAction
             return;
         }
         if ($imagefile === null) {
-			// Try loading file via URL
-			// @fixme There's probably a better way to do it with the methods StatusNet gives
-			$limit = 1024*1024*10; // Max. file size in bytes (1024*1024*10 = 10MB)
-			$ch = curl_init();
-			
-			$temp_file_name = tempnam('/tmp', 'ava');
-
-			$fh = fopen($temp_file_name, 'w'); 
-			
-			$url = $this->arg('avatar_by_url');
-
-			curl_setopt($ch, CURLOPT_URL, $url);
-			curl_setopt($ch, CURLOPT_HEADER, 0);
-			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-			curl_setopt($ch, CURLOPT_FILE, $fh);
-			curl_setopt($ch, CURLOPT_RANGE, '0-' . $limit);
-			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT ,15);
-
-			curl_exec($ch);
-
-			curl_close($ch);
-
-
-			$info = @getimagesize($temp_file_name);
-
-			if (!$info) {
-				@unlink($temp_file_name);
-				 
-				// TRANS: Validation error on avatar upload form when no file was uploaded.
-				$this->showForm(_('No file uploaded.'));
-				return;
-			}
-			
-			$imagefile = new ImageFile(null, $temp_file_name);
+            // TRANS: Validation error on avatar upload form when no file was uploaded.
+            $this->showForm(_('No file uploaded.'));
+            return;
         }
 
         $cur = common_current_user();
@@ -395,7 +355,7 @@ class AvatarsettingsAction extends SettingsAction
      *
      * @return void
      */
-    function cropAvatar()
+    public function cropAvatar()
     {
         $filedata = $_SESSION['FILEDATA'];
 
@@ -412,7 +372,7 @@ class AvatarsettingsAction extends SettingsAction
         $dest_y = $this->arg('avatar_crop_y') ? $this->arg('avatar_crop_y'):0;
         $dest_w = $this->arg('avatar_crop_w') ? $this->arg('avatar_crop_w'):$file_d;
         $dest_h = $this->arg('avatar_crop_h') ? $this->arg('avatar_crop_h'):$file_d;
-        $size = min($dest_w, $dest_h, MAX_ORIGINAL);
+        $size = floor(min($dest_w, $dest_h, MAX_ORIGINAL));
 
         $user = common_current_user();
         $profile = $user->getProfile();
@@ -426,7 +386,6 @@ class AvatarsettingsAction extends SettingsAction
             $this->mode = 'upload';
             // TRANS: Success message for having updated a user avatar.
             $this->showForm(_('Avatar updated.'), true);
-            common_broadcast_profile($profile);
         } else {
             // TRANS: Error displayed on the avatar upload page if the avatar could not be updated for an unknown reason.
             $this->showForm(_('Failed updating avatar.'));
@@ -443,14 +402,7 @@ class AvatarsettingsAction extends SettingsAction
         $user = common_current_user();
         $profile = $user->getProfile();
 
-        $avatar = $profile->getOriginalAvatar();
-        if($avatar) $avatar->delete();
-        $avatar = $profile->getAvatar(AVATAR_PROFILE_SIZE);
-        if($avatar) $avatar->delete();
-        $avatar = $profile->getAvatar(AVATAR_STREAM_SIZE);
-        if($avatar) $avatar->delete();
-        $avatar = $profile->getAvatar(AVATAR_MINI_SIZE);
-        if($avatar) $avatar->delete();
+        Avatar::deleteFromProfile($profile);
 
         // TRANS: Success message for deleting a user avatar.
         $this->showForm(_('Avatar deleted.'), true);
@@ -465,7 +417,7 @@ class AvatarsettingsAction extends SettingsAction
     function showStylesheets()
     {
         parent::showStylesheets();
-        $this->cssLink('css/jquery.Jcrop.css','base','screen, projection, tv');
+        $this->cssLink('js/extlib/jquery-jcrop/css/jcrop.css','base','screen, projection, tv');
     }
 
     /**
@@ -478,8 +430,8 @@ class AvatarsettingsAction extends SettingsAction
         parent::showScripts();
 
         if ($this->mode == 'crop') {
-            $this->script('jcrop/jquery.Jcrop.min.js');
-            $this->script('jcrop/jquery.Jcrop.go.js');
+            $this->script('extlib/jquery-jcrop/jcrop.js');
+            $this->script('jcrop.go.js');
         }
 
         $this->autofocus('avatarfile');

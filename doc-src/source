@@ -9,10 +9,8 @@ Free Software license for network services.
 
 You can get a copy of the software from the
 [StatusNet](http://status.net/) main site. The version of the software
-that runs on *this* site is heavily modified from that version. You can 
-find the modified software on [GitHub](https://github.com/RedEnchilada/rainbowdash-network).
-
-The site also depends on certain libraries and other software; you can get
+that runs on *this* site is unmodified from that version. The site
+also depends on certain libraries and other software; you can get
 those at the StatusNet site, too.
 
 

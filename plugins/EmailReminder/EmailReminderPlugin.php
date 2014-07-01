@@ -62,32 +62,6 @@ class EmailReminderPlugin extends Plugin
     }
 
     /**
-     * Load related modules when needed
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value; true means continue processing, false
-     *         means stop.
-     */
-    function onAutoload($cls) {
-        $base = dirname(__FILE__);
-        $lower = strtolower($cls);
-
-        $files = array("$base/classes/$cls.php",
-            "$base/lib/$lower.php");
-        if (substr($lower, -6) == 'action') {
-            $files[] = "$base/actions/" . substr($lower, 0, -6) . ".php";
-        }
-        foreach ($files as $file) {
-            if (file_exists($file)) {
-                include_once $file;
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
      * Register our queue handlers
      *
      * @param QueueManager $qm Current queue manager
@@ -168,7 +142,7 @@ class EmailReminderPlugin extends Plugin
         $inviterurl = null;
 
         if ($type == UserInviteReminderHandler::INVITE_REMINDER) {
-            $user = User::staticGet($object->user_id);
+            $user = User::getKV($object->user_id);
             if (!empty($user)) {
                 $profile    = $user->getProfile();
                 $inviter    = $profile->getBestName();
@@ -209,7 +183,7 @@ class EmailReminderPlugin extends Plugin
     {
         $versions[] = array(
             'name'           => 'EmailReminder',
-            'version'        => STATUSNET_VERSION,
+            'version'        => GNUSOCIAL_VERSION,
             'author'         => 'Zach Copley',
             'homepage'       => 'http://status.net/wiki/Plugin:EmailReminder',
             // TRANS: Plugin description.

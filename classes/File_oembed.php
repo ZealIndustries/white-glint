@@ -47,9 +47,6 @@ class File_oembed extends Managed_DataObject
     public $url;                             // varchar(255)
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
 
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('File_oembed',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -87,7 +84,7 @@ class File_oembed extends Managed_DataObject
         try {
             return oEmbedHelper::getObject($url, $parameters);
         } catch (Exception $e) {
-            common_log(LOG_ERR, "Error during oembed lookup for $url - " . $e->getMessage());
+            common_log(LOG_INFO, "Error during oembed lookup for $url - " . $e->getMessage());
             return false;
         }
     }
@@ -101,11 +98,14 @@ class File_oembed extends Managed_DataObject
     function saveNew($data, $file_id) {
         $file_oembed = new File_oembed;
         $file_oembed->file_id = $file_id;
+        if (!isset($data->version)) {
+            common_debug('DEBUGGING oEmbed: data->version undefined in variable $data: '.var_export($data, true));
+        }
         $file_oembed->version = $data->version;
         $file_oembed->type = $data->type;
         if (!empty($data->provider_name)) $file_oembed->provider = $data->provider_name;
         if (!empty($data->provider)) $file_oembed->provider = $data->provider;
-        if (!empty($data->provide_url)) $file_oembed->provider_url = $data->provider_url;
+        if (!empty($data->provider_url)) $file_oembed->provider_url = $data->provider_url;
         if (!empty($data->width)) $file_oembed->width = intval($data->width);
         if (!empty($data->height)) $file_oembed->height = intval($data->height);
         if (!empty($data->html)) $file_oembed->html = $data->html;
@@ -116,24 +116,24 @@ class File_oembed extends Managed_DataObject
             $file_oembed->url = $data->url;
             $given_url = File_redirection::_canonUrl($file_oembed->url);
             if (! empty($given_url)){
-                $file = File::staticGet('url', $given_url);
-                if (empty($file)) {
-                    $file_redir = File_redirection::staticGet('url', $given_url);
+                $file = File::getKV('url', $given_url);
+                if ($file instanceof File) {
+                    $file_oembed->mimetype = $file->mimetype;
+                } else {
+                    $file_redir = File_redirection::getKV('url', $given_url);
                     if (empty($file_redir)) {
                         $redir_data = File_redirection::where($given_url);
                         $file_oembed->mimetype = $redir_data['type'];
                     } else {
                         $file_id = $file_redir->file_id;
                     }
-                } else {
-                    $file_oembed->mimetype=$file->mimetype;
                 }
             }
         }
         $file_oembed->insert();
         if (!empty($data->thumbnail_url) || ($data->type == 'photo')) {
-            $ft = File_thumbnail::staticGet('file_id', $file_id);
-            if (!empty($ft)) {
+            $ft = File_thumbnail::getKV('file_id', $file_id);
+            if ($ft instanceof File_thumbnail) {
                 common_log(LOG_WARNING, "Strangely, a File_thumbnail object exists for new file $file_id",
                            __FILE__);
             } else {

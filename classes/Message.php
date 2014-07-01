@@ -21,9 +21,6 @@ class Message extends Managed_DataObject
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
     public $source;                          // varchar(32)
 
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('Message',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -62,30 +59,23 @@ class Message extends Managed_DataObject
 
     function getFrom()
     {
-        return Profile::staticGet('id', $this->from_profile);
+        return Profile::getKV('id', $this->from_profile);
     }
 
     function getTo()
     {
-        return Profile::staticGet('id', $this->to_profile);
+        return Profile::getKV('id', $this->to_profile);
     }
 
     static function saveNew($from, $to, $content, $source) {
-        $sender = Profile::staticGet('id', $from);
+        $sender = Profile::getKV('id', $from);
 
         if (!$sender->hasRight(Right::NEWMESSAGE)) {
             // TRANS: Client exception thrown when a user tries to send a direct message while being banned from sending them.
             throw new ClientException(_('You are banned from sending direct messages.'));
         }
 
-        if (common_config('throttle', 'enabled') && !Message::checkEditThrottle($from)) {
-            common_log(LOG_WARNING, 'Excessive posting by profile #' . $from . '; throttled.');
-            // TRANS: Client exception thrown when a user tries to post too many notices in a given time frame.
-            throw new ClientException(_('Too many notices too fast; take a breather '.
-                                        'and post again in a few minutes.'));
-        }
-
-        $user = User::staticGet('id', $sender->id);
+        $user = User::getKV('id', $sender->id);
 
         $msg = new Message();
 
@@ -100,20 +90,13 @@ class Message extends Managed_DataObject
         $msg->rendered = common_render_text($msg->content);
         $msg->created = common_sql_now();
         $msg->source = $source;
-		
-		// Message processing stuff
-		Event::handle('SaveNewDirectMessage', array($msg));
-		if(common_config('site', 'sent_to_multiple_users')) {
-			$msg->rendered = '<span class="dm_sent_to_multiple" title="' . common_config('site', 'sent_to_multiple_users') 
-							. '"></span>' . $msg->rendered;
-		}
 
         $result = $msg->insert();
 
         if (!$result) {
             common_log_db_error($msg, 'INSERT', __FILE__);
             // TRANS: Message given when a message could not be stored on the server.
-            return _('Could not insert message.');
+            throw new ServerException(_('Could not insert message.'));
         }
 
         $orig = clone($msg);
@@ -124,29 +107,10 @@ class Message extends Managed_DataObject
         if (!$result) {
             common_log_db_error($msg, 'UPDATE', __FILE__);
             // TRANS: Message given when a message could not be updated on the server.
-            return _('Could not update message with new URI.');
+            throw new ServerException(_('Could not update message with new URI.'));
         }
-		
-		Event::handle('EndSendPrivateMessage', array($msg));
 
         return $msg;
-    }
-
-    static function checkEditThrottle($profile_id) {
-        $msg = new Message();
-        $msg->from_profile = $profile_id;
-        $msg->orderBy('id DESC');
-        $msg->limit(common_config('throttle', 'count') - 1, 1);
-
-        if ($msg->find() && $msg->fetch()) {
-            # If the Nth message was posted less than timespan seconds ago
-            if (time() - strtotime($msg->created) <= common_config('throttle', 'timespan')) {
-                # Then we throttle
-                return false;
-            }
-        }
-        # Either not N notices in the stream, OR the Nth was not posted within timespan seconds
-        return true;
     }
 
     static function maxContent()
@@ -167,9 +131,86 @@ class Message extends Managed_DataObject
 
     function notify()
     {
-        $from = User::staticGet('id', $this->from_profile);
-        $to   = User::staticGet('id', $this->to_profile);
+        $from = User::getKV('id', $this->from_profile);
+        $to   = User::getKV('id', $this->to_profile);
 
         mail_notify_message($this, $from, $to);
+    }
+
+    function getSource()
+    {
+        $ns = new Notice_source();
+        if (!empty($this->source)) {
+            switch ($this->source) {
+            case 'web':
+            case 'xmpp':
+            case 'mail':
+            case 'omb':
+            case 'system':
+            case 'api':
+                $ns->code = $this->source;
+                break;
+            default:
+                $ns = Notice_source::getKV($this->source);
+                if (!$ns) {
+                    $ns = new Notice_source();
+                    $ns->code = $this->source;
+                    $app = Oauth_application::getKV('name', $this->source);
+                    if ($app) {
+                        $ns->name = $app->name;
+                        $ns->url  = $app->source_url;
+                    }
+                }
+                break;
+            }
+        }
+        return $ns;
+    }
+
+    function asActivity()
+    {
+        $act = new Activity();
+
+        if (Event::handle('StartMessageAsActivity', array($this, &$act))) {
+
+            $act->id      = TagURI::mint(sprintf('activity:message:%d', $this->id));
+            $act->time    = strtotime($this->created);
+            $act->link    = $this->url;
+
+            $profile = Profile::getKV('id', $this->from_profile);
+
+            if (empty($profile)) {
+                throw new Exception(sprintf("Sender profile not found: %d", $this->from_profile));
+            }
+            
+            $act->actor            = ActivityObject::fromProfile($profile);
+            $act->actor->extra[]   = $profile->profileInfo(null);
+
+            $act->verb = ActivityVerb::POST;
+
+            $act->objects[] = ActivityObject::fromMessage($this);
+
+            $ctx = new ActivityContext();
+
+            $rprofile = Profile::getKV('id', $this->to_profile);
+
+            if (empty($rprofile)) {
+                throw new Exception(sprintf("Receiver profile not found: %d", $this->to_profile));
+            }
+
+            $ctx->attention[$rprofile->getUri()] = ActivityObject::PERSON;
+
+            $act->context = $ctx;
+
+            $source = $this->getSource();
+
+            if ($source) {
+                $act->generator = ActivityObject::fromNoticeSource($source);
+            }
+
+            Event::handle('EndMessageAsActivity', array($this, &$act));
+        }
+
+        return $act;
     }
 }

@@ -55,24 +55,23 @@ class FollowEveryonePlugin extends Plugin
      * the new user to them. Exceptions (like silenced users or whatever)
      * are caught, logged, and ignored.
      *
-     * @param Profile &$newProfile The new user's profile
-     * @param User    &$newUser    The new user
+     * @param Profile $profile The new user's profile
      *
      * @return boolean hook value
      */
-    function onEndUserRegister(&$newProfile, &$newUser)
+    public function onEndUserRegister(Profile $profile)
     {
         $otherUser = new User();
-        $otherUser->whereAdd('id != ' . $newUser->id);
+        $otherUser->whereAdd('id != ' . $profile->id);
 
         if ($otherUser->find()) {
             while ($otherUser->fetch()) {
                 $otherProfile = $otherUser->getProfile();
                 try {
                     if (User_followeveryone_prefs::followEveryone($otherUser->id)) {
-                        Subscription::start($otherProfile, $newProfile);
+                        Subscription::start($otherProfile, $profile);
                     }
-                    Subscription::start($newProfile, $otherProfile);
+                    Subscription::start($profile, $otherProfile);
                 } catch (Exception $e) {
                     common_log(LOG_WARNING, $e->getMessage());
                     continue;
@@ -82,7 +81,7 @@ class FollowEveryonePlugin extends Plugin
 
         $ufep = new User_followeveryone_prefs();
 
-        $ufep->user_id        = $newUser->id;
+        $ufep->user_id        = $profile->id;
         $ufep->followeveryone = true;
 
         $ufep->insert();
@@ -114,34 +113,9 @@ class FollowEveryonePlugin extends Plugin
         $schema = Schema::get();
 
         // For storing user-submitted flags on profiles
-        $schema->ensureTable('user_followeveryone_prefs',
-                             array(new ColumnDef('user_id', 'integer', null,
-                                                 true, 'PRI'),
-                                   new ColumnDef('followeveryone', 'tinyint', null,
-                                                 false, null, 1)));
+        $schema->ensureTable('user_followeveryone_prefs', User_followeveryone_prefs::schemaDef());
 
         return true;
-    }
-
-    /**
-     * Load related modules when needed
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value; true means continue processing, false means stop.
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'User_followeveryone_prefs':
-            include_once $dir . '/'.$cls.'.php';
-            return false;
-        default:
-            return true;
-        }
     }
 
     /**
@@ -194,7 +168,7 @@ class FollowEveryonePlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'FollowEveryone',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Evan Prodromou',
                             'homepage' => 'http://status.net/wiki/Plugin:FollowEveryone',
                             'rawdescription' =>

@@ -113,14 +113,8 @@ class ApproveGroupForm extends Form
     function formActions()
     {
         // TRANS: Submit button text to accept a group membership request on approve group form.
-        //$this->out->submit('approve', _m('BUTTON','Accept'));
-        $this->out->element('button',
-			array('type' => 'submit', 'class' => 'submit', 'value' => 'approve', 'name' => 'approve', 'id' => 'approve'),
-		_m('BUTTON','Accept'));
+        $this->out->submit('approve', _m('BUTTON','Accept'));
         // TRANS: Submit button text to reject a group membership request on approve group form.
-        //$this->out->submit('cancel', _m('BUTTON','Reject'));
-        $this->out->element('button',
-			array('type' => 'submit', 'class' => 'submit', 'value' => 'cancel', 'name' => 'cancel', 'id' => 'cancel'),
-		_m('BUTTON','Reject'));
+        $this->out->submit('cancel', _m('BUTTON','Reject'));
     }
 }

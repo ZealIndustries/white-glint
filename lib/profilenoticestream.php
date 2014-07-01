@@ -47,15 +47,60 @@ if (!defined('STATUSNET')) {
 
 class ProfileNoticeStream extends ScopingNoticeStream
 {
-    function __construct($profile, $userProfile = -1, $images=false)
+    var $streamProfile;
+    var $userProfile;
+
+    function __construct($profile, $userProfile = -1)
     {
-        $this->images = $images;
         if (is_int($userProfile) && $userProfile == -1) {
             $userProfile = Profile::current();
         }
+        $this->streamProfile = $profile;
+        $this->userProfile   = $userProfile;
         parent::__construct(new CachingNoticeStream(new RawProfileNoticeStream($profile),
                                                     'profile:notice_ids:' . $profile->id),
                             $userProfile);
+    }
+
+    function getNoticeIds($offset, $limit, $sinceId = null, $maxId = null)
+    {
+        if ($this->impossibleStream()) {
+            return array();
+        } else {
+            return parent::getNoticeIds($offset, $limit, $since_id, $max_id);
+        }
+    }
+
+    function getNotices($offset, $limit, $sinceId = null, $maxId = null)
+    {
+        if ($this->impossibleStream()) {
+            return new ArrayWrapper(array());
+        } else {
+            return parent::getNotices($offset, $limit, $sinceId, $maxId);
+        }
+    }
+
+    function impossibleStream() 
+    {
+        $user = User::getKV('id', $this->streamProfile->id);
+
+        // If it's a private stream, and no user or not a subscriber
+
+        if (!empty($user) && $user->private_stream && 
+            (empty($this->userProfile) || !$this->userProfile->isSubscribed($this->streamProfile))) {
+            return true;
+        }
+
+        // If it's a spammy stream, and no user or not a moderator
+
+        if (common_config('notice', 'hidespam')) {
+            if ($this->streamProfile->hasRole(Profile_role::SILENCED) &&
+                (empty($this->userProfile) || (($this->userProfile->id !== $this->streamProfile->id) && !$this->userProfile->hasRight(Right::REVIEWSPAM)))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 

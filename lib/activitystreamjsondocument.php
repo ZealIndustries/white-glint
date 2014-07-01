@@ -165,10 +165,9 @@ class ActivityStreamJSONDocument extends JSONActivityCollection
      */
     function asString()
     {
-        $this->doc['generator'] = 'StatusNet ' . STATUSNET_VERSION; // extension
+        $this->doc['generator'] = 'GNU social ' . GNUSOCIAL_VERSION; // extension
         $this->doc['title'] = $this->title;
         $this->doc['url']   = $this->url;
-        $this->doc['count'] = $this->count;
         $this->doc['totalItems'] = $this->count;
         $this->doc['items'] = $this->items;
         $this->doc['links'] = $this->links; // extension
@@ -202,9 +201,9 @@ class ActivityStreamsMediaLink extends ActivityStreamsLink
     {
         parent::__construct($url, $rel, $mediaType);
         $this->linkDict = array(
-            'width'      => $width,
-            'height'     => $height,
-            'duration'   => $duration
+            'width'      => intval($width),
+            'height'     => intval($height),
+            'duration'   => intval($duration)
         );
     }
 

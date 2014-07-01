@@ -76,7 +76,7 @@ class Command
             if(substr($this->other,0,1)=='#'){
                 // A specific notice_id #123
 
-                $notice = Notice::staticGet(substr($arg,1));
+                $notice = Notice::getKV(substr($arg,1));
                 if (!$notice) {
                     // TRANS: Command exception text shown when a notice ID is requested that does not exist.
                     throw new CommandException(_('Notice with that id does not exist.'));
@@ -85,7 +85,7 @@ class Command
 
             if (Validate::uri($this->other)) {
                 // A specific notice by URI lookup
-                $notice = Notice::staticGet('uri', $arg);
+                $notice = Notice::getKV('uri', $arg);
             }
 
             if (!$notice) {
@@ -139,7 +139,7 @@ class Command
     {
         $user = null;
         if (Event::handle('StartCommandGetUser', array($this, $arg, &$user))) {
-            $user = User::staticGet('nickname', Nickname::normalize($arg));
+            $user = User::getKV('nickname', Nickname::normalize($arg));
         }
         Event::handle('EndCommandGetUser', array($this, $arg, &$user));
         if (!$user){
@@ -310,7 +310,7 @@ class FavCommand extends Command
         // @fixme favorite notification should be triggered
         // at a lower level
 
-        $other = User::staticGet('id', $notice->profile_id);
+        $other = User::getKV('id', $notice->profile_id);
 
         if ($other && $other->id != $this->user->id) {
             if ($other->email && $other->emailnotifyfav) {
@@ -632,15 +632,15 @@ class MessageCommand extends Command
             $channel->error($this->user, _('Do not send a message to yourself; just say it to yourself quietly instead.'));
             return;
         }
-        $message = Message::saveNew($this->user->id, $other->id, $this->text, $channel->source());
-        if ($message) {
+        try {
+            $message = Message::saveNew($this->user->id, $other->id, $this->text, $channel->source());
             $message->notify();
             // TRANS: Message given have sent a direct message to another user.
             // TRANS: %s is the name of the other user.
             $channel->output($this->user, sprintf(_('Direct message to %s sent.'), $this->other));
-        } else {
+        } catch (Exception $e) {
             // TRANS: Error text shown sending a direct message fails with an unknown reason.
-            $channel->error($this->user, _('Error sending direct message.'));
+            $channel->error($this->user, $e->getMessage());
         }
     }
 }
@@ -770,15 +770,8 @@ class SubCommand extends Command
 
         $target = $this->getProfile($this->other);
 
-        $remote = Remote_profile::staticGet('id', $target->id);
-        if ($remote) {
-            // TRANS: Command exception text shown when trying to subscribe to an OMB profile using the subscribe command.
-            throw new CommandException(_("Can't subscribe to OMB profiles by command."));
-        }
-
         try {
-            Subscription::start($this->user->getProfile(),
-                                $target);
+            Subscription::start($this->user->getProfile(), $target);
             // TRANS: Text shown after having subscribed to another user successfully.
             // TRANS: %s is the name of the user the subscription was requested for.
             $channel->output($this->user, sprintf(_('Subscribed to %s.'), $this->other));
@@ -809,8 +802,7 @@ class UnsubCommand extends Command
         $target = $this->getProfile($this->other);
 
         try {
-            Subscription::cancel($this->user->getProfile(),
-                                 $target);
+            Subscription::cancel($this->user->getProfile(), $target);
             // TRANS: Text shown after having unsubscribed from another user successfully.
             // TRANS: %s is the name of the user the unsubscription was requested for.
             $channel->output($this->user, sprintf(_('Unsubscribed from %s.'), $this->other));
@@ -933,7 +925,7 @@ class SubscriptionsCommand extends Command
 {
     function handle($channel)
     {
-        $profile = $this->user->getSubscriptions(0);
+        $profile = $this->user->getSubscribed(0);
         $nicknames=array();
         while ($profile->fetch()) {
             $nicknames[]=$profile->nickname;
@@ -988,7 +980,7 @@ class GroupsCommand extends Command
     {
         $group = $this->user->getGroups();
         $groups=array();
-        while ($group->fetch()) {
+        while ($group instanceof User_group && $group->fetch()) {
             $groups[]=$group->nickname;
         }
         if(count($groups)==0){

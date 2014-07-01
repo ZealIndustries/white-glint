@@ -63,7 +63,7 @@ class JoingroupAction extends Action
         $nickname_arg = $this->trimmed('nickname');
         $id = intval($this->arg('id'));
         if ($id) {
-            $this->group = User_group::staticGet('id', $id);
+            $this->group = User_group::getKV('id', $id);
         } else if ($nickname_arg) {
             $nickname = common_canonical_nickname($nickname_arg);
 
@@ -75,7 +75,7 @@ class JoingroupAction extends Action
                 return false;
             }
 
-            $local = Local_group::staticGet('nickname', $nickname);
+            $local = Local_group::getKV('nickname', $nickname);
 
             if (!$local) {
                 // TRANS: Client error displayed when trying to join a non-local group.
@@ -83,7 +83,7 @@ class JoingroupAction extends Action
                 return false;
             }
 
-            $this->group = User_group::staticGet('id', $local->group_id);
+            $this->group = User_group::getKV('id', $local->group_id);
         } else {
             // TRANS: Client error displayed when trying to join a group without providing a group name or group ID.
             $this->clientError(_('No nickname or ID.'), 404);
@@ -130,8 +130,6 @@ class JoingroupAction extends Action
 
         try {
             $result = $cur->joinGroup($this->group);
-			if ($result instanceof Group_join_queue)
-				Event::handle('EndRequestJoinGroup', array($cur, $this->group));
         } catch (Exception $e) {
         	common_log(LOG_ERR, sprintf("Couldn't join user %s to group %s: '%s'",
         								$cur->nickname,
@@ -165,7 +163,7 @@ class JoingroupAction extends Action
             }
             $form->show();
             $this->elementEnd('body');
-            $this->elementEnd('html');
+            $this->endHTML();
         } else {
             common_redirect(common_local_url('groupmembers', array('nickname' =>
                                                                    $this->group->nickname)),

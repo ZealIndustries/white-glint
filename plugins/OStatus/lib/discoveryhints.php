@@ -20,24 +20,27 @@
  */
 
 class DiscoveryHints {
-    static function fromXRD($xrd)
+    static function fromXRD(XML_XRD $xrd)
     {
         $hints = array();
 
         foreach ($xrd->links as $link) {
-            switch ($link['rel']) {
-            case Discovery::PROFILEPAGE:
-                $hints['profileurl'] = $link['href'];
+            switch ($link->rel) {
+            case WebFingerResource_Profile::PROFILEPAGE:
+                $hints['profileurl'] = $link->href;
                 break;
-            case Salmon::NS_MENTIONS:
-            case Salmon::NS_REPLIES:
-                $hints['salmon'] = $link['href'];
+            case Salmon::REL_SALMON:
+            case Salmon::NS_MENTIONS:   // XXX: deprecated, remove in the future
+            case Salmon::NS_REPLIES:    // XXX: deprecated, remove in the future
+                $hints['salmon'] = $link->href;
                 break;
             case Discovery::UPDATESFROM:
-                $hints['feedurl'] = $link['href'];
+                if (empty($link->type) || $link->type == 'application/atom+xml') {
+                    $hints['feedurl'] = $link->href;
+                }
                 break;
             case Discovery::HCARD:
-                $hints['hcardurl'] = $link['href'];
+                $hints['hcardurl'] = $link->href;
                 break;
             default:
                 break;

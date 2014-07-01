@@ -28,7 +28,7 @@
  * @link      http://status.net/
  */
 
-if (!defined('STATUSNET')) {
+if (!defined('GNUSOCIAL')) {
     exit(1);
 }
 
@@ -73,7 +73,17 @@ class SiteProfile
  */
 abstract class SiteProfileSettings
 {
-    abstract static function getSettings();
+    static function getSettings()
+    {
+        throw new MethodNotImplementedException(__METHOD__);
+    }
+
+    static function corePlugins() {
+        return common_config('plugins', 'core');
+    }
+    static function defaultPlugins() {
+        return common_config('plugins', 'default');
+    }
 }
 
 /**
@@ -98,23 +108,13 @@ class PublicSite extends SiteProfileSettings
                 )
             ),
             'plugins' => array(
-                'default' => array(
-                    'Activity'                => null,
-                    'Bookmark'                => null,
-                    'ClientSideShorten'       => null,
-                    'Directory'               => null,
-                    'Event'                   => null,
-                    'ExtendedProfile'         => null,
-                    'Geonames'                => null,
-                    'Gravatar'                => null,
-                    'OpenID'                  => null,
-                    'OStatus'                 => null,
-                    'Poll'                    => null,
-                    'QnA'                     => null,
-                    'SearchSub'               => null,
-                    'StrictTransportSecurity' => null,
-                    'TagSub'                  => null
-                )
+                'core'    => self::corePlugins(),
+                'default' => array_merge(self::defaultPlugins(), array(
+                    'Directory'               => array(),
+                    'ExtendedProfile'         => array(),
+                    'OStatus'                 => array(),
+                    'WebFinger'               => array(),
+                ))
             ),
             'discovery' => array('cors' => true) // Allow Cross-Origin Resource Sharing for service discovery (host-meta, XRD, etc.)
         );
@@ -144,25 +144,13 @@ class PrivateSite extends SiteProfileSettings
                 )
             ),
             'plugins' => array(
-                'default' => array(
-                    'Activity'                => null,
-                    'Bookmark'                => null,
-                    'ClientSideShorten'       => null,
-                    'Directory'               => null,
-                    'Event'                   => null,
-                    'ExtendedProfile'         => null,
-                    'EmailRegistration'       => null,
-                    'Geonames'                => null,
-                    'Gravatar'                => null,
-                    'NewMenu'                 => null,
-                    'MobileProfile'           => null,
-                    'OpenID'                  => null,
-                    'Poll'                    => null,
-                    'QnA'                     => null,
-                    'SearchSub'               => null,
-                    'StrictTransportSecurity' => null,
-                    'TagSub'                  => null
-                )
+                'core'    => self::corePlugins(),
+                'default' => array_merge(self::defaultPlugins(), array(
+                    'Directory'               => array(),
+                    'ExtendedProfile'         => array(),
+                    'EmailRegistration'       => array(),
+                    'MobileProfile'           => array(),
+                ))
              ),
             'profile'       => array('delete' => 'true'),
             'license'       => array('type'   => 'private'),
@@ -207,22 +195,12 @@ class CommunitySite extends SiteProfileSettings
                 )
             ),
             'plugins' => array(
-                'default' => array(
-                    'Activity'                => null,
-                    'Bookmark'                => null,
-                    'ClientSideShorten'       => null,
-                    'Directory'               => null,
-                    'Event'                   => null,
-                    'Geonames'                => null,
-                    'Gravatar'                => null,
-                    'OpenID'                  => null,
-                    'OStatus'                 => null,
-                    'Poll'                    => null,
-                    'QnA'                     => null,
-                    'SearchSub'               => null,
-                    'StrictTransportSecurity' => null,
-                    'TagSub'                  => null
-                )
+                'core'    => self::corePlugins(),
+                'default' => array_merge(self::defaultPlugins(), array(
+                    'Directory'               => array(),
+                    'OStatus'                 => array(),
+                    'WebFinger'               => array(),
+                ))
             ),
             'discovery' => array('cors' => true) // Allow Cross-Origin Resource Sharing for service discovery (host-meta, XRD, etc.)
         );
@@ -252,24 +230,14 @@ class SingleuserSite extends SiteProfileSettings
                 )
             ),
             'plugins' => array(
-                'default' => array(
-                    'Activity'                => null,
-                    'Bookmark'                => null,
-                    'ClientSideShorten'       => null,
-                    'Event'                   => null,
-                    'Geonames'                => null,
-                    'NewMenu'                 => null,
-                    'MobileProfile'           => null,
-                    'OpenID'                  => null,
-                    'OStatus'                 => null,
-                    'Poll'                    => null,
-                    'QnA'                     => null,
-                    'SearchSub'               => null,
-                    'StrictTransportSecurity' => null,
-                    'TagSub'                  => null,
-                    'TwitterBridge'           => null,
-                    'FacebookBridge'          => null,
-                )
+                'core'    => self::corePlugins(),
+                'default' => array_merge(self::defaultPlugins(), array(
+                    'MobileProfile'           => array(),
+                    'OStatus'                 => array(),
+                    'TwitterBridge'           => array(),
+                    'FacebookBridge'          => array(),
+                    'WebFinger'               => array(),
+                ))
             ),
             'discovery' => array('cors' => true) // Allow Cross-Origin Resource Sharing for service discovery (host-meta, XRD, etc.)
         );

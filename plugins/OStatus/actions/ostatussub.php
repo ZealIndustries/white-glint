@@ -142,8 +142,7 @@ class OStatusSubAction extends Action
             $ok = true;
         }
 
-        $avatar = $profile->getAvatar(AVATAR_PROFILE_SIZE);
-        $avatarUrl = $avatar ? $avatar->displayUrl() : false;
+        $avatarUrl = $profile->avatarUrl(AVATAR_PROFILE_SIZE);
 
         $this->showEntity($profile,
                           $profile->profileurl,
@@ -158,10 +157,6 @@ class OStatusSubAction extends Action
         $fullname = $entity->fullname;
         $homepage = $entity->homepage;
         $location = $entity->location;
-
-        if (!$avatar) {
-            $avatar = Avatar::defaultImage(AVATAR_PROFILE_SIZE);
-        }
 
         $this->elementStart('div', 'entity_profile vcard');
         $this->element('img', array('src' => $avatar,
@@ -298,7 +293,7 @@ class OStatusSubAction extends Action
         if ($user->isSubscribed($local)) {
             // TRANS: OStatus remote subscription dialog error.
             $this->showForm(_m('Already subscribed!'));
-        } elseif (Subscription::start($user, $local)) {
+        } elseif (Subscription::start($user->getProfile(), $local)) {
             $this->success();
         } else {
             // TRANS: OStatus remote subscription dialog error.
@@ -373,9 +368,7 @@ class OStatusSubAction extends Action
             $this->error = $err;
         }
         if ($this->boolean('ajax')) {
-            header('Content-Type: text/xml;charset=utf-8');
-            $this->xw->startDocument('1.0', 'UTF-8');
-            $this->elementStart('html');
+            $this->startHTML('text/xml;charset=utf-8');
             $this->elementStart('head');
             // TRANS: Form title.
             $this->element('title', null, _m('Subscribe to user'));
@@ -383,7 +376,7 @@ class OStatusSubAction extends Action
             $this->elementStart('body');
             $this->showContent();
             $this->elementEnd('body');
-            $this->elementEnd('html');
+            $this->endHTML();
         } else {
             $this->showPage();
         }

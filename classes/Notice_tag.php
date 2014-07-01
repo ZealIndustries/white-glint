@@ -29,10 +29,6 @@ class Notice_tag extends Managed_DataObject
     public $notice_id;                       // int(4)  primary_key not_null
     public $created;                         // datetime()   not_null
 
-    /* Static get */
-    function staticGet($k,$v=null)
-    { return Memcached_DataObject::staticGet('Notice_tag',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -52,6 +48,7 @@ class Notice_tag extends Managed_DataObject
             'indexes' => array(
                 'notice_tag_created_idx' => array('created'),
                 'notice_tag_notice_id_idx' => array('notice_id'),
+                'notice_tag_tag_created_notice_id_idx' => array('tag', 'created', 'notice_id')
             ),
         );
     }
@@ -63,46 +60,12 @@ class Notice_tag extends Managed_DataObject
         return $stream->getNotices($offset, $limit, $sinceId, $maxId);
     }
 
-    function _streamDirect($tag, $offset, $limit=null, $since_id=null, $max_id=false)
-    {
-        $nt = new Notice_tag();
-
-        $nt->tag = $tag;
-
-        $nt->selectAdd();
-        $nt->selectAdd('notice_id');
-
-        Notice::addWhereSinceId($nt, $since_id, 'notice_id');
-        Notice::addWhereMaxId($nt, $max_id, 'notice_id');
-
-        $nt->orderBy('created DESC, notice_id DESC');
-
-        if (!is_null($offset)) {
-            $nt->limit($offset, $limit);
-        }
-
-        $ids = array();
-
-        if ($nt->find()) {
-            while ($nt->fetch()) {
-                $ids[] = $nt->notice_id;
-            }
-        }
-
-        return $ids;
-    }
-
     function blowCache($blowLast=false)
     {
         self::blow('notice_tag:notice_ids:%s', Cache::keyize($this->tag));
         if ($blowLast) {
             self::blow('notice_tag:notice_ids:%s;last', Cache::keyize($this->tag));
         }
-    }
-
-    function pkeyGet($kv)
-    {
-        return Memcached_DataObject::pkeyGet('Notice_tag', $kv);
     }
 
 	static function url($tag)

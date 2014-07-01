@@ -49,45 +49,60 @@ require_once INSTALLDIR.'/lib/groupminilist.php';
 class ProfileAction extends Action
 {
     var $page    = null;
-    var $profile = null;
     var $tag     = null;
 
-    function prepare($args)
+    protected $target  = null;    // Profile that we're showing
+
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
-        $nickname_arg = $this->arg('nickname');
-        $nickname     = common_canonical_nickname($nickname_arg);
+        try {
+            $nickname_arg = $this->arg('nickname');
+            $nickname     = common_canonical_nickname($nickname_arg);
 
-        // Permanent redirect on non-canonical nickname
+            // Permanent redirect on non-canonical nickname
 
-        if ($nickname_arg != $nickname) {
-            $args = array('nickname' => $nickname);
-            if ($this->arg('page') && $this->arg('page') != 1) {
-                $args['page'] = $this->arg['page'];
+            if ($nickname_arg != $nickname) {
+                $args = array('nickname' => $nickname);
+                if ($this->arg('page') && $this->arg('page') != 1) {
+                    $args['page'] = $this->arg['page'];
+                }
+                common_redirect(common_local_url($this->trimmed('action'), $args), 301);
             }
-            common_redirect(common_local_url($this->trimmed('action'), $args), 301);
-            return false;
+            $this->user = User::getKV('nickname', $nickname);
+
+            if (!$this->user) {
+                // TRANS: Client error displayed when calling a profile action without specifying a user.
+                $this->clientError(_('No such user.'), 404);
+            }
+
+            $this->target = $this->user->getProfile();
+        } catch (NicknameException $e) {
+            $id = (int)$this->arg('id');
+            $this->target = Profile::getKV('id', $id);
+
+            if (!($this->target instanceof Profile)) {
+                // TRANS: Error message displayed when referring to a user without a profile.
+                $this->serverError(_m('Profile ID does not exist.'));
+            }
+
+            $user = User::getKV('id', $this->target->id);
+            if ($user instanceof User) {
+                // This is a local user -- send to their regular profile.
+                common_redirect(common_local_url('showstream', array('nickname' => $user->nickname)));
+            }
         }
 
-        $this->user = User::staticGet('nickname', $nickname);
-
-        if (!$this->user) {
-            // TRANS: Client error displayed when calling a profile action without specifying a user.
-            $this->clientError(_('No such user.'), 404);
-            return false;
+        if ($this->target->hasRole(Profile_role::SILENCED) &&
+            (empty($this->scoped) || !$this->scoped->hasRight(Right::SILENCEUSER))) {
+            throw new ClientException(_('This profile has been silenced by site moderators'), 403);
         }
 
-        $this->profile = $this->user->getProfile();
-
-        if (!$this->profile) {
-            // TRANS: Error message displayed when referring to a user without a profile.
-            $this->serverError(_('User has no profile.'));
-            return false;
-        }
+        // backwards compatibility until all actions are fixed to use $this->target
+        $this->profile = $this->target;
 
         $this->tag = $this->trimmed('tag');
-        $this->images = $this->trimmed('images');
         $this->page = ($this->arg('page')) ? ($this->arg('page')+0) : 1;
         common_set_returnto($this->selfUrl());
         return true;
@@ -119,8 +134,6 @@ class ProfileAction extends Action
 
     function showSubscriptions()
     {
-        $profile = $this->profile->getSubscriptions(0, PROFILES_PER_MINILIST + 1);
-
         $this->elementStart('div', array('id' => 'entity_subscriptions',
                                          'class' => 'section'));
         if (Event::handle('StartShowSubscriptionsMiniList', array($this))) {
@@ -130,16 +143,14 @@ class ProfileAction extends Action
             $this->text(' ');
             $this->text($this->profile->subscriptionCount());
             $this->elementEnd('h2');
-
-            $cnt = 0;
-
-            if (!empty($profile)) {
+        
+            try {
+                $profile = $this->profile->getSubscribed(0, PROFILES_PER_MINILIST + 1);
                 $pml = new ProfileMiniList($profile, $this);
-                $cnt = $pml->show();
-                if ($cnt == 0) {
-                    // TRANS: Text for user subscription statistics if the user has no subscriptions.
-                    $this->element('p', null, _('(None)'));
-                }
+                $pml->show();
+            } catch (NoResultException $e) {
+                // TRANS: Text for user subscription statistics if the user has no subscription
+                $this->element('p', null, _('(None)'));
             }
 
             Event::handle('EndShowSubscriptionsMiniList', array($this));
@@ -149,8 +160,6 @@ class ProfileAction extends Action
 
     function showSubscribers()
     {
-        $profile = $this->profile->getSubscribers(0, PROFILES_PER_MINILIST + 1);
-
         $this->elementStart('div', array('id' => 'entity_subscribers',
                                          'class' => 'section'));
 
@@ -163,15 +172,13 @@ class ProfileAction extends Action
             $this->text($this->profile->subscriberCount());
             $this->elementEnd('h2');
 
-            $cnt = 0;
-
-            if (!empty($profile)) {
+            try {
+                $profile = $this->profile->getSubscribers(0, PROFILES_PER_MINILIST + 1);
                 $sml = new SubscribersMiniList($profile, $this);
-                $cnt = $sml->show();
-                if ($cnt == 0) {
-                    // TRANS: Text for user subscriber statistics if user has no subscribers.
-                    $this->element('p', null, _('(None)'));
-                }
+                $sml->show();
+            } catch (NoResultException $e) {
+                // TRANS: Text for user subscriber statistics if user has no subscribers.
+                $this->element('p', null, _('(None)'));
             }
 
             Event::handle('EndShowSubscribersMiniList', array($this));
@@ -182,13 +189,13 @@ class ProfileAction extends Action
 
     function showStatistics()
     {
-	$notice_count = $this->profile->noticeCount();
-	$age_days     = (time() - strtotime($this->profile->created)) / 86400;
-	if ($age_days < 1) {
-		// Rather than extrapolating out to a bajillion...
-		$age_days = 1;
-	}
-	$daily_count = round($notice_count / $age_days);
+        $notice_count = $this->profile->noticeCount();
+        $age_days     = (time() - strtotime($this->profile->created)) / 86400;
+        if ($age_days < 1) {
+            // Rather than extrapolating out to a bajillion...
+            $age_days = 1;
+        }
+        $daily_count = round($notice_count / $age_days);
 
         $this->elementStart('div', array('id' => 'entity_statistics',
                                          'class' => 'section'));
@@ -260,16 +267,15 @@ class ProfileAction extends Action
             // TRANS: H2 text for user group membership statistics.
             $this->statsSectionLink('usergroups', _('Groups'));
             $this->text(' ');
-            $this->text($this->profile->getGroups(0, null)->N);
+            $this->text($this->profile->getGroupCount());
             $this->elementEnd('h2');
 
-            if ($groups) {
+            if ($groups instanceof User_group) {
                 $gml = new GroupMiniList($groups, $this->profile, $this);
                 $cnt = $gml->show();
-                if ($cnt == 0) {
-                    // TRANS: Text for user user group membership statistics if user is not a member of any group.
-                    $this->element('p', null, _('(None)'));
-                }
+            } else {
+                // TRANS: Text for user user group membership statistics if user is not a member of any group.
+                $this->element('p', null, _('(None)'));
             }
 
             Event::handle('EndShowGroupsMiniList', array($this));

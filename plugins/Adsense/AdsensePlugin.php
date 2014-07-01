@@ -174,20 +174,6 @@ class AdsensePlugin extends UAPPlugin
         return true;
     }
 
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'AdsenseadminpanelAction':
-            require_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        default:
-            return true;
-        }
-    }
-
     function onEndAdminPanelNav($menu) {
         if (AdminPanelAction::canAdmin('adsense')) {
             // TRANS: Menu item title/tooltip
@@ -202,7 +188,7 @@ class AdsensePlugin extends UAPPlugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'BlankAdPlugin',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Evan Prodromou',
                             'homepage' => 'http://status.net/wiki/Plugin:Adsense',
                             'rawdescription' =>

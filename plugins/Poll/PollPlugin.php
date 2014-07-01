@@ -64,6 +64,7 @@ class PollPlugin extends MicroAppPlugin
         $schema = Schema::get();
         $schema->ensureTable('poll', Poll::schemaDef());
         $schema->ensureTable('poll_response', Poll_response::schemaDef());
+        $schema->ensureTable('user_poll_prefs', User_poll_prefs::schemaDef());
         return true;
     }
 
@@ -73,43 +74,11 @@ class PollPlugin extends MicroAppPlugin
      * @param Action $action the action being run
      *
      * @return boolean hook value
-     *//*
+     */
     function onEndShowStyles($action)
     {
         $action->cssLink($this->path('poll.css'));
         return true;
-    }*/
-
-    /**
-     * Load related modules when needed
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value; true means continue processing, false means stop.
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'ShowpollAction':
-        case 'NewpollAction':
-        case 'RespondpollAction':
-            include_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'Poll':
-        case 'Poll_response':
-            include_once $dir.'/'.$cls.'.php';
-            return false;
-        case 'NewPollForm':
-        case 'PollResponseForm':
-        case 'PollResultForm':
-            include_once $dir.'/'.strtolower($cls).'.php';
-            return false;
-        default:
-            return true;
-        }
     }
 
     /**
@@ -135,6 +104,9 @@ class PollPlugin extends MicroAppPlugin
         $m->connect('main/poll/:id/respond',
                     array('action' => 'respondpoll'),
                     array('id' => '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'));
+
+        $m->connect('settings/poll',
+                    array('action' => 'pollsettings'));
 
         return true;
     }
@@ -229,7 +201,7 @@ class PollPlugin extends MicroAppPlugin
                     // TRANS: Exception thrown trying to respond to a poll without a poll reference.
                     throw new Exception(_m('Invalid poll response: No poll reference.'));
                 }
-                $poll = Poll::staticGet('uri', $pollUri);
+                $poll = Poll::getKV('uri', $pollUri);
                 if (!$poll) {
                     // TRANS: Exception thrown trying to respond to a non-existing poll.
                     throw new Exception(_m('Invalid poll response: Poll is unknown.'));
@@ -426,10 +398,10 @@ class PollPlugin extends MicroAppPlugin
         $user = common_current_user();
 
         // @hack we want regular rendering, then just add stuff after that
-        $nli = new PollListItem($notice, $out);
+        $nli = new NoticeListItem($notice, $out);
         $nli->showNotice();
 
-        $out->elementStart('div', array('class' => 'poll-content'));
+        $out->elementStart('div', array('class' => 'entry-content poll-content'));
         $poll = Poll::getByNotice($notice);
         if ($poll) {
             if ($user) {
@@ -442,10 +414,7 @@ class PollPlugin extends MicroAppPlugin
                     $form = new PollResponseForm($poll, $out);
                 }
                 $form->show();
-            } else {
-				$form = new PollResultForm($poll, $out);
-                $form->show();
-			}
+            }
         } else {
             // TRANS: Error text displayed if no poll data could be found.
             $out->text(_m('Poll data is missing'));
@@ -468,9 +437,9 @@ class PollPlugin extends MicroAppPlugin
         $out->elementStart('div', array('class' => 'entry-content'));
     }
 
-    function entryForm($out, $options=array())
+    function entryForm($out)
     {
-        return new NewPollForm($out, null, null, $options);
+        return new NewPollForm($out);
     }
 
     // @fixme is this from parent?
@@ -494,10 +463,43 @@ class PollPlugin extends MicroAppPlugin
         }
         return true;
     }
-}
 
-class PollListItem extends NoticeListItem { 
-	function showContent() {
-		// do nothing lel
-	}
+    // Hide poll responses for @chuck
+
+    function onEndNoticeWhoGets($notice, &$ni) {
+        if ($notice->object_type == self::POLL_RESPONSE_OBJECT) {
+            foreach ($ni as $id => $source) {
+                $user = User::getKV('id', $id);
+                if (!empty($user)) {
+                    $pollPrefs = User_poll_prefs::getKV('user_id', $user->id);
+                    if (!empty($pollPrefs) && ($pollPrefs->hide_responses)) {
+                        unset($ni[$id]);
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Menu item for personal subscriptions/groups area
+     *
+     * @param Action $action action being executed
+     *
+     * @return boolean hook return
+     */
+
+    function onEndAccountSettingsNav($action)
+    {
+        $action_name = $action->trimmed('action');
+
+        $action->menuItem(common_local_url('pollsettings'),
+                          // TRANS: Poll plugin menu item on user settings page.
+                          _m('MENU', 'Polls'),
+                          // TRANS: Poll plugin tooltip for user settings menu item.
+                          _m('Configure poll behavior'),
+                          $action_name === 'pollsettings');
+
+        return true;
+    }
 }

@@ -20,7 +20,7 @@
  * @category  Plugin
  * @package   StatusNet
  * @author    Evan Prodromou <evan@status.net>
- * @author   Craig Andrews <candrews@integralblue.com>
+ * @author    Craig Andrews <candrews@integralblue.com>
  * @copyright 2009-2010 StatusNet, Inc.
  * @copyright 2009 Free Software Foundation, Inc http://www.fsf.org
  * @license   http://www.fsf.org/licensing/licenses/agpl-3.0.html GNU Affero General Public License version 3.0
@@ -36,6 +36,8 @@ if (!defined('STATUSNET')) {
  *
  * This class enables consumer support for OpenID, the distributed authentication
  * and identity system.
+ *
+ * Depends on: WebFinger plugin for HostMeta-lookup (user@host format)
  *
  * @category Plugin
  * @package  StatusNet
@@ -350,31 +352,14 @@ class OpenIDPlugin extends Plugin
     {
         switch ($cls)
         {
-        case 'OpenidloginAction':
-        case 'FinishopenidloginAction':
-        case 'FinishaddopenidAction':
-        case 'XrdsAction':
-        case 'PublicxrdsAction':
-        case 'OpenidsettingsAction':
-        case 'OpenidserverAction':
-        case 'OpenidtrustAction':
-        case 'OpenidadminpanelAction':
-            require_once dirname(__FILE__) . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'User_openid':
-            require_once dirname(__FILE__) . '/User_openid.php';
-            return false;
-        case 'User_openid_trustroot':
-            require_once dirname(__FILE__) . '/User_openid_trustroot.php';
-            return false;
         case 'Auth_OpenID_TeamsExtension':
         case 'Auth_OpenID_TeamsRequest':
         case 'Auth_OpenID_TeamsResponse':
             require_once dirname(__FILE__) . '/extlib/teams-extension.php';
             return false;
-        default:
-            return true;
         }
+
+        return parent::onAutoload($cls);
     }
 
     /**
@@ -425,8 +410,8 @@ class OpenIDPlugin extends Plugin
     }
 
     /**
-     * We include a <meta> element linking to the userxrds page, for OpenID
-     * client-side authentication.
+     * We include a <meta> element linking to the webfinger resource page,
+     * for OpenID client-side authentication.
      *
      * @param Action $action Action being shown
      *
@@ -555,24 +540,9 @@ class OpenIDPlugin extends Plugin
     function onCheckSchema()
     {
         $schema = Schema::get();
-        $schema->ensureTable('user_openid',
-                             array(new ColumnDef('canonical', 'varchar',
-                                                 '255', false, 'PRI'),
-                                   new ColumnDef('display', 'varchar',
-                                                 '255', false, 'UNI'),
-                                   new ColumnDef('user_id', 'integer',
-                                                 null, false, 'MUL'),
-                                   new ColumnDef('created', 'datetime',
-                                                 null, false),
-                                   new ColumnDef('modified', 'timestamp')));
-        $schema->ensureTable('user_openid_trustroot',
-                             array(new ColumnDef('trustroot', 'varchar',
-                                                 '255', false, 'PRI'),
-                                   new ColumnDef('user_id', 'integer',
-                                                 null, false, 'PRI'),
-                                   new ColumnDef('created', 'datetime',
-                                                 null, false),
-                                   new ColumnDef('modified', 'timestamp')));
+        $schema->ensureTable('user_openid', User_openid::schemaDef());
+        $schema->ensureTable('user_openid_trustroot', User_openid_trustroot::schemaDef());
+        $schema->ensureTable('user_openid_prefs', User_openid_prefs::schemaDef());
 
         /* These are used by JanRain OpenID library */
 
@@ -677,7 +647,7 @@ class OpenIDPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'OpenID',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Evan Prodromou, Craig Andrews',
                             'homepage' => 'http://status.net/wiki/Plugin:OpenID',
                             'rawdescription' =>
@@ -768,7 +738,7 @@ class OpenIDPlugin extends Plugin
             oid_assert_allowed($openid_url);
 
             $returnto = common_local_url(
-                'ApiOauthAuthorize',
+                'ApiOAuthAuthorize',
                 array(),
                 array(
                     'oauth_token' => $action->arg('oauth_token'),
@@ -797,19 +767,47 @@ class OpenIDPlugin extends Plugin
      * Webfinger identity to services that support it. See
      * http://webfinger.org/login for an example.
      *
-     * @param XRD  &$xrd Currently-displaying XRD object
-     * @param User $user The user that it's for
+     * @param XML_XRD   $xrd    Currently-displaying resource descriptor
+     * @param Profile   $target The profile that it's for
      *
      * @return boolean hook value (always true)
      */
 
-    function onEndXrdActionLinks(&$xrd, $user)
+    function onEndWebFingerProfileLinks(XML_XRD $xrd, Profile $target)
     {
-        $profile = $user->getProfile();
+        $xrd->links[] = new XML_XRD_Element_Link(
+                            'http://specs.openid.net/auth/2.0/provider',
+                            $target->profileurl);
 
-        if (!empty($profile)) {
-            $xrd->links[] = array('rel' => 'http://specs.openid.net/auth/2.0/provider',
-                                  'href' => $profile->profileurl);
+        return true;
+    }
+
+    /**
+     * Add links in the user's profile block to their OpenID URLs.
+     *
+     * @param Profile $profile The profile being shown
+     * @param Array   &$links  Writeable array of arrays (href, text, image).
+     *
+     * @return boolean hook value (true)
+     */
+    
+    function onOtherAccountProfiles($profile, &$links)
+    {
+        $prefs = User_openid_prefs::getKV('user_id', $profile->id);
+
+        if (empty($prefs) || !$prefs->hide_profile_link) {
+
+            $oid = new User_openid();
+
+            $oid->user_id = $profile->id;
+
+            if ($oid->find()) {
+                while ($oid->fetch()) {
+                    $links[] = array('href' => $oid->display,
+                                     'text' => _('OpenID'),
+                                     'image' => $this->path("icons/openid-16x16.gif"));
+                }
+            }
         }
 
         return true;

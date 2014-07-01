@@ -77,27 +77,6 @@ class SlicedFavoritesPlugin extends Plugin
         return true;
     }
 
-    /**
-     * Automatically load the actions and libraries used by the plugin
-     *
-     * @param Class $cls the class
-     *
-     * @return boolean hook return
-     *
-     */
-    function onAutoload($cls)
-    {
-        $base = dirname(__FILE__);
-        $lower = strtolower($cls);
-        switch ($lower) {
-        case 'favoritedsliceaction':
-            require_once "$base/$lower.php";
-            return false;
-        default:
-            return true;
-        }
-    }
-
     function onSlicedFavoritesGetSettings($slice, &$data)
     {
         if (isset($this->slices[$slice])) {
@@ -121,7 +100,7 @@ class SlicedFavoritesPlugin extends Plugin
         $url = 'http://status.net/wiki/Plugin:SlicedFavorites';
 
         $versions[] = array('name' => 'SlicedFavorites',
-            'version' => STATUSNET_VERSION,
+            'version' => GNUSOCIAL_VERSION,
             'author' => 'Brion Vibber',
             'homepage' => $url,
             'rawdescription' =>

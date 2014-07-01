@@ -33,8 +33,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apibareauth.php';
-
 /**
  * This class outputs a list of profiles as Twitter-style user and status objects.
  * It is used by the API methods /api/statuses/(friends|followers). To support the
@@ -48,7 +46,7 @@ require_once INSTALLDIR . '/lib/apibareauth.php';
  * @license  http://www.fsf.org/licensing/licenses/agpl-3.0.html GNU Affero General Public License version 3.0
  * @link     http://status.net/
  */
-class ApiSubscriptionsAction extends ApiBareAuthAction
+abstract class ApiSubscriptionsAction extends ApiBareAuthAction
 {
     var $profiles = null;
     var $tag      = null;
@@ -62,7 +60,7 @@ class ApiSubscriptionsAction extends ApiBareAuthAction
      *
      * @return boolean success flag
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
@@ -78,12 +76,11 @@ class ApiSubscriptionsAction extends ApiBareAuthAction
         $this->count    = isset($this->ids_only) ?
             5000 : (int)$this->arg('count', 100);
 
-        $this->user = $this->getTargetUser($this->arg('id'));
+        $this->target = $this->getTargetProfile($this->arg('id'));
 
-        if (empty($this->user)) {
+        if (!($this->target instanceof Profile)) {
             // TRANS: Client error displayed when requesting a list of followers for a non-existing user.
-            $this->clientError(_('No such user.'), 404, $this->format);
-            return false;
+            $this->clientError(_('No such user.'), 404);
         }
 
         $this->profiles = $this->getProfiles();
@@ -96,18 +93,15 @@ class ApiSubscriptionsAction extends ApiBareAuthAction
      *
      * Show the profiles
      *
-     * @param array $args $_REQUEST data (unused)
-     *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
+        parent::handle();
 
         if (!in_array($this->format, array('xml', 'json'))) {
             // TRANS: Client error displayed when coming across a non-supported API method.
-            $this->clientError(_('API method not found.'), $code = 404);
-            return;
+            $this->clientError(_('API method not found.'), 404);
         }
 
         $this->initDocument($this->format);
@@ -122,13 +116,11 @@ class ApiSubscriptionsAction extends ApiBareAuthAction
     }
 
     /**
-     * Get profiles - should get overrrided
+     * Get profiles related to the type of subscriber/subscription action
      *
      * @return array Profiles
      */
-    function getProfiles()
-    {
-    }
+    abstract protected function getProfiles();
 
     /**
      * Is this action read only?
@@ -177,7 +169,7 @@ class ApiSubscriptionsAction extends ApiBareAuthAction
                 array($this->arg('action'),
                       common_user_cache_hash($this->auth_user),
                       common_language(),
-                      $this->user->id,
+                      $this->target->id,
                       // Caching tags.
                       isset($this->ids_only) ? 'IDs' : 'Profiles',
                       strtotime($this->profiles[0]->created),

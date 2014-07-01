@@ -69,6 +69,10 @@ class ActivityObject
     const COMMENT   = 'http://activitystrea.ms/schema/1.0/comment';
     // ^^^^^^^^^^ tea!
     const ACTIVITY = 'http://activitystrea.ms/schema/1.0/activity';
+    const SERVICE   = 'http://activitystrea.ms/schema/1.0/service';
+    const IMAGE     = 'http://activitystrea.ms/schema/1.0/image';
+    const COLLECTION = 'http://activitystrea.ms/schema/1.0/collection';
+    const APPLICATION = 'http://activitystrea.ms/schema/1.0/application';
 
     // Atom elements we snarf
 
@@ -109,6 +113,8 @@ class ActivityObject
     public $largerImage;
     public $description;
     public $extra = array();
+
+    public $stream;
 
     /**
      * Constructor
@@ -432,9 +438,16 @@ class ActivityObject
             $object->type    = (empty($notice->object_type)) ? ActivityObject::NOTE : $notice->object_type;
 
             $object->id      = $notice->uri;
-            $object->title   = $notice->content;
+            $object->title = 'New ' . ActivityObject::canonicalType($object->type) . ' by ';
+            try {
+                $object->title .= $notice->getProfile()->getAcctUri();
+            } catch (ProfileNoAcctUriException $e) {
+                $object->title .= $e->profile->nickname;
+            }
             $object->content = $notice->rendered;
             $object->link    = $notice->bestUrl();
+
+            $object->extra[] = array('status_net', array('notice_id' => $notice->id));
 
             Event::handle('EndActivityObjectFromNotice', array($notice, &$object));
         }
@@ -452,10 +465,11 @@ class ActivityObject
             $object->title  = $profile->getBestName();
             $object->link   = $profile->profileurl;
 
-            $orig = $profile->getOriginalAvatar();
-
-            if (!empty($orig)) {
-                $object->avatarLinks[] = AvatarLink::fromAvatar($orig);
+            try {
+                $avatar = Avatar::getUploaded($profile);
+                $object->avatarLinks[] = AvatarLink::fromAvatar($avatar);
+            } catch (NoAvatarException $e) {
+                // Could not find an original avatar to link
             }
 
             $sizes = array(
@@ -466,27 +480,15 @@ class ActivityObject
 
             foreach ($sizes as $size) {
                 $alink  = null;
-                $avatar = $profile->getAvatar($size);
-
-                if (!empty($avatar)) {
+                try {
+                    $avatar = Avatar::byProfile($profile, $size);
                     $alink = AvatarLink::fromAvatar($avatar);
-                } else {
+                } catch (NoAvatarException $e) {
                     $alink = new AvatarLink();
                     $alink->type   = 'image/png';
                     $alink->height = $size;
                     $alink->width  = $size;
                     $alink->url    = Avatar::defaultImage($size);
-
-                    if ($size == AVATAR_PROFILE_SIZE) {
-                        // Hack for Twitter import: we don't have a 96x96 image,
-                        // but we do have a 73x73 image. For now, fake it with that.
-                        $avatar = $profile->getAvatar(73);
-                        if ($avatar) {
-                            $alink = AvatarLink::fromAvatar($avatar);
-                            $alink->height= $size;
-                            $alink->width = $size;
-                        }
-                    }
                 }
 
                 $object->avatarLinks[] = $alink;
@@ -499,13 +501,17 @@ class ActivityObject
 
             $object->poco = PoCo::fromProfile($profile);
 
+            if ($profile->isLocal()) {
+                $object->extra[] = array('followers', array('url' => common_local_url('subscribers', array('nickname' => $profile->nickname))));
+            }
+
             Event::handle('EndActivityObjectFromProfile', array($profile, &$object));
         }
 
         return $object;
     }
 
-    static function fromGroup($group)
+    static function fromGroup(User_group $group)
     {
         $object = new ActivityObject();
 
@@ -542,10 +548,117 @@ class ActivityObject
             $object->title   = $ptag->tag;
             $object->summary = $ptag->description;
             $object->link    = $ptag->homeUrl();
-            $object->owner   = Profile::staticGet('id', $ptag->tagger);
+            $object->owner   = Profile::getKV('id', $ptag->tagger);
             $object->poco    = PoCo::fromProfile($object->owner);
             Event::handle('EndActivityObjectFromPeopletag', array($ptag, &$object));
         }
+        return $object;
+    }
+
+    static function fromFile(File $file)
+    {
+        $object = new ActivityObject();
+
+        if (Event::handle('StartActivityObjectFromFile', array($file, &$object))) {
+
+            $object->type = self::mimeTypeToObjectType($file->mimetype);
+            $object->id   = TagURI::mint(sprintf("file:%d", $file->id));
+            $object->link = common_local_url('attachment', array('attachment' => $file->id));
+
+            if ($file->title) {
+                $object->title = $file->title;
+            }
+
+            if ($file->date) {
+                $object->date = $file->date;
+            }
+
+            $thumbnail = $file->getThumbnail();
+
+            if (!empty($thumbnail)) {
+                $object->thumbnail = $thumbnail;
+            }
+
+            switch (ActivityObject::canonicalType($object->type)) {
+            case 'image':
+                $object->largerImage = $file->url;
+                break;
+            case 'video':
+            case 'audio':
+                $object->stream = $file->url;
+                break;
+            }
+
+            Event::handle('EndActivityObjectFromFile', array($file, &$object));
+        }
+
+        return $object;
+    }
+
+    static function fromNoticeSource(Notice_source $source)
+    {
+        $object = new ActivityObject();
+        $wellKnown = array('web', 'xmpp', 'mail', 'omb', 'system', 'api', 'ostatus',
+                           'activity', 'feed', 'mirror', 'twitter', 'facebook');
+
+        if (Event::handle('StartActivityObjectFromNoticeSource', array($source, &$object))) {
+            $object->type = ActivityObject::APPLICATION;
+
+            if (in_array($source->code, $wellKnown)) {
+                // We use one ID for all well-known StatusNet sources
+                $object->id = "tag:status.net,2009:notice-source:".$source->code;
+            } else if ($source->url) {
+                // They registered with an URL
+                $object->id = $source->url;
+            } else {
+                // Locally-registered, no URL
+                $object->id = TagURI::mint("notice-source:".$source->code);
+            }
+
+            if ($source->url) {
+                $object->link = $source->url;
+            }
+
+            if ($source->name) {
+                $object->title = $source->name;
+            } else {
+                $object->title = $source->code;
+            }
+
+            if ($source->created) {
+                $object->date = $source->created;
+            }
+            
+            $object->extra[] = array('status_net', array('source_code' => $source->code));
+
+            Event::handle('EndActivityObjectFromNoticeSource', array($source, &$object));
+        }
+
+        return $object;
+    }
+
+    static function fromMessage(Message $message)
+    {
+        $object = new ActivityObject();
+
+        if (Event::handle('StartActivityObjectFromMessage', array($message, &$object))) {
+
+            $object->type    = ActivityObject::NOTE;
+            $object->id      = ($message->uri) ? $message->uri : (($message->url) ? $message->url : TagURI::mint(sprintf("message:%d", $message->id)));
+            $object->content = $message->rendered;
+            $object->date    = $message->created;
+
+            if ($message->url) {
+                $object->link = $message->url;
+            } else {
+                $object->link = common_local_url('showmessage', array('message' => $message->id));
+            }
+
+            $object->extra[] = array('status_net', array('message_id' => $message->id));
+            
+            Event::handle('EndActivityObjectFromMessage', array($message, &$object));
+        }
+
         return $object;
     }
 
@@ -615,17 +728,16 @@ class ActivityObject
             if ($this->type == ActivityObject::PERSON
                 || $this->type == ActivityObject::GROUP) {
 
-                foreach ($this->avatarLinks as $avatar) {
-                    $xo->element(
-                        'link', array(
-                            'rel'  => 'avatar',
-                            'type'         => $avatar->type,
-                            'media:width'  => $avatar->width,
-                            'media:height' => $avatar->height,
-                            'href' => $avatar->url
-                        ),
-                        null
-                    );
+                foreach ($this->avatarLinks as $alink) {
+                    $xo->element('link',
+                            array(
+                                'rel'          => 'avatar',
+                                'type'         => $alink->type,
+                                'media:width'  => $alink->width,
+                                'media:height' => $alink->height,
+                                'href'         => $alink->url,
+                                ),
+                            null);
                 }
             }
 
@@ -644,7 +756,7 @@ class ActivityObject
             // @fixme there's no way here to make a tree; elements can only contain plaintext
             // @fixme these may collide with JSON extensions
             foreach ($this->extra as $el) {
-                list($extraTag, $attrs, $content) = $el;
+                list($extraTag, $attrs, $content) = array_pad($el, 3, null);
                 $xo->element($extraTag, $attrs, $content);
             }
 
@@ -685,19 +797,21 @@ class ActivityObject
 
             // content (Add rendered version of the notice?)
 
-            // displayName
-            $object['displayName'] = $this->title;
-
             // downstreamDuplicates
 
             // id
-            $object['id'] = $this->id;
-            //
-            // XXX: Should we use URL here? or a crazy tag URI?
-            $object['id'] = $this->id;
+
+            if ($this->id) {
+                $object['id'] = $this->id;
+            } else if ($this->link) {
+                $object['id'] = $this->link;
+            }
 
             if ($this->type == ActivityObject::PERSON
                 || $this->type == ActivityObject::GROUP) {
+
+                // displayName
+                $object['displayName'] = $this->title;
 
                 // XXX: Not sure what the best avatar is to use for the
                 // author's "image". For now, I'm using the large size.
@@ -724,7 +838,11 @@ class ActivityObject
                     $avatarMediaLinks[] = $avatar->asArray();
                 }
 
-                $object['avatarLinks'] = $avatarMediaLinks; // extension
+                if (!array_key_exists('status_net', $object)) {
+                    $object['status_net'] = array();
+                }
+
+                $object['status_net']['avatarLinks'] = $avatarMediaLinks; // extension
 
                 // image
                 if (!empty($imgLink)) {
@@ -736,45 +854,145 @@ class ActivityObject
             //
             // We can probably use the whole schema URL here but probably the
             // relative simple name is easier to parse
-            // @fixme this breaks extension URIs
-            $object['type'] = substr($this->type, strrpos($this->type, '/') + 1);
 
-            // published (probably don't need. Might be useful for repeats.)
+            $object['objectType'] = ActivityObject::canonicalType($this->type);
 
             // summary
             $object['summary'] = $this->summary;
 
-            // udpated (probably don't need this)
+            // content, usually rendered HTML
+            $object['content'] = $this->content;
+
+            // published (probably don't need. Might be useful for repeats.)
+
+            // updated (probably don't need this)
 
             // TODO: upstreamDuplicates
 
-            // url (XXX: need to put the right thing here...)
-            $object['url'] = $this->id;
+            if ($this->link) {
+                $object['url'] = $this->link;
+            }
 
             /* Extensions */
             // @fixme these may collide with XML extensions
             // @fixme multiple tags of same name will overwrite each other
             // @fixme text content from XML extensions will be lost
+
             foreach ($this->extra as $e) {
-                list($objectName, $props, $txt) = $e;
-                $object[$objectName] = $props;
+                list($objectName, $props, $txt) = array_pad($e, 3, null);
+                if (!empty($objectName)) {
+                    $parts = explode(":", $objectName);
+                    if (count($parts) == 2 && $parts[0] == "statusnet") {
+                        if (!array_key_exists('status_net', $object)) {
+                            $object['status_net'] = array();
+                        }
+                        $object['status_net'][$parts[1]] = $props;
+                    } else {
+                        $object[$objectName] = $props;
+                    }
+                }
             }
 
             if (!empty($this->geopoint)) {
 
-                list($lat, $long) = explode(' ', $this->geopoint);
+                list($lat, $lon) = explode(' ', $this->geopoint);
 
-                $object['geopoint'] = array(
-                    'type'        => 'Point',
-                    'coordinates' => array($lat, $long)
-                );
+                if (!empty($lat) && !empty($lon)) {
+                    $object['location'] = array(
+                        'objectType' => 'place',
+                        'position' => sprintf("%+02.5F%+03.5F/", $lat, $lon),
+                        'lat' => $lat,
+                        'lon' => $lon
+                    );
+
+                    $loc = Location::fromLatLon((float)$lat, (float)$lon);
+
+                    if ($loc) {
+                        $name = $loc->getName();
+
+                        if ($name) {
+                            $object['location']['displayName'] = $name;
+                        }
+                        $url = $loc->getURL();
+
+                        if ($url) {
+                            $object['location']['url'] = $url;
+                        }
+                    }
+                }
             }
 
             if (!empty($this->poco)) {
-                $object['contact'] = array_filter($this->poco->asArray());
+                $object['portablecontacts_net'] = array_filter($this->poco->asArray());
             }
+
+            if (!empty($this->thumbnail)) {
+                if (is_string($this->thumbnail)) {
+                    $object['image'] = array('url' => $this->thumbnail);
+                } else {
+                    $object['image'] = array('url' => $this->thumbnail->url);
+                    if ($this->thumbnail->width) {
+                        $object['image']['width'] = $this->thumbnail->width;
+                    }
+                    if ($this->thumbnail->height) {
+                        $object['image']['height'] = $this->thumbnail->height;
+                    }
+                }
+            }
+
+            switch (ActivityObject::canonicalType($this->type)) {
+            case 'image':
+                if (!empty($this->largerImage)) {
+                    $object['fullImage'] = array('url' => $this->largerImage);
+                }
+                break;
+            case 'audio':
+            case 'video':
+                if (!empty($this->stream)) {
+                    $object['stream'] = array('url' => $this->stream);
+                }
+                break;
+            }
+
             Event::handle('EndActivityObjectOutputJson', array($this, &$object));
         }
         return array_filter($object);
+    }
+
+    static function canonicalType($type) {
+        $ns = 'http://activitystrea.ms/schema/1.0/';
+        if (substr($type, 0, mb_strlen($ns)) == $ns) {
+            return substr($type, mb_strlen($ns));
+        } else {
+            return $type;
+        }
+    }
+
+    static function mimeTypeToObjectType($mimeType) {
+        $ot = null;
+
+        // Default
+
+        if (empty($mimeType)) {
+            return self::FILE;
+        }
+
+        $parts = explode('/', $mimeType);
+
+        switch ($parts[0]) {
+        case 'image':
+            $ot = self::IMAGE;
+            break;
+        case 'audio':
+            $ot = self::AUDIO;
+            break;
+        case 'video':
+            $ot = self::VIDEO;
+            break;
+        default:
+            $ot = self::FILE;
+        }
+
+        return $ot;
     }
 }

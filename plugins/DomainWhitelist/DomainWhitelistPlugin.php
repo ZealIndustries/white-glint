@@ -49,32 +49,6 @@ if (!defined('STATUSNET')) {
 class DomainWhitelistPlugin extends Plugin
 {
     /**
-     * Load related modules when needed
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value; true means continue processing, false
-     *         means stop.
-     */
-    function onAutoload($cls) {
-        $base = dirname(__FILE__);
-        $lower = strtolower($cls);
-
-        $files = array("$base/classes/$cls.php",
-            "$base/lib/$lower.php");
-        if (substr($lower, -6) == 'action') {
-            $files[] = "$base/actions/" . substr($lower, 0, -6) . ".php";
-        }
-        foreach ($files as $file) {
-            if (file_exists($file)) {
-                include_once $file;
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
      * Get the path to the plugin's installation directory. Used
      * to link in js files and whatnot.
      *
@@ -296,7 +270,7 @@ class DomainWhitelistPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'DomainWhitelist',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Evan Prodromou, Zach Copley',
                             'homepage' => 'http://status.net/wiki/Plugin:DomainWhitelist',
                             'rawdescription' =>

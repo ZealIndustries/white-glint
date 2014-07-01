@@ -41,7 +41,7 @@ class TagprofileAction extends Action
         if (!$id) {
             $this->profile = false;
         } else {
-            $this->profile = Profile::staticGet('id', $id);
+            $this->profile = Profile::getKV('id', $id);
 
             if (!$this->profile) {
                 // TRANS: Client error displayed when referring to non-existing profile ID.
@@ -94,7 +94,7 @@ class TagprofileAction extends Action
             $this->elementStart('body');
             $this->element('p', 'error', $error);
             $this->elementEnd('body');
-            $this->elementEnd('html');
+            $this->endHTML();
         } else {
             $this->showPage();
         }
@@ -107,8 +107,8 @@ class TagprofileAction extends Action
             // TRANS: Header in list form.
             $this->element('h2', null, _('User profile'));
 
-            $avatar = $this->profile->getAvatar(AVATAR_PROFILE_SIZE);
-            $this->element('img', array('src' => ($avatar) ? $avatar->displayUrl() : Avatar::defaultImage(AVATAR_PROFILE_SIZE),
+            $avatarUrl = $this->profile->avatarUrl(AVATAR_PROFILE_SIZE);
+            $this->element('img', array('src' => $avatarUrl,
                                         'class' => 'photo avatar entity_depiction',
                                         'width' => AVATAR_PROFILE_SIZE,
                                         'height' => AVATAR_PROFILE_SIZE,
@@ -238,7 +238,7 @@ class TagprofileAction extends Action
                 }
 
                 $this->elementEnd('body');
-                $this->elementEnd('html');
+                $this->endHTML();
             } else {
                 // TRANS: Success message if lists are saved.
                 $this->error = _('Lists saved.');

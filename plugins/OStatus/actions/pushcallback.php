@@ -28,15 +28,15 @@ if (!defined('STATUSNET')) {
 
 class PushCallbackAction extends Action
 {
-    function handle()
+    protected function handle()
     {
         StatusNet::setApi(true); // Minimize error messages to aid in debugging
         parent::handle();
-        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-            $this->handlePost();
-        } else {
-            $this->handleGet();
+        if ($this->isPost()) {
+            return $this->handlePost();
         }
+        
+        return $this->handleGet();
     }
 
     /**
@@ -51,7 +51,7 @@ class PushCallbackAction extends Action
             throw new ServerException(_m('Empty or invalid feed id.'), 400);
         }
 
-        $feedsub = FeedSub::staticGet('id', $feedid);
+        $feedsub = FeedSub::getKV('id', $feedid);
         if (!$feedsub) {
             // TRANS: Server exception. %s is a feed ID.
             throw new ServerException(sprintf(_m('Unknown PuSH feed id %s'),$feedid), 400);
@@ -82,24 +82,18 @@ class PushCallbackAction extends Action
         $mode = $this->arg('hub_mode');
         $topic = $this->arg('hub_topic');
         $challenge = $this->arg('hub_challenge');
-        $lease_seconds = $this->arg('hub_lease_seconds');
-        $verify_token = $this->arg('hub_verify_token');
-        common_log(LOG_INFO, __METHOD__ . ": sub verification mode: $mode topic: $topic challenge: $challenge lease_seconds: $lease_seconds verify_token: $verify_token");
+        $lease_seconds = $this->arg('hub_lease_seconds');   // Must be >0 for PuSH 0.4!
+        common_log(LOG_INFO, __METHOD__ . ": sub verification mode: $mode topic: $topic challenge: $challenge lease_seconds: $lease_seconds");
 
         if ($mode != 'subscribe' && $mode != 'unsubscribe') {
             // TRANS: Client exception. %s is an invalid value for hub.mode.
             throw new ClientException(sprintf(_m('Bad hub.mode "$s".',$mode)), 404);
         }
 
-        $feedsub = FeedSub::staticGet('uri', $topic);
-        if (!$feedsub) {
+        $feedsub = FeedSub::getKV('uri', $topic);
+        if (!$feedsub instanceof FeedSub) {
             // TRANS: Client exception. %s is an invalid feed name.
             throw new ClientException(sprintf(_m('Bad hub.topic feed "%s".'),$topic), 404);
-        }
-
-        if ($feedsub->verify_token !== $verify_token) {
-            // TRANS: Client exception. %1$s the invalid token, %2$s is the topic for which the invalid token was given.
-            throw new ClientException(sprintf(_m('Bad hub.verify_token %1$s for %2$s.'),$token,$topic), 404);
         }
 
         if ($mode == 'subscribe') {

@@ -116,13 +116,13 @@ function is_twitter_bound($notice, $flink) {
     }
 
     // Check to see if notice should go to Twitter
-    if (!empty($flink) && ($flink->noticesync & FOREIGN_NOTICE_SEND == FOREIGN_NOTICE_SEND)) {
+    if (!empty($flink) && (($flink->noticesync & FOREIGN_NOTICE_SEND) == FOREIGN_NOTICE_SEND)) {
 
         // If it's not a Twitter-style reply, or if the user WANTS to send replies,
         // or if it's in reply to a twitter notice
-        if (!preg_match('/^@[a-zA-Z0-9_]{1,15}\b/u', $notice->content) ||
-            ($flink->noticesync & FOREIGN_NOTICE_SEND_REPLY == FOREIGN_NOTICE_SEND_REPLY) ||
-            is_twitter_notice($notice->reply_to)) {
+        if ( (($flink->noticesync & FOREIGN_NOTICE_SEND_REPLY) == FOREIGN_NOTICE_SEND_REPLY) ||
+             (is_twitter_notice($notice->reply_to) || is_twitter_notice($notice->repeat_of)) ||
+             (empty($notice->reply_to) && !preg_match('/^@[a-zA-Z0-9_]{1,15}\b/u', $notice->content)) ){
             return true;
         }
     }
@@ -132,7 +132,7 @@ function is_twitter_bound($notice, $flink) {
 
 function is_twitter_notice($id)
 {
-    $n2s = Notice_to_status::staticGet('notice_id', $id);
+    $n2s = Notice_to_status::getKV('notice_id', $id);
 
     return (!empty($n2s));
 }
@@ -184,7 +184,7 @@ function broadcast_twitter($notice)
     if (!empty($flink) && TwitterOAuthClient::isPackedToken($flink->credentials)) {
         if (is_twitter_bound($notice, $flink)) {
             if (!empty($notice->repeat_of) && is_twitter_notice($notice->repeat_of)) {
-                $retweet = retweet_notice($flink, Notice::staticGet('id', $notice->repeat_of));
+                $retweet = retweet_notice($flink, Notice::getKV('id', $notice->repeat_of));
                 if (is_object($retweet)) {
                     Notice_to_status::saveNew($notice->id, twitter_id($retweet));
                     return true;
@@ -239,7 +239,7 @@ function retweet_notice($flink, $notice)
 
 function twitter_status_id($notice)
 {
-    $n2s = Notice_to_status::staticGet('notice_id', $notice->id);
+    $n2s = Notice_to_status::getKV('notice_id', $notice->id);
     if (empty($n2s)) {
         return null;
     } else {
@@ -263,7 +263,7 @@ function twitter_update_params($notice)
         $params['long'] = $notice->lon;
     }
     if (!empty($notice->reply_to) && is_twitter_notice($notice->reply_to)) {
-        $reply = Notice::staticGet('id', $notice->reply_to);
+        $reply = Notice::getKV('id', $notice->reply_to);
         $params['in_reply_to_status_id'] = twitter_status_id($reply);
     }
     return $params;

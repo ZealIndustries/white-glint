@@ -118,4 +118,3 @@ ENDOFSCRIPT2;
         return true;
     }
 }
-

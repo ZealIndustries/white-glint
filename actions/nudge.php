@@ -66,7 +66,7 @@ class NudgeAction extends Action
         }
 
         $user  = common_current_user();
-        $other = User::staticGet('nickname', $this->arg('nickname'));
+        $other = User::getKV('nickname', $this->arg('nickname'));
 
         if ($_SERVER['REQUEST_METHOD'] != 'POST') {
             common_redirect(common_local_url('showstream',
@@ -101,7 +101,7 @@ class NudgeAction extends Action
             // TRANS: Confirmation text after sending a nudge.
             $this->element('p', array('id' => 'nudge_response'), _('Nudge sent!'));
             $this->elementEnd('body');
-            $this->elementEnd('html');
+            $this->endHTML();
         } else {
             // display a confirmation to the user
             common_redirect(common_local_url('showstream',

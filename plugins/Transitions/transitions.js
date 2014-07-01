@@ -1,1 +1,0 @@
-$(document).ready(function(){function a(){window.location=linkLocation}$("dd ul.nav a").click(function(b){if(b.ctrlKey){return}b.preventDefault();linkLocation=this.href;$("#content_inner").fadeOut(250,a)})})

@@ -267,10 +267,7 @@ class ProfileDetailSettingsAction extends ProfileSettingsAction
         $this->removeAll($user, 'website');
         $i = 0;
         foreach($sites as $site) {
-            if (!empty($site['value']) && !Validate::uri(
-                $site['value'],
-                array('allowed_schemes' => array('http', 'https')))
-            ) {
+            if (!empty($site['value']) && !common_valid_http_url($site['value'])) {
                 // TRANS: Exception thrown when entering an invalid URL.
                 // TRANS: %s is the invalid URL.
                 throw new Exception(sprintf(_m('Invalid URL: %s.'), $site['value']));
@@ -636,7 +633,6 @@ class ProfileDetailSettingsAction extends ProfileSettingsAction
             }
 
             Event::handle('EndProfileSaveForm', array($this));
-            common_broadcast_profile($profile);
         }
     }
 

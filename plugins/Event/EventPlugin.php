@@ -65,44 +65,6 @@ class EventPlugin extends MicroappPlugin
     }
 
     /**
-     * Load related modules when needed
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value; true means continue processing, false means stop.
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'NeweventAction':
-        case 'NewrsvpAction':
-        case 'CancelrsvpAction':
-        case 'ShoweventAction':
-        case 'ShowrsvpAction':
-        case 'TimelistAction':
-            include_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'EventListItem':
-        case 'RSVPListItem':
-        case 'EventForm':
-        case 'RSVPForm':
-        case 'CancelRSVPForm':
-        case 'EventTimeList':
-            include_once $dir . '/'.strtolower($cls).'.php';
-            break;
-        case 'Happening':
-        case 'RSVP':
-            include_once $dir . '/'.$cls.'.php';
-            return false;
-        default:
-            return true;
-        }
-    }
-
-    /**
      * Map URLs to actions
      *
      * @param Net_URL_Mapper $m path-to-action mapper
@@ -131,7 +93,7 @@ class EventPlugin extends MicroappPlugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'Event',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Evan Prodromou',
                             'homepage' => 'http://status.net/wiki/Plugin:Event',
                             'description' =>
@@ -197,7 +159,7 @@ class EventPlugin extends MicroappPlugin
         case RSVP::POSITIVE:
         case RSVP::NEGATIVE:
         case RSVP::POSSIBLE:
-            $happening = Happening::staticGet('uri', $happeningObj->id);
+            $happening = Happening::getKV('uri', $happeningObj->id);
             if (empty($happening)) {
                 // FIXME: save the event
                 // TRANS: Exception thrown when trying to RSVP for an unknown event.
@@ -224,49 +186,37 @@ class EventPlugin extends MicroappPlugin
     {
         $happening = null;
 
-		switch ($notice->object_type) {
-		case Happening::OBJECT_TYPE:
-				$happening = Happening::fromNotice($notice);
-			break;
-			break;
-		case RSVP::POSITIVE:
-		case RSVP::NEGATIVE:
-		case RSVP::POSSIBLE:
-			$rsvp  = RSVP::fromNotice($notice);
-			$happening = $rsvp->getEvent();
-			break;
-		}
+        switch ($notice->object_type) {
+        case Happening::OBJECT_TYPE:
+            $happening = Happening::fromNotice($notice);
+            break;
+        case RSVP::POSITIVE:
+        case RSVP::NEGATIVE:
+        case RSVP::POSSIBLE:
+            $rsvp  = RSVP::fromNotice($notice);
+            $happening = $rsvp->getEvent();
+            break;
+        }
 
         if (empty($happening)) {
-			// uh
-			$obj = new ActivityObject();
-
-			$obj->id 	  = '0';
-			$obj->type    = Happening::OBJECT_TYPE;
-			$obj->title   = 'Unknown event';
-			$obj->summary = '';
-			$obj->link    = '#';
-			
-			return $obj;
-			
             // TRANS: Exception thrown when event plugin comes across a unknown object type.
             throw new Exception(_m('Unknown object type.'));
         }
-		
-		$notice = $happening->getNotice();
 
-		if (empty($notice)) {
-			// TRANS: Exception thrown when referring to a notice that is not an event an in event context.
-			throw new Exception(_m('Unknown event notice.'));
-		}
+        $notice = $happening->getNotice();
+
+        if (empty($notice)) {
+            // TRANS: Exception thrown when referring to a notice that is not an event an in event context.
+            throw new Exception(_m('Unknown event notice.'));
+        }
 
         $obj = new ActivityObject();
 
-		$obj->id      = $happening->uri;
-		$obj->type    = Happening::OBJECT_TYPE;
-		$obj->title   = $happening->title;
-		$obj->summary = $happening->description;
-		$obj->link    = $notice->bestUrl();
+        $obj->id      = $happening->uri;
+        $obj->type    = Happening::OBJECT_TYPE;
+        $obj->title   = $happening->title;
+        $obj->summary = $happening->description;
+        $obj->link    = $notice->bestUrl();
 
         // XXX: how to get this stuff into JSON?!
 
@@ -328,9 +278,9 @@ class EventPlugin extends MicroappPlugin
      * @param HTMLOutputter $out
      * @return Widget
      */
-    function entryForm($out, $options=array())
+    function entryForm($out)
     {
-        return new EventForm($out, $options);
+        return new EventForm($out);
     }
 
     /**
@@ -364,11 +314,11 @@ class EventPlugin extends MicroappPlugin
         $action->script($this->path('event.js'));
     }
 
-    /*function onEndShowStyles($action)
+    function onEndShowStyles($action)
     {
         $action->cssLink($this->path('event.css'));
         return true;
-    }*/
+    }
 
     function onStartAddNoticeReply($nli, $parent, $child)
     {

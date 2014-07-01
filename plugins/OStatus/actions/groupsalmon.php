@@ -40,7 +40,7 @@ class GroupsalmonAction extends SalmonAction
             $this->clientError(_m('No ID.'));
         }
 
-        $this->group = User_group::staticGet('id', $id);
+        $this->group = User_group::getKV('id', $id);
 
         if (empty($this->group)) {
             // TRANS: Client error.
@@ -50,7 +50,7 @@ class GroupsalmonAction extends SalmonAction
 
         $this->target = $this->group;
 
-        $oprofile = Ostatus_profile::staticGet('group_id', $id);
+        $oprofile = Ostatus_profile::getKV('group_id', $id);
         if ($oprofile) {
             // TRANS: Client error.
             $this->clientError(_m('Cannot accept remote posts for a remote group.'));
@@ -78,14 +78,13 @@ class GroupsalmonAction extends SalmonAction
         }
 
         // Notice must be to the attention of this group
-        $context = $this->activity->context;
-
-        if (empty($context->attention)) {
+        if (empty($this->activity->context->attention)) {
             // TRANS: Client exception.
             throw new ClientException("Not to the attention of anyone.");
         } else {
             $uri = common_local_url('groupbyid', array('id' => $this->group->id));
-            if (!in_array($uri, $context->attention)) {
+
+            if (!array_key_exists($uri, $this->activity->context->attention)) {
                 // TRANS: Client exception.
                 throw new ClientException("Not to the attention of this group.");
             }

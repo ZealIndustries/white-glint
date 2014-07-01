@@ -20,16 +20,10 @@ StartShowStyles: Showing Style links; good place to add UA style resets
 EndShowStyles: End showing Style links; good place to add custom styles
 - $action: the current action
 
-StartShowStatusNetStyles: Showing StatusNet Style links
+StartShowStylesheets: Showing stylesheet links
 - $action: the current action
 
-EndShowStatusNetStyles: End showing StatusNet Style links;  good place to add handheld or JavaScript dependant styles
-- $action: the current action
-
-StartShowLaconicaStyles: backwards compatibility; deprecated
-- $action: the current action
-
-EndShowLaconicaStyles: backwards compatibility; deprecated
+EndShowStylesheets: End showing stylesheet links;  good place to add handheld or JavaScript dependant styles
 - $action: the current action
 
 StartShowUAStyles: Showing custom User-Agent style links
@@ -55,12 +49,6 @@ StartShowStatusNetScripts: Showing StatusNet script links (use this to link to a
 - $action: the current action
 
 EndShowStatusNetScripts: End showing StatusNet script links
-- $action: the current action
-
-StartShowLaconicaScripts: backwards compatibility; deprecated
-- $action: the current action
-
-EndShowLaconicaScripts: backwards compatibility; deprecated
 - $action: the current action
 
 StartShowSections: Start the list of sections in the sidebar
@@ -244,6 +232,10 @@ StartEndHTML: just before the </html> tag
 
 EndEndHTML: just after the </html> tag
 - $action: action object being shown
+
+FinalAction: After prepare() (and possible handle) in Action class.
+- $status: result of "prepare" call on action
+- $action: Action that is currently running
 
 StartShowDesign: just before showing a site, user, or group design
 - $action: action object being shown
@@ -591,12 +583,6 @@ EndPublicXRDS: End XRDS output (right before the closing XRDS tag)
 - $action: the current action
 - &$xrdsoutputter - XRDSOutputter object to write to
 
-StartHostMetaLinks: Start /.well-known/host-meta links
-- &links: array containing the links elements to be written
-
-EndHostMetaLinks: End /.well-known/host-meta links
-- &links: array containing the links elements to be written
-
 StartCheckPassword: Check a username/password
 - $nickname: The nickname to check
 - $password: The password to check
@@ -614,6 +600,11 @@ StartChangePassword: Before changing a password
 
 EndChangePassword: After changing a password
 - $user: user
+
+StartHashPassword: Generate a hashed version of the password (like a salted crypt)
+- &$hashed: Hashed version of the password, later put in the database
+- $password: The password that should be hashed
+- $profile: Profile that this password and hash belongs to. Can be null.
 
 StartSetUser: Before setting the currently logged in user
 - $user: user
@@ -725,20 +716,20 @@ EndUnblockProfile: when an unblock has succeeded
 - $profile: the person unblocked, can be remote
 
 StartSubscribe: when a subscription is starting
-- $user: the person subscribing
-- $other: the person being subscribed to
+- $profile: Profile that is subscribing
+- $other: Profile that is being subscribed to
 
 EndSubscribe: when a subscription is finished
-- $user: the person subscribing
-- $other: the person being subscribed to
+- $profile: Profile that is subscribing
+- $other: Profile that is being subscribed to
 
 StartUnsubscribe: when an unsubscribe is starting
-- $user: the person unsubscribing
-- $other: the person being unsubscribed from
+- $profile: Profile that is unsubscribing
+- $other: Profile that is being unsubscribed from
 
 EndUnsubscribe: when an unsubscribe is done
-- $user: the person unsubscribing
-- $other: the person being unsubscribed to
+- $profile: Profile that is unsubscribing
+- $other: Profile that is being unsubscribed from
 
 StartJoinGroup: when a user is joining a group
 - $group: the group being joined
@@ -781,12 +772,10 @@ SendImConfirmationCode: Send a confirmation code to confirm a user owns an IM sc
 - $user: user requesting the confirmation
 
 StartUserRegister: When a new user is being registered
-- &$profile: new profile data (no ID)
-- &$user: new user account (no ID or URI)
+- $profile: Profile object with new profile data (no ID yet)
 
 EndUserRegister: When a new user has been registered
-- &$profile: new profile data
-- &$user: new user account
+- $profile: Profile object with new profile data
 
 StartRobotsTxt: Before outputting the robots.txt page
 - &$action: RobotstxtAction being shown
@@ -801,6 +790,14 @@ StartGetProfileUri: When determining the canonical URI for a given profile
 EndGetProfileUri: After determining the canonical URI for a given profile
 - $profile: the current profile
 - &$uri: the URI
+
+StartGetProfileAcctUri: Get the acct: URI for a Profile (or throw ProfileNoAcctUriException)
+- $profile: Profile of user we want to get acct: URI for
+- &$acct:   string with the resulting acct: uri
+
+EndGetProfileAcctUri: Last attempts to get the acct: URI for a Profile (or throw ProfileNoAcctUriException)
+- $profile: Profile of user we want to get acct: URI for
+- &$acct:   string with the resulting acct: uri
 
 StartFavorNotice: Saving a notice as a favorite
 - $profile: profile of the person faving (can be remote!)
@@ -994,22 +991,6 @@ EndAtomPubNewActivity: When a new activity comes in through Atom Pub API
 - $activity: received activity
 - $user: user publishing the entry
 - $notice: notice that was created
-
-StartXrdActionAliases: About to set aliases for the XRD object for a user
-- &$xrd: XRD object being shown
-- $user: User being shown
-
-EndXrdActionAliases: Done with aliases for the XRD object for a user
-- &$xrd: XRD object being shown
-- $user: User being shown
-
-StartXrdActionLinks: About to set links for the XRD object for a user
-- &$xrd: XRD object being shown
-- $user: User being shown
-
-EndXrdActionLinks: Done with links for the XRD object for a user
-- &$xrd: XRD object being shown
-- $user: User being shown
 
 AdminPanelCheck: When checking whether the current user can access a given admin panel
 - $name:  Name of the admin panel
@@ -1425,3 +1406,34 @@ EndUpgrade: when ending a site upgrade; good place to do your own upgrades
 HaveIMPlugin: is there an IM plugin loaded?
 - &$haveIMPlugin: set me to true if you're loaded!
 
+StartShowNoticeOptionItems: Before showing first controls in a notice list item; inside the div
+- $nli: NoticeListItem being shown
+
+EndShowNoticeOptionItems: After showing last controls in a notice list item; inside the div
+- $nli: NoticeListItem being shown
+
+StartNoticeInScope: Before checking if a notice should be visible to a user
+- $notice: The notice to check
+- $profile: The profile to check for scope
+- &$bResult: The boolean result; fill this in if you want to skip
+
+EndNoticeInScope: After checking if a notice should be visible to a user
+- $notice: The notice to check
+- $profile: The profile to check for scope
+- &$bResult: The boolean result; overwrite this if you so desire
+
+StartNoticeListPrefill: Before pre-filling a list of notices with extra data
+- &$notices: Notices to be pre-filled
+- $avatarSize: The avatar size for the list
+
+EndNoticeListPrefill: After pre-filling a list of notices with extra data
+- &$notices: Notices that were pre-filled
+- &$profiles: Profiles that were pre-filled 
+- $avatarSize: The avatar size for the list
+
+OtherAccountProfiles: Hook to add account profiles to a user account profile block
+- $profile: the Profile being shown
+- &$others: Modifiable array of profile info arrays. Each one has the following fields:
+            href: link to the profile
+            text: text for the profile
+            image: mini image for the profile

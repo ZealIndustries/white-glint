@@ -57,18 +57,6 @@ class TagAction extends Action
         return true;
     }
 
-    function showSections()
-    {
-        $pop = new PopularNoticeSection($this);
-        $pop->show();
-    }
-
-    function showNoticeForm()
-    {  
-        $notice_form = new NoticeForm($this, null, "#{$this->tag} ");
-        $notice_form->show();
-    }
-                
     function title()
     {
         if ($this->page == 1) {

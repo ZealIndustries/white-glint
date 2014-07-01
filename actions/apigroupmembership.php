@@ -35,8 +35,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiprivateauth.php';
-
 /**
  * List 20 newest members of the group specified by name or ID.
  *
@@ -61,15 +59,14 @@ class ApiGroupMembershipAction extends ApiPrivateAuthAction
      *
      * @return boolean success flag
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
         $this->group    = $this->getTargetGroup($this->arg('id'));
         if (empty($this->group)) {
             // TRANS: Client error displayed trying to show group membership on a non-existing group.
-            $this->clientError(_('Group not found.'), 404, $this->format);
-            return false;
+            $this->clientError(_('Group not found.'), 404);
         }
 
         $this->profiles = $this->getProfiles();
@@ -82,13 +79,11 @@ class ApiGroupMembershipAction extends ApiPrivateAuthAction
      *
      * Show the members of the group
      *
-     * @param array $args $_REQUEST data (unused)
-     *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
+        parent::handle();
 
         // XXX: RSS and Atom
 
@@ -100,13 +95,8 @@ class ApiGroupMembershipAction extends ApiPrivateAuthAction
             $this->showJsonUsers($this->profiles);
             break;
         default:
-            $this->clientError(
-                // TRANS: Client error displayed when coming across a non-supported API method.
-                _('API method not found.'),
-                404,
-                $this->format
-            );
-            break;
+            // TRANS: Client error displayed when coming across a non-supported API method.
+            $this->clientError(_('API method not found.'), 404);
         }
     }
 

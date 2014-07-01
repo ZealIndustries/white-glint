@@ -17,9 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-if (!defined('STATUSNET') && !defined('LACONICA')) {
-    exit(1);
-}
+if (!defined('GNUSOCIAL')) { exit(1); }
 
 /**
  * Queue handler for letting plugins handle stuff.
@@ -44,7 +42,12 @@ class PluginQueueHandler extends QueueHandler
 
     function handle($notice)
     {
-        Event::handle('HandleQueuedNotice', array(&$notice));
+        try {
+            Event::handle('HandleQueuedNotice', array(&$notice));
+        } catch (NoProfileException $unp) {
+            // We can't do anything about this, so just skip
+            return true;
+        }
         return true;
     }
 }

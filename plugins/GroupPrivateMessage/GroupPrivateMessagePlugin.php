@@ -61,104 +61,10 @@ class GroupPrivateMessagePlugin extends Plugin
         $schema = Schema::get();
 
         // For storing user-submitted flags on profiles
-
-        $schema->ensureTable('group_privacy_settings',
-                             array(new ColumnDef('group_id',
-                                                 'integer',
-                                                 null,
-                                                 false,
-                                                 'PRI'),
-                                   new ColumnDef('allow_privacy',
-                                                 'integer'),
-                                   new ColumnDef('allow_sender',
-                                                 'integer'),
-                                   new ColumnDef('created',
-                                                 'datetime'),
-                                   new ColumnDef('modified',
-                                                 'timestamp')));
-
-        $schema->ensureTable('group_message',
-                             array(new ColumnDef('id',
-                                                 'char',
-                                                 36,
-                                                 false,
-                                                 'PRI'),
-                                   new ColumnDef('uri',
-                                                 'varchar',
-                                                 255,
-                                                 false,
-                                                 'UNI'),
-                                   new ColumnDef('from_profile',
-                                                 'integer',
-                                                 null,
-                                                 false,
-                                                 'MUL'),
-                                   new ColumnDef('to_group',
-                                                 'integer',
-                                                 null,
-                                                 false,
-                                                 'MUL'),
-                                   new ColumnDef('content',
-                                                 'text'),
-                                   new ColumnDef('rendered',
-                                                 'text'),
-                                   new ColumnDef('url',
-                                                 'varchar',
-                                                 255,
-                                                 false,
-                                                 'UNI'),
-                                   new ColumnDef('created',
-                                                 'datetime')));
-
-        $schema->ensureTable('group_message_profile',
-                             array(new ColumnDef('to_profile',
-                                                 'integer',
-                                                 null,
-                                                 false,
-                                                 'PRI'),
-                                   new ColumnDef('group_message_id',
-                                                 'char',
-                                                 36,
-                                                 false,
-                                                 'PRI'),
-                                   new ColumnDef('created',
-                                                 'datetime')));
-
+        $schema->ensureTable('group_privacy_settings', Group_privacy_settings::schemaDef());
+        $schema->ensureTable('group_message', Group_message::schemaDef());
+        $schema->ensureTable('group_message_profile', Group_message_profile::schemaDef());
         return true;
-    }
-
-    /**
-     * Load related modules when needed
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'GroupinboxAction':
-        case 'ShowgroupmessageAction':
-        case 'NewgroupmessageAction':
-            include_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'Group_privacy_settings':
-        case 'Group_message':
-        case 'Group_message_profile':
-            include_once $dir . '/'.$cls.'.php';
-            return false;
-        case 'GroupMessageCommand':
-        case 'GroupMessageList':
-        case 'GroupMessageListItem':
-        case 'GroupMessageForm':
-            include_once $dir . '/'.strtolower($cls).'.php';
-            return false;
-        default:
-            return true;
-        }
     }
 
     /**
@@ -245,7 +151,7 @@ class GroupPrivateMessagePlugin extends Plugin
         $gps = null;
 
         if (!empty($form->group)) {
-            $gps = Group_privacy_settings::staticGet('group_id', $form->group->id);
+            $gps = Group_privacy_settings::getKV('group_id', $form->group->id);
         }
 
         $form->out->elementStart('li');
@@ -286,7 +192,7 @@ class GroupPrivateMessagePlugin extends Plugin
         $gps = null;
 
         if (!empty($action->group)) {
-            $gps = Group_privacy_settings::staticGet('group_id', $action->group->id);
+            $gps = Group_privacy_settings::getKV('group_id', $action->group->id);
         }
 
         $orig = null;
@@ -441,7 +347,7 @@ class GroupPrivateMessagePlugin extends Plugin
                                "but group ".$group->nickname." does not allow them.");
                 }
 
-                $user = User::staticGet('id', $notice->profile_id);
+                $user = User::getKV('id', $notice->profile_id);
 
                 if (empty($user)) {
                     common_log(LOG_WARNING,
@@ -499,7 +405,7 @@ class GroupPrivateMessagePlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'GroupPrivateMessage',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Evan Prodromou',
                             'homepage' => 'http://status.net/wiki/Plugin:GroupPrivateMessage',
                             'rawdescription' =>

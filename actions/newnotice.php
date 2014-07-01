@@ -25,16 +25,14 @@
  * @author    Zach Copley <zach@status.net>
  * @author    Sarven Capadisli <csarven@status.net>
  * @copyright 2008-2009 StatusNet, Inc.
+ * @copyright 2013 Free Software Foundation, Inc.
  * @license   http://www.fsf.org/licensing/licenses/agpl-3.0.html GNU Affero General Public License version 3.0
  * @link      http://status.net/
  */
 
-if (!defined('STATUSNET') && !defined('LACONICA')) {
+if (!defined('STATUSNET')) {
     exit(1);
 }
-
-require_once INSTALLDIR . '/lib/noticelist.php';
-require_once INSTALLDIR . '/lib/mediafile.php';
 
 /**
  * Action for posting new notices
@@ -47,13 +45,8 @@ require_once INSTALLDIR . '/lib/mediafile.php';
  * @license  http://www.fsf.org/licensing/licenses/agpl-3.0.html GNU Affero General Public License version 3.0
  * @link     http://status.net/
  */
-class NewnoticeAction extends Action
+class NewnoticeAction extends FormAction
 {
-    /**
-     * Error message, if any
-     */
-    var $msg = null;
-
     /**
      * Title of the page
      *
@@ -68,56 +61,7 @@ class NewnoticeAction extends Action
     }
 
     /**
-     * Handle input, produce output
-     *
-     * Switches based on GET or POST method. On GET, shows a form
-     * for posting a notice. On POST, saves the results of that form.
-     *
-     * Results may be a full page, or just a single notice list item,
-     * depending on whether AJAX was requested.
-     *
-     * @param array $args $_REQUEST contents
-     *
-     * @return void
-     */
-    function handle($args)
-    {
-        if (!common_logged_in()) {
-            // TRANS: Error message displayed when trying to perform an action that requires a logged in user.
-            $this->clientError(_('Not logged in.'));
-        } else if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-            // check for this before token since all POST and FILES data
-            // is losts when size is exceeded
-            if (empty($_POST) && $_SERVER['CONTENT_LENGTH']) {
-                // TRANS: Client error displayed when the number of bytes in a POST request exceeds a limit.
-                // TRANS: %s is the number of bytes of the CONTENT_LENGTH.
-                $msg = _m('The server was unable to handle that much POST data (%s byte) due to its current configuration.',
-                          'The server was unable to handle that much POST data (%s bytes) due to its current configuration.',
-                          intval($_SERVER['CONTENT_LENGTH']));
-                $this->clientError(sprintf($msg,$_SERVER['CONTENT_LENGTH']));
-            }
-            parent::handle($args);
-
-            // CSRF protection
-            $token = $this->trimmed('token');
-            if (!$token || $token != common_session_token()) {
-                // TRANS: Client error displayed when the session token does not match or is not given.
-                $this->clientError(_('There was a problem with your session token. '.
-                                     'Try again, please.'));
-            }
-            try {
-                $this->saveNewNotice();
-            } catch (Exception $e) {
-                $this->showForm($e->getMessage());
-                return;
-            }
-        } else {
-            $this->showForm();
-        }
-    }
-
-    /**
-     * Save a new notice, based on arguments
+     * This handlePost saves a new notice, based on arguments
      *
      * If successful, will show the notice, or return an Ajax-y result.
      * If not, it will show an error message -- possibly Ajax-y.
@@ -127,10 +71,12 @@ class NewnoticeAction extends Action
      *
      * @return void
      */
-    function saveNewNotice()
+    protected function handlePost()
     {
-        $user = common_current_user();
-        assert($user); // XXX: maybe an error instead...
+        parent::handlePost();
+
+        assert($this->scoped); // XXX: maybe an error instead...
+        $user = $this->scoped->getUser();
         $content = $this->trimmed('status_textarea');
         $options = array();
         Event::handle('StartSaveNewNoticeWeb', array($this, $user, &$content, &$options));
@@ -138,7 +84,6 @@ class NewnoticeAction extends Action
         if (!$content) {
             // TRANS: Client error displayed trying to send a notice without content.
             $this->clientError(_('No content!'));
-            return;
         }
 
         $inter = new CommandInterpreter();
@@ -146,7 +91,7 @@ class NewnoticeAction extends Action
         $cmd = $inter->handle_command($user, $content);
 
         if ($cmd) {
-            if ($this->boolean('ajax')) {
+            if (StatusNet::isAjax()) {
                 $cmd->execute(new AjaxWebChannel($this));
             } else {
                 $cmd->execute(new WebChannel($this));
@@ -169,11 +114,7 @@ class NewnoticeAction extends Action
             $options['reply_to'] = $replyto;
         }
 
-        $upload = null;
-        $upload = MediaFile::fromUpload('attach');
-        if(empty($upload) && $this->trimmed('ajaxfile')) {
-            $upload = MediaFile::fromURI('ajaxfile', $this->trimmed('ajaxfile'));
-        }
+        $upload = MediaFile::fromUpload('attach', $this->scoped);
 
         if (isset($upload)) {
 
@@ -193,26 +134,26 @@ class NewnoticeAction extends Action
             }
         }
 
-        if ($user->shareLocation()) {
+        if ($this->scoped->shareLocation()) {
             // use browser data if checked; otherwise profile data
             if ($this->arg('notice_data-geo')) {
                 $locOptions = Notice::locationOptions($this->trimmed('lat'),
                                                       $this->trimmed('lon'),
                                                       $this->trimmed('location_id'),
                                                       $this->trimmed('location_ns'),
-                                                      $user->getProfile());
+                                                      $this->scoped);
             } else {
                 $locOptions = Notice::locationOptions(null,
                                                       null,
                                                       null,
                                                       null,
-                                                      $user->getProfile());
+                                                      $this->scoped);
             }
 
             $options = array_merge($options, $locOptions);
         }
 
-        $author_id = $user->id;
+        $author_id = $this->scoped->id;
         $text      = $content_shortened;
 
         // Does the heavy-lifting for getting "To:" information
@@ -221,11 +162,7 @@ class NewnoticeAction extends Action
 
         if (Event::handle('StartNoticeSaveWeb', array($this, &$author_id, &$text, &$options))) {
 
-            if(function_exists('fastcgi_finish_request')) {
-                $options = array_merge($options, array('finish' => $this));
-            }
-
-            $notice = Notice::saveNew($user->id, $content_shortened, 'web', $options);
+            $notice = Notice::saveNew($this->scoped->id, $content_shortened, 'web', $options);
 
             if (isset($upload)) {
                 $upload->attachToNotice($notice);
@@ -235,14 +172,8 @@ class NewnoticeAction extends Action
         }
         Event::handle('EndSaveNewNoticeWeb', array($this, $user, &$content_shortened, &$options));
 
-        if(!function_exists('fastcgi_finish_request')) $this->finishSave($notice);
-    }
-
-    function finishSave($notice) {
-        if ($this->boolean('ajax')) {
-            header('Content-Type: text/xml;charset=utf-8');
-            $this->xw->startDocument('1.0', 'UTF-8');
-            $this->elementStart('html');
+        if (StatusNet::isAjax()) {
+            $this->startHTML('text/xml;charset=utf-8');
             $this->elementStart('head');
             // TRANS: Page title after sending a notice.
             $this->element('title', null, _('Notice posted'));
@@ -250,14 +181,14 @@ class NewnoticeAction extends Action
             $this->elementStart('body');
             $this->showNotice($notice);
             $this->elementEnd('body');
-            $this->elementEnd('html');
-            $this->endXML();
+            $this->endHTML();
+            exit;
         } else {
             $returnto = $this->trimmed('returnto');
 
             if ($returnto) {
                 $url = common_local_url($returnto,
-                                        array('nickname' => $user->nickname));
+                                        array('nickname' => $this->scoped->nickname));
             } else {
                 $url = common_local_url('shownotice',
                                         array('notice' => $notice->id));
@@ -285,7 +216,7 @@ class NewnoticeAction extends Action
         $this->elementStart('body');
         $this->element('p', array('id' => 'error'), $msg);
         $this->elementEnd('body');
-        $this->elementEnd('html');
+        $this->endHTML();
     }
 
     /**
@@ -310,7 +241,7 @@ class NewnoticeAction extends Action
         $form->show();
 
         $this->elementEnd('body');
-        $this->elementEnd('html');
+        $this->endHTML();
     }
 
     /**
@@ -323,13 +254,14 @@ class NewnoticeAction extends Action
      * Note that since we started doing Ajax output, this page is rarely
      * seen.
      *
-     * @param string $msg An error message, if any
+     * @param string  $msg     An error/info message, if any
+     * @param boolean $success false for error indication, true for info
      *
      * @return void
      */
-    function showForm($msg=null)
+    function showForm($msg=null, $success=false)
     {
-        if ($this->boolean('ajax')) {
+        if (StatusNet::isAjax()) {
             if ($msg) {
                 $this->ajaxErrorMsg($msg);
             } else {
@@ -338,8 +270,7 @@ class NewnoticeAction extends Action
             return;
         }
 
-        $this->msg = $msg;
-        $this->showPage();
+        parent::showForm($msg, $success);
     }
 
     /**
@@ -357,7 +288,7 @@ class NewnoticeAction extends Action
         if (!$content) {
             $replyto = $this->trimmed('replyto');
             $inreplyto = $this->trimmed('inreplyto');
-            $profile = Profile::staticGet('nickname', $replyto);
+            $profile = Profile::getKV('nickname', $replyto);
             if ($profile) {
                 $content = '@' . $profile->nickname . ' ';
             }

@@ -34,9 +34,6 @@ class Group_block extends Managed_DataObject
     public $blocker;                         // int(4)   not_null
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
 
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('Group_block',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -56,11 +53,6 @@ class Group_block extends Managed_DataObject
                 'group_block_blocker_fkey' => array('user', array('blocker' => 'id')),
             ),
         );
-    }
-
-    function pkeyGet($kv)
-    {
-        return Memcached_DataObject::pkeyGet('Group_block', $kv);
     }
 
     static function isBlocked($group, $profile)
@@ -84,7 +76,7 @@ class Group_block extends Managed_DataObject
 
         $result = $block->insert();
 
-        if (!$result) {
+        if ($result === false) {
             common_log_db_error($block, 'INSERT', __FILE__);
             return null;
         }
@@ -98,7 +90,7 @@ class Group_block extends Managed_DataObject
 
         if ($member->find(true)) {
             $result = $member->delete();
-            if (!$result) {
+            if ($result === false) {
                 common_log_db_error($member, 'DELETE', __FILE__);
                 return null;
             }

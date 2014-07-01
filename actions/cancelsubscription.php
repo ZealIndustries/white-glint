@@ -85,7 +85,7 @@ class CancelsubscriptionAction extends Action
             return;
         }
 
-        $other = Profile::staticGet('id', $other_id);
+        $other = Profile::getKV('id', $other_id);
 
         if (!$other) {
             // TRANS: Client error displayed when trying to leave a non-existing group.
@@ -114,7 +114,7 @@ class CancelsubscriptionAction extends Action
             $subscribe = new SubscribeForm($this, $other);
             $subscribe->show();
             $this->elementEnd('body');
-            $this->elementEnd('html');
+            $this->endHTML();
         } else {
             common_redirect(common_local_url('subscriptions',
                                              array('nickname' => $user->nickname)),

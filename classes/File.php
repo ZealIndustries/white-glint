@@ -17,14 +17,7 @@
  * along with this program.     If not, see <http://www.gnu.org/licenses/>.
  */
 
-if (!defined('STATUSNET') && !defined('LACONICA')) { exit(1); }
-
-require_once INSTALLDIR.'/classes/Memcached_DataObject.php';
-require_once INSTALLDIR.'/classes/File_redirection.php';
-require_once INSTALLDIR.'/classes/File_oembed.php';
-require_once INSTALLDIR.'/classes/File_thumbnail.php';
-require_once INSTALLDIR.'/classes/File_to_post.php';
-//require_once INSTALLDIR.'/classes/File_redirection.php';
+if (!defined('GNUSOCIAL')) { exit(1); }
 
 /**
  * Table Definition for file
@@ -44,9 +37,6 @@ class File extends Managed_DataObject
     public $protected;                       // int(4)
     public $filename;                        // varchar(255)
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
-
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('File',$k,$v); }
 
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
@@ -89,9 +79,9 @@ class File extends Managed_DataObject
         // I don't know why we have to keep doing this but I'm adding this last check to avoid
         // uniqueness bugs.
 
-        $x = File::staticGet('url', $given_url);
+        $x = File::getKV('url', $given_url);
         
-        if (empty($x)) {
+        if (!$x instanceof File) {
             $x = new File;
             $x->url = $given_url;
             if (!empty($redir_data['protected'])) $x->protected = $redir_data['protected'];
@@ -116,19 +106,24 @@ class File extends Managed_DataObject
      * @param string $given_url
      * @return boolean success
      */
-    public function saveOembed($redir_data, $given_url)
+    public function saveOembed(array $redir_data, $given_url)
     {
         if (isset($redir_data['type'])
-            && (('text/html' === substr($redir_data['type'], 0, 9) || 'application/xhtml+xml' === substr($redir_data['type'], 0, 21)))
-            && ($oembed_data = File_oembed::_getOembed($given_url))) {
+                && (('text/html' === substr($redir_data['type'], 0, 9)
+                || 'application/xhtml+xml' === substr($redir_data['type'], 0, 21)))) {
+            try {
+                $oembed_data = File_oembed::_getOembed($given_url);
+            } catch (Exception $e) {
+                return false;
+            }
 
-            $fo = File_oembed::staticGet('file_id', $this->id);
+            $fo = File_oembed::getKV('file_id', $this->id);
 
-            if (empty($fo)) {
+            if ($fo instanceof File_oembed) {
+                common_log(LOG_WARNING, "Strangely, a File_oembed object exists for new file $file_id", __FILE__);
+            } else {
                 File_oembed::saveNew($oembed_data, $this->id);
                 return true;
-            } else {
-                common_log(LOG_WARNING, "Strangely, a File_oembed object exists for new file $file_id", __FILE__);
             }
         }
         return false;
@@ -156,9 +151,9 @@ class File extends Managed_DataObject
         if (empty($given_url)) return -1;   // error, no url to process
         $given_url = File_redirection::_canonUrl($given_url);
         if (empty($given_url)) return -1;   // error, no url to process
-        $file = File::staticGet('url', $given_url);
+        $file = File::getKV('url', $given_url);
         if (empty($file)) {
-            $file_redir = File_redirection::staticGet('url', $given_url);
+            $file_redir = File_redirection::getKV('url', $given_url);
             if (empty($file_redir)) {
                 // @fixme for new URLs this also looks up non-redirect data
                 // such as target content type, size, etc, which we need
@@ -200,7 +195,7 @@ class File extends Managed_DataObject
         }
 
         if (empty($x)) {
-            $x = File::staticGet('id', $file_id);
+            $x = File::getKV('id', $file_id);
             if (empty($x)) {
                 // @todo FIXME: This could possibly be a clearer message :)
                 // TRANS: Server exception thrown when... Robin thinks something is impossible!
@@ -214,41 +209,52 @@ class File extends Managed_DataObject
         return $x;
     }
 
-    function isRespectsQuota($user,$fileSize) {
-
+    public static function respectsQuota(Profile $scoped, $fileSize) {
         if ($fileSize > common_config('attachments', 'file_quota')) {
+            // TRANS: Message used to be inserted as %2$s in  the text "No file may
+            // TRANS: be larger than %1$d byte and the file you sent was %2$s.".
+            // TRANS: %1$d is the number of bytes of an uploaded file.
+            $fileSizeText = sprintf(_m('%1$d byte','%1$d bytes',$fileSize),$fileSize);
+
+            $fileQuota = common_config('attachments', 'file_quota');
             // TRANS: Message given if an upload is larger than the configured maximum.
-            // TRANS: %1$d is the byte limit for uploads, %2$d is the byte count for the uploaded file.
-            // TRANS: %1$s is used for plural.
-            return sprintf(_m('No file may be larger than %1$d byte and the file you sent was %2$d bytes. Try to upload a smaller version.',
-                              'No file may be larger than %1$d bytes and the file you sent was %2$d bytes. Try to upload a smaller version.',
-                              common_config('attachments', 'file_quota')),
-                           common_config('attachments', 'file_quota'), $fileSize);
+            // TRANS: %1$d (used for plural) is the byte limit for uploads,
+            // TRANS: %2$s is the proper form of "n bytes". This is the only ways to have
+            // TRANS: gettext support multiple plurals in the same message, unfortunately...
+            throw new ClientException(
+                    sprintf(_m('No file may be larger than %1$d byte and the file you sent was %2$s. Try to upload a smaller version.',
+                              'No file may be larger than %1$d bytes and the file you sent was %2$s. Try to upload a smaller version.',
+                              $fileQuota),
+                    $fileQuota, $fileSizeText));
         }
 
-        $query = "select sum(size) as total from file join file_to_post on file_to_post.file_id = file.id join notice on file_to_post.post_id = notice.id where profile_id = {$user->id} and file.url like '%/notice/%/file'";
-        $this->query($query);
-        $this->fetch();
-        $total = $this->total + $fileSize;
+        $file = new File;
+
+        $query = "select sum(size) as total from file join file_to_post on file_to_post.file_id = file.id join notice on file_to_post.post_id = notice.id where profile_id = {$scoped->id} and file.url like '%/notice/%/file'";
+        $file->query($query);
+        $file->fetch();
+        $total = $file->total + $fileSize;
         if ($total > common_config('attachments', 'user_quota')) {
             // TRANS: Message given if an upload would exceed user quota.
             // TRANS: %d (number) is the user quota in bytes and is used for plural.
-            return sprintf(_m('A file this large would exceed your user quota of %d byte.',
+            throw new ClientException(
+                    sprintf(_m('A file this large would exceed your user quota of %d byte.',
                               'A file this large would exceed your user quota of %d bytes.',
                               common_config('attachments', 'user_quota')),
-                           common_config('attachments', 'user_quota'));
+                    common_config('attachments', 'user_quota')));
         }
         $query .= ' AND EXTRACT(month FROM file.modified) = EXTRACT(month FROM now()) and EXTRACT(year FROM file.modified) = EXTRACT(year FROM now())';
-        $this->query($query);
-        $this->fetch();
-        $total = $this->total + $fileSize;
+        $file->query($query);
+        $file->fetch();
+        $total = $file->total + $fileSize;
         if ($total > common_config('attachments', 'monthly_quota')) {
             // TRANS: Message given id an upload would exceed a user's monthly quota.
             // TRANS: $d (number) is the monthly user quota in bytes and is used for plural.
-            return sprintf(_m('A file this large would exceed your monthly quota of %d byte.',
+            throw new ClientException(
+                    sprintf(_m('A file this large would exceed your monthly quota of %d byte.',
                               'A file this large would exceed your monthly quota of %d bytes.',
                               common_config('attachments', 'monthly_quota')),
-                           common_config('attachments', 'monthly_quota'));
+                    common_config('attachments', 'monthly_quota')));
         }
         return true;
     }
@@ -387,7 +393,7 @@ class File extends Managed_DataObject
             if(in_array($mimetype,$notEnclosureMimeTypes)){
                 // Never treat generic HTML links as an enclosure type!
                 // But if we have oEmbed info, we'll consider it golden.
-                $oembed = File_oembed::staticGet('file_id',$this->id);
+                $oembed = File_oembed::getKV('file_id',$this->id);
                 if($oembed && in_array($oembed->type, array('photo', 'video'))){
                     $mimetype = strtolower($oembed->mimetype);
                     $semicolon = strpos($mimetype,';');
@@ -429,7 +435,7 @@ class File extends Managed_DataObject
      */
     function getThumbnail()
     {
-        return File_thumbnail::staticGet('file_id', $this->id);
+        return File_thumbnail::getKV('file_id', $this->id);
     }
 
     /**

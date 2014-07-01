@@ -59,7 +59,7 @@ class AutoSandboxPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'AutoSandbox',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Sean Carmody',
                             'homepage' => 'http://status.net/wiki/Plugin:AutoSandbox',
                             'rawdescription' =>
@@ -74,7 +74,7 @@ class AutoSandboxPlugin extends Plugin
          $instr = _m('Note you will initially be "sandboxed" so your posts will not appear in the public timeline.');
 
          if (isset($this->contact)) {
-             $contactuser = User::staticGet('nickname', $this->contact);
+             $contactuser = User::getKV('nickname', $this->contact);
              if (!empty($contactuser)) {
                  $contactlink = "@<a href=\"$contactuser->uri\">$contactuser->nickname</a>";
                  // TRANS: User instructions after registration.
@@ -90,11 +90,11 @@ class AutoSandboxPlugin extends Plugin
          $action->elementEnd('div');
     }
 
-    function onEndUserRegister(&$profile,&$user)
+    public function onEndUserRegister(Profile $profile)
     {
-	$profile->sandbox();
-	if ($this->debug) {
-	    common_log(LOG_WARNING, "AutoSandbox: sandboxed of $user->nickname");
+        $profile->sandbox();
+        if ($this->debug) {
+            common_log(LOG_WARNING, "AutoSandbox: sandboxed of $profile->nickname");
         }
     }
 }

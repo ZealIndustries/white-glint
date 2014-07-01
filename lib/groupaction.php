@@ -44,7 +44,7 @@ define('MEMBERS_PER_SECTION', 27);
  */
 class GroupAction extends Action
 {
-    public $group;
+    protected $group;
 
     function prepare($args)
     {
@@ -70,10 +70,10 @@ class GroupAction extends Action
             return false;
         }
 
-        $local = Local_group::staticGet('nickname', $nickname);
+        $local = Local_group::getKV('nickname', $nickname);
 
         if (!$local) {
-            $alias = Group_alias::staticGet('alias', $nickname);
+            $alias = Group_alias::getKV('alias', $nickname);
             if ($alias) {
                 $args = array('id' => $alias->group_id);
                 if ($this->page != 1) {
@@ -89,7 +89,7 @@ class GroupAction extends Action
             }
         }
 
-        $this->group = User_group::staticGet('id', $local->group_id);
+        $this->group = User_group::getKV('id', $local->group_id);
 
         if (!$this->group) {
             // TRANS: Client error displayed if no local group with a given name was found requesting group page.
@@ -103,11 +103,6 @@ class GroupAction extends Action
         $block = new GroupProfileBlock($this, $this->group);
         $block->show();
     }
-		
-	function showLocalNav() {
-		$nav = new GroupNav($this, $this->group);
-		$nav->show();
-	}
 
     /**
      * Fill in the sidebar.
@@ -120,7 +115,7 @@ class GroupAction extends Action
         $cur = common_current_user();
         if ($cur && $cur->isAdmin($this->group)) {
             $this->showPending();
-            //$this->showBlocked();
+            $this->showBlocked();
         }
 
         $this->showAdmins();
@@ -231,10 +226,6 @@ class GroupAction extends Action
     function showBlocked()
     {
         $blocked = $this->group->getBlocked(0, MEMBERS_PER_SECTION);
-
-        if (!$blocked) {
-            return;
-        }
 
         $this->elementStart('div', array('id' => 'entity_blocked',
                                          'class' => 'section'));

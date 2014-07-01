@@ -50,8 +50,6 @@ class oEmbedHelper
         'hulu.com' => 'http://www.hulu.com/api/oembed.json',
         'vimeo.com' => 'http://www.vimeo.com/api/oembed.json',
         'my.opera.com' => 'http://my.opera.com/service/oembed',
-        'derpiboo.ru' => 'http://derpiboo.ru/oembed.json',
-        'derpibooru.org' => 'http://derpiboo.ru/oembed.json',
     );
     protected static $functionMap = array(
         'twitpic.com' => 'oEmbedHelper::twitPic',
@@ -218,6 +216,10 @@ class oEmbedHelper
     {
         $params['url'] = $url;
         $params['format'] = 'json';
+        $key=common_config('oembed','apikey');
+        if(isset($key)) {
+            $params['key'] = common_config('oembed','apikey');
+        }
         $data = self::json($api, $params);
         return self::normalize($data);
     }

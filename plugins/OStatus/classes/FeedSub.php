@@ -30,8 +30,6 @@ if (!defined('STATUSNET')) {
 PuSH subscription flow:
 
     $profile->subscribe()
-        generate random verification token
-            save to verify_token
         sends a sub request to the hub...
 
     main/push/callback
@@ -59,7 +57,7 @@ class FeedDBException extends FeedSubException
  * Higher-level behavior building OStatus stuff on top is handled
  * under Ostatus_profile.
  */
-class FeedSub extends Memcached_DataObject
+class FeedSub extends Managed_DataObject
 {
     public $__table = 'feedsub';
 
@@ -69,7 +67,6 @@ class FeedSub extends Memcached_DataObject
     // PuSH subscription data
     public $huburi;
     public $secret;
-    public $verify_token;
     public $sub_state; // subscribe, active, unsubscribe, inactive
     public $sub_start;
     public $sub_end;
@@ -78,94 +75,26 @@ class FeedSub extends Memcached_DataObject
     public $created;
     public $modified;
 
-    public /*static*/ function staticGet($k, $v=null)
+    public static function schemaDef()
     {
-        return parent::staticGet(__CLASS__, $k, $v);
-    }
-
-    /**
-     * return table definition for DB_DataObject
-     *
-     * DB_DataObject needs to know something about the table to manipulate
-     * instances. This method provides all the DB_DataObject needs to know.
-     *
-     * @return array array of column definitions
-     */
-    function table()
-    {
-        return array('id' => DB_DATAOBJECT_INT + DB_DATAOBJECT_NOTNULL,
-                     'uri' => DB_DATAOBJECT_STR + DB_DATAOBJECT_NOTNULL,
-                     'huburi' =>  DB_DATAOBJECT_STR,
-                     'secret' => DB_DATAOBJECT_STR,
-                     'verify_token' => DB_DATAOBJECT_STR,
-                     'sub_state' => DB_DATAOBJECT_STR + DB_DATAOBJECT_NOTNULL,
-                     'sub_start' => DB_DATAOBJECT_STR + DB_DATAOBJECT_DATE + DB_DATAOBJECT_TIME,
-                     'sub_end' => DB_DATAOBJECT_STR + DB_DATAOBJECT_DATE + DB_DATAOBJECT_TIME,
-                     'last_update' => DB_DATAOBJECT_STR + DB_DATAOBJECT_DATE + DB_DATAOBJECT_TIME,
-                     'created' => DB_DATAOBJECT_STR + DB_DATAOBJECT_DATE + DB_DATAOBJECT_TIME + DB_DATAOBJECT_NOTNULL,
-                     'modified' => DB_DATAOBJECT_STR + DB_DATAOBJECT_DATE + DB_DATAOBJECT_TIME + DB_DATAOBJECT_NOTNULL);
-    }
-
-    static function schemaDef()
-    {
-        return array(new ColumnDef('id', 'integer',
-                                   /*size*/ null,
-                                   /*nullable*/ false,
-                                   /*key*/ 'PRI',
-                                   /*default*/ null,
-                                   /*extra*/ null,
-                                   /*auto_increment*/ true),
-                     new ColumnDef('uri', 'varchar',
-                                   255, false, 'UNI'),
-                     new ColumnDef('huburi', 'text',
-                                   null, true),
-                     new ColumnDef('verify_token', 'text',
-                                   null, true),
-                     new ColumnDef('secret', 'text',
-                                   null, true),
-                     new ColumnDef('sub_state', "enum('subscribe','active','unsubscribe','inactive')",
-                                   null, false),
-                     new ColumnDef('sub_start', 'datetime',
-                                   null, true),
-                     new ColumnDef('sub_end', 'datetime',
-                                   null, true),
-                     new ColumnDef('last_update', 'datetime',
-                                   null, false),
-                     new ColumnDef('created', 'datetime',
-                                   null, false),
-                     new ColumnDef('modified', 'datetime',
-                                   null, false));
-    }
-
-    /**
-     * return key definitions for DB_DataObject
-     *
-     * DB_DataObject needs to know about keys that the table has; this function
-     * defines them.
-     *
-     * @return array key definitions
-     */
-    function keys()
-    {
-        return array_keys($this->keyTypes());
-    }
-
-    /**
-     * return key definitions for Memcached_DataObject
-     *
-     * Our caching system uses the same key definitions, but uses a different
-     * method to get them.
-     *
-     * @return array key definitions
-     */
-    function keyTypes()
-    {
-        return array('id' => 'K', 'uri' => 'U');
-    }
-
-    function sequenceKey()
-    {
-        return array('id', true, false);
+        return array(
+            'fields' => array(
+                'id' => array('type' => 'serial', 'not null' => true, 'description' => 'FeedSub local unique id'),
+                'uri' => array('type' => 'varchar', 'not null' => true, 'length' => 255, 'description' => 'FeedSub uri'),
+                'huburi' => array('type' => 'text', 'description' => 'FeedSub hub-uri'),
+                'secret' => array('type' => 'text', 'description' => 'FeedSub stored secret'),
+                'sub_state' => array('type' => 'enum("subscribe","active","unsubscribe","inactive")', 'not null' => true, 'description' => 'subscription state'),
+                'sub_start' => array('type' => 'datetime', 'description' => 'subscription start'),
+                'sub_end' => array('type' => 'datetime', 'description' => 'subscription end'),
+                'last_update' => array('type' => 'datetime', 'not null' => true, 'description' => 'when this record was last updated'),
+                'created' => array('type' => 'datetime', 'not null' => true, 'description' => 'date this record was created'),
+                'modified' => array('type' => 'timestamp', 'not null' => true, 'description' => 'date this record was modified'),
+            ),
+            'primary key' => array('id'),
+            'unique keys' => array(
+                'feedsub_uri_key' => array('uri'),
+            ),
+        );
     }
 
     /**
@@ -175,7 +104,7 @@ class FeedSub extends Memcached_DataObject
     public function localProfile()
     {
         if ($this->profile_id) {
-            return Profile::staticGet('id', $this->profile_id);
+            return Profile::getKV('id', $this->profile_id);
         }
         return null;
     }
@@ -187,7 +116,7 @@ class FeedSub extends Memcached_DataObject
     public function localGroup()
     {
         if ($this->group_id) {
-            return User_group::staticGet('id', $this->group_id);
+            return User_group::getKV('id', $this->group_id);
         }
         return null;
     }
@@ -199,8 +128,8 @@ class FeedSub extends Memcached_DataObject
      */
     public static function ensureFeed($feeduri)
     {
-        $current = self::staticGet('uri', $feeduri);
-        if ($current) {
+        $current = self::getKV('uri', $feeduri);
+        if ($current instanceof FeedSub) {
             return $current;
         }
 
@@ -221,7 +150,7 @@ class FeedSub extends Memcached_DataObject
         $feedsub->modified = common_sql_now();
 
         $result = $feedsub->insert();
-        if (empty($result)) {
+        if ($result === false) {
             throw new FeedDBException($feedsub);
         }
 
@@ -235,10 +164,10 @@ class FeedSub extends Memcached_DataObject
      * @return bool true on success, false on failure
      * @throws ServerException if feed state is not valid
      */
-    public function subscribe($mode='subscribe')
+    public function subscribe()
     {
         if ($this->sub_state && $this->sub_state != 'inactive') {
-            common_log(LOG_WARNING, "Attempting to (re)start PuSH subscription to $this->uri in unexpected state $this->sub_state");
+            common_log(LOG_WARNING, "Attempting to (re)start PuSH subscription to {$this->uri} in unexpected state {$this->sub_state}");
         }
         if (empty($this->huburi)) {
             if (common_config('feedsub', 'fallback_hub')) {
@@ -269,7 +198,7 @@ class FeedSub extends Memcached_DataObject
      */
     public function unsubscribe() {
         if ($this->sub_state != 'active') {
-            common_log(LOG_WARNING, "Attempting to (re)end PuSH subscription to $this->uri in unexpected state $this->sub_state");
+            common_log(LOG_WARNING, "Attempting to (re)end PuSH subscription to {$this->uri} in unexpected state {$this->sub_state}");
         }
         if (empty($this->huburi)) {
             if (common_config('feedsub', 'fallback_hub')) {
@@ -315,12 +244,31 @@ class FeedSub extends Memcached_DataObject
         }
     }
 
+    static public function renewalCheck()
+    {
+        $fs = new FeedSub();
+        // the "" empty string check is because we historically haven't saved unsubscribed feeds as NULL
+        $fs->whereAdd('sub_end IS NOT NULL AND sub_end!="" AND sub_end < NOW() - INTERVAL 1 day');
+        if (!$fs->find()) { // find can be both false and 0, depending on why nothing was found
+            throw new NoResultException($fs);
+        }
+        return $fs;
+    }
+
+    public function renew()
+    {
+        $this->subscribe();
+    }
+
+    /**
+     * @return boolean  true on successful sub/unsub, false on failure
+     */
     protected function doSubscribe($mode)
     {
+        $this->query('BEGIN');
         $orig = clone($this);
-        $this->verify_token = common_good_rand(16);
         if ($mode == 'subscribe') {
-            $this->secret = common_good_rand(32);
+            $this->secret = common_random_hexstr(32);
         }
         $this->sub_state = $mode;
         $this->update($orig);
@@ -331,8 +279,9 @@ class FeedSub extends Memcached_DataObject
             $headers = array('Content-Type: application/x-www-form-urlencoded');
             $post = array('hub.mode' => $mode,
                           'hub.callback' => $callback,
-                          'hub.verify' => 'sync',
-                          'hub.verify_token' => $this->verify_token,
+                          'hub.verify' => 'async',  // TODO: deprecated, remove when noone uses PuSH <0.4 (only 'async' method used there)
+                          'hub.verify_token' => 'Deprecated-since-PuSH-0.4', // TODO: rm!
+
                           'hub.secret' => $this->secret,
                           'hub.topic' => $this->uri);
             $client = new HTTPClient();
@@ -353,30 +302,26 @@ class FeedSub extends Memcached_DataObject
             $response = $client->post($hub, $headers, $post);
             $status = $response->getStatus();
             if ($status == 202) {
+                $this->query('COMMIT');
                 common_log(LOG_INFO, __METHOD__ . ': sub req ok, awaiting verification callback');
-                return true;
-            } else if ($status == 204) {
-                common_log(LOG_INFO, __METHOD__ . ': sub req ok and verified');
                 return true;
             } else if ($status >= 200 && $status < 300) {
                 common_log(LOG_ERR, __METHOD__ . ": sub req returned unexpected HTTP $status: " . $response->getBody());
-                return false;
             } else {
                 common_log(LOG_ERR, __METHOD__ . ": sub req failed with HTTP $status: " . $response->getBody());
-                return false;
             }
+            $this->query('ROLLBACK');
         } catch (Exception $e) {
+            $this->query('ROLLBACK');
             // wtf!
             common_log(LOG_ERR, __METHOD__ . ": error \"{$e->getMessage()}\" hitting hub $this->huburi subscribing to $this->uri");
 
             $orig = clone($this);
-            $this->verify_token = '';
             $this->sub_state = 'inactive';
             $this->update($orig);
             unset($orig);
-
-            return false;
         }
+        return false;
     }
 
     /**
@@ -385,7 +330,7 @@ class FeedSub extends Memcached_DataObject
      *
      * @param int $lease_seconds provided hub.lease_seconds parameter, if given
      */
-    public function confirmSubscribe($lease_seconds=0)
+    public function confirmSubscribe($lease_seconds)
     {
         $original = clone($this);
 
@@ -394,7 +339,7 @@ class FeedSub extends Memcached_DataObject
         if ($lease_seconds > 0) {
             $this->sub_end = common_sql_date(time() + $lease_seconds);
         } else {
-            $this->sub_end = null;
+            $this->sub_end = null;  // Backwards compatibility to StatusNet (PuSH <0.4 supported permanent subs)
         }
         $this->modified = common_sql_now();
 
@@ -410,7 +355,6 @@ class FeedSub extends Memcached_DataObject
         $original = clone($this);
 
         // @fixme these should all be null, but DB_DataObject doesn't save null values...?????
-        $this->verify_token = '';
         $this->secret = '';
         $this->sub_state = '';
         $this->sub_start = '';

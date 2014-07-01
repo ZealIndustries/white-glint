@@ -35,8 +35,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiprivateauth.php';
-
 /**
  * Outputs detailed information about the group specified by ID
  *
@@ -61,14 +59,14 @@ class ApiGroupShowAction extends ApiPrivateAuthAction
      *
      * @return boolean success flag
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
         $this->group = $this->getTargetGroup($this->arg('id'));
 
         if (empty($this->group)) {
-            $alias = Group_alias::staticGet(
+            $alias = Group_alias::getKV(
                 'alias',
                 common_canonical_nickname($this->arg('id'))
             );
@@ -76,12 +74,8 @@ class ApiGroupShowAction extends ApiPrivateAuthAction
                 $args = array('id' => $alias->group_id, 'format' => $this->format);
                 common_redirect(common_local_url('ApiGroupShow', $args), 301);
             } else {
-                $this->clientError(
-                    // TRANS: Client error displayed when trying to show a group that could not be found.
-                    _('Group not found.'),
-                    404,
-                    $this->format
-                );
+                // TRANS: Client error displayed when trying to show a group that could not be found.
+                $this->clientError(_('Group not found.'), 404);
             }
             return;
         }
@@ -94,13 +88,11 @@ class ApiGroupShowAction extends ApiPrivateAuthAction
      *
      * Check the format and show the user info
      *
-     * @param array $args $_REQUEST data (unused)
-     *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
+        parent::handle();
 
         switch($this->format) {
         case 'xml':
@@ -111,8 +103,7 @@ class ApiGroupShowAction extends ApiPrivateAuthAction
             break;
         default:
             // TRANS: Client error displayed when coming across a non-supported API method.
-            $this->clientError(_('API method not found.'), 404, $this->format);
-            break;
+            $this->clientError(_('API method not found.'), 404);
         }
     }
 

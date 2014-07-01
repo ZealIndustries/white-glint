@@ -129,12 +129,8 @@ class UnsubscribeForm extends Form
     function formActions()
     {
         // TRANS: Button text on unsubscribe form.
-        /*$this->out->submit('submit', _m('BUTTON','Unsubscribe'), 'submit', null,
+        $this->out->submit('submit', _m('BUTTON','Unsubscribe'), 'submit', null,
                            // TRANS: Button title on unsubscribe form.
-                           _('Unsubscribe from this user.'));*/
-		$this->out->element('button', array('title' => _('Unsubscribe from this user.'),
-											'type' => 'submit',
-											'class' => 'submit'),
-							 _m('BUTTON','Unsubscribe'));
+                           _('Unsubscribe from this user.'));
     }
 }

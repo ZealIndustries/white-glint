@@ -78,8 +78,6 @@ class PublicAction extends Action
         parent::prepare($args);
         $this->page = ($this->arg('page')) ? ($this->arg('page')+0) : 1;
 
-        $this->images = ($this->arg('images')) ? true : false;
-
         if ($this->page > MAX_PUBLIC_PAGE) {
             // TRANS: Client error displayed when requesting a public timeline page beyond the page limit.
             // TRANS: %s is the page limit.
@@ -93,9 +91,9 @@ class PublicAction extends Action
         $user = common_current_user();
 
         if (!empty($user) && $user->streamModeOnly()) {
-            $stream = new PublicNoticeStream($this->userProfile, $this->images);
+            $stream = new PublicNoticeStream($this->userProfile);
         } else {
-            $stream = new ThreadingPublicNoticeStream($this->userProfile, $this->images);
+            $stream = new ThreadingPublicNoticeStream($this->userProfile);
         }
 
         $this->notice = $stream->getNotices(($this->page-1)*NOTICES_PER_PAGE,
@@ -161,6 +159,11 @@ class PublicAction extends Action
         $this->element('link', array('rel' => 'EditURI',
                                      'type' => 'application/rsd+xml',
                                      'href' => $rsd));
+
+        if ($this->page != 1) {
+            $this->element('link', array('rel' => 'canonical',
+                                         'href' => common_local_url('public')));
+        }
     }
 
     /**
@@ -235,19 +238,15 @@ class PublicAction extends Action
             $this->showEmptyList();
         }
 
-        $xpargs = array();
-        if($this->images) {
-            $xpargs['images'] = $this->images;
-        }
         $this->pagination($this->page > 1, $cnt > NOTICES_PER_PAGE,
-            $this->page, 'public', null, $xpargs);
+                          $this->page, 'public');
     }
 
     function showSections()
-    {/*
+    {
         // Show invite button, as long as site isn't closed, and
         // we have a logged in user.
-        if (!common_config('site', 'closed') && common_logged_in()) {
+        if (common_config('invite', 'enabled') && !common_config('site', 'closed') && common_logged_in()) {
             if (!common_config('site', 'private')) {
                 $ibs = new InviteButtonSection(
                     $this,
@@ -260,26 +259,27 @@ class PublicAction extends Action
             }
             $ibs->show();
         }
-        // $top = new TopPostersSection($this);
-        // $top->show();
-        $feat = new FeaturedUsersSection($this);
-        $feat->show();*/
-        //$gbp = new GroupsByMembersSection($this);
-        //$gbp->show();
-        $pop = new PopularNoticeSection($this);
+
+        $p = Profile::current();
+
+        $pop = new PopularNoticeSection($this, $p);
         $pop->show();
         if (!common_config('performance', 'high')) {
             $cloud = new PublicTagCloudSection($this);
             $cloud->show();
         }
+        $feat = new FeaturedUsersSection($this);
+        $feat->show();
     }
 
     function showAnonymousMessage()
     {
         if (! (common_config('site','closed') || common_config('site','inviteonly'))) {
-            $m = _('Welcome to %%site.name%%, a [microblog](http://en.wikipedia.org/wiki/Micro-blogging) service for %%site.user%% ' .
-                   'based on [StatusNet](http://status.net/). ' .
-                   '[Join now](%%action.register%%) to talk with other %%site.user%%! ' .
+            // TRANS: Message for not logged in users at an invite-only site trying to view the public feed of notices.
+            // TRANS: This message contains Markdown links. Please mind the formatting.
+            $m = _('This is %%site.name%%, a [micro-blogging](http://en.wikipedia.org/wiki/Micro-blogging) service ' .
+                   'based on the Free Software [StatusNet](http://status.net/) tool. ' .
+                   '[Join now](%%action.register%%) to share notices about yourself with friends, family, and colleagues! ' .
                    '([Read more](%%doc.help%%))');
         } else {
             // TRANS: Message for not logged in users at a closed site trying to view the public feed of notices.
@@ -295,9 +295,8 @@ class PublicAction extends Action
 
 class ThreadingPublicNoticeStream extends ThreadingNoticeStream
 {
-    function __construct($profile, $images=false)
+    function __construct($profile)
     {
         parent::__construct(new PublicNoticeStream($profile));
-        $this->images = $images;
     }
 }

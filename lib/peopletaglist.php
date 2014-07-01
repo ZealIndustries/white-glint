@@ -107,7 +107,7 @@ class PeopletagListItem extends Widget
         parent::__construct($out);
         $this->peopletag  = $peopletag;
         $this->current = $current;
-        $this->profile = Profile::staticGet('id', $this->peopletag->tagger);
+        $this->profile = Profile::getKV('id', $this->peopletag->tagger);
     }
 
     /**
@@ -255,7 +255,7 @@ class PeopletagListItem extends Widget
         if ($this->peopletag->private) {
             $this->out->elementStart('a',
                 array('href' => common_local_url('peopletagsbyuser',
-                    array('nickname' => $this->profile->nickname, 'private' => 1)).'?private=1'));
+                    array('nickname' => $this->profile->nickname, 'private' => 1))));
             // TRANS: Privacy mode text in list list item for private list.
             $this->out->element('span', 'privacy_mode', _m('MODE','Private'));
             $this->out->elementEnd('a');
@@ -283,11 +283,9 @@ class PeopletagListItem extends Widget
 
     function showAvatar($size=AVATAR_STREAM_SIZE)
     {
-        $avatar = $this->profile->getAvatar($size);
+        $avatarUrl = $this->profile->avatarUrl($size);
 
-        $this->out->element('img', array('src' => ($avatar) ?
-                                         $avatar->displayUrl() :
-                                         Avatar::defaultImage($size),
+        $this->out->element('img', array('src' => $avatarUrl,
                                          'class' => 'avatar photo',
                                          'width' => $size,
                                          'height' => $size,

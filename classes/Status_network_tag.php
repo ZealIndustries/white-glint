@@ -43,9 +43,13 @@ class Status_network_tag extends Safe_DataObject
         $this->_connect();
     }
 
+    /* the code above is auto generated do not remove the tag below */
+    ###END_AUTOCODE
+
     /* Static get */
-    function staticGet($k,$v=null)
+    static function getKV($k,$v=null)
     {
+        // TODO: This probably has to be converted to a non-static call
         $i = DB_DataObject::staticGet('Status_network_tag',$k,$v);
 
         // Don't use local process cache; if we're fetching multiple
@@ -56,13 +60,9 @@ class Status_network_tag extends Safe_DataObject
         return $i;
     }
 
-    /* the code above is auto generated do not remove the tag below */
-    ###END_AUTOCODE
-
-
-    function pkeyGet($kv)
+    static function pkeyGet($kv)
     {
-        return Memcached_DataObject::pkeyGet('Status_network_tag', $kv);
+        return Memcached_DataObject::pkeyGetClass('Status_network_tag', $kv);
     }
 
     /**
@@ -125,11 +125,10 @@ class Status_network_tag extends Safe_DataObject
         return $ret;
     }
 
-    function delete()
+    function delete($useWhere=false)
     {
-        $ret = parent::delete();
         $this->decache();
-        return $ret;
+        return parent::delete($useWhere);
     }
 
     static function withTag($tag)

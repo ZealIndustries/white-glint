@@ -56,39 +56,6 @@ class QnA_Question extends Managed_DataObject
     public $created;     // datetime
 
     /**
-     * Get an instance by key
-     *
-     * This is a utility method to get a single instance with a given key value.
-     *
-     * @param string $k Key to use to lookup
-     * @param mixed  $v Value to lookup
-     *
-     * @return QnA_Question object found, or null for no hits
-     *
-     */
-    function staticGet($k, $v=null)
-    {
-        return Memcached_DataObject::staticGet('QnA_Question', $k, $v);
-    }
-
-    /**
-     * Get an instance by compound key
-     *
-     * This is a utility method to get a single instance with a given set of
-     * key-value pairs. Usually used for the primary key for a compound key; thus
-     * the name.
-     *
-     * @param array $kv array of key-value mappings
-     *
-     * @return Bookmark object found, or null for no hits
-     *
-     */
-    function pkeyGet($kv)
-    {
-        return Memcached_DataObject::pkeyGet('QnA_Question', $kv);
-    }
-
-    /**
      * The One True Thingy that must be defined and declared.
      */
     public static function schemaDef()
@@ -130,14 +97,14 @@ class QnA_Question extends Managed_DataObject
      *
      * @return Question found question or null
      */
-    function getByNotice($notice)
+    static function getByNotice($notice)
     {
-        return self::staticGet('uri', $notice->uri);
+        return self::getKV('uri', $notice->uri);
     }
 
     function getNotice()
     {
-        return Notice::staticGet('uri', $this->uri);
+        return Notice::getKV('uri', $this->uri);
     }
 
     function bestUrl()
@@ -147,7 +114,7 @@ class QnA_Question extends Managed_DataObject
 
     function getProfile()
     {
-        $profile = Profile::staticGet('id', $this->profile_id);
+        $profile = Profile::getKV('id', $this->profile_id);
         if (empty($profile)) {
             // TRANS: Exception trown when getting a profile for a non-existing ID.
             // TRANS: %s is the provided profile ID.
@@ -199,7 +166,7 @@ class QnA_Question extends Managed_DataObject
 
     static function fromNotice($notice)
     {
-        return QnA_Question::staticGet('uri', $notice->uri);
+        return QnA_Question::getKV('uri', $notice->uri);
     }
 
     function asHTML()

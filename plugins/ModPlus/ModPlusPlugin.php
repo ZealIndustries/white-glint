@@ -32,7 +32,7 @@ class ModPlusPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'ModPlus',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Brion Vibber',
                             'homepage' => 'http://status.net/wiki/Plugin:ModPlus',
                             'rawdescription' =>
@@ -57,31 +57,9 @@ class ModPlusPlugin extends Plugin
         return true;
     }
 
-    function onEndShowStatusNetStyles($action) {
+    public function onEndShowStylesheets(Action $action) {
         $action->cssLink($this->path('modplus.css'));
         return true;
-    }
-
-    /**
-     * Autoloader
-     *
-     * Loads our classes if they're requested.
-     *
-     * @param string $cls Class requested
-     *
-     * @return boolean hook return
-     */
-    function onAutoload($cls)
-    {
-        switch ($cls)
-        {
-        case 'RemoteprofileAction':
-        case 'RemoteProfileAction':
-            require_once dirname(__FILE__) . '/remoteprofileaction.php';
-            return false;
-        default:
-            return true;
-        }
     }
 
     /**
@@ -134,9 +112,7 @@ class ModPlusPlugin extends Plugin
      */
     protected function showProfileOptions(HTMLOutputter $out, $profile)
     {
-		if(!isset($profile->id))
-			return;
-        $isRemote = !(User::staticGet('id', $profile->id));
+        $isRemote = !(User::getKV('id', $profile->id));
         if ($isRemote) {
             $target = common_local_url('remoteprofile', array('id' => $profile->id));
             // TRANS: Label for access to remote profile options.

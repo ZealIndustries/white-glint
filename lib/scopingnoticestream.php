@@ -71,11 +71,27 @@ class ScopingNoticeStream extends FilteringNoticeStream
 
     function filter($notice)
     {
-        if(!empty($this->images)) {
-            return $notice->inScope($this->profile) && count($notice->attachments());
-        }
-        else {
-            return $notice->inScope($this->profile);
+        return $notice->inScope($this->profile);
+    }
+
+    function prefill($notices)
+    {
+        // XXX: this should probably only be in the scoping one.
+            
+        Notice::fillGroups($notices);
+        Notice::fillReplies($notices);
+
+        if (common_config('notice', 'hidespam')) {
+
+            $profiles = Notice::getProfiles($notices);
+
+            foreach ($profiles as $profile) {
+                $pids[] = $profile->id;
+            }
+            
+            Profile_role::pivotGet('profile_id',
+                                   $pids,
+                                   array('role' => Profile_role::SILENCED));
         }
     }
 }

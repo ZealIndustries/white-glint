@@ -37,9 +37,6 @@ class Config extends Managed_DataObject
     public $setting;                         // varchar(32)  primary_key not_null
     public $value;                           // varchar(255)
 
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('Config',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -118,27 +115,22 @@ class Config extends Managed_DataObject
         return $result;
     }
 
-    function delete()
+    function delete($useWhere=false)
     {
-        $result = parent::delete();
-        if ($result) {
+        $result = parent::delete($useWhere);
+        if ($result !== false) {
             Config::_blowSettingsCache();
         }
         return $result;
     }
 
-    function update($orig=null)
+    function update($dataObject=false)
     {
-        $result = parent::update($orig);
-        if ($result) {
+        $result = parent::update($dataObject);
+        if ($result !== false) {
             Config::_blowSettingsCache();
         }
         return $result;
-    }
-
-    function pkeyGet($kv)
-    {
-        return Memcached_DataObject::pkeyGet('Config', $kv);
     }
 
     static function save($section, $setting, $value)

@@ -33,8 +33,6 @@ if (!defined('STATUSNET') && !defined('LACONICA')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/info.php';
-
 /**
  * Base class for displaying HTTP errors
  *
@@ -119,6 +117,6 @@ class ErrorAction extends InfoAction
         $this->elementStart('body');
         $this->element('p', array('id' => 'error'), $this->message);
         $this->elementEnd('body');
-        $this->elementEnd('html');
+        $this->endHTML();
     }
 }

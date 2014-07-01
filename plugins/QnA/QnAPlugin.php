@@ -66,48 +66,6 @@ class QnAPlugin extends MicroAppPlugin
     }
 
     /**
-     * Load related modules when needed
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value; true means continue processing, false means stop.
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'QnanewquestionAction':
-        case 'QnanewanswerAction':
-        case 'QnashowquestionAction':
-        case 'QnaclosequestionAction':
-        case 'QnashowanswerAction':
-        case 'QnareviseanswerAction':
-        case 'QnavoteAction':
-            include_once $dir . '/actions/'
-                . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'QnanewquestionForm':
-        case 'QnashowquestionForm':
-        case 'QnanewanswerForm':
-        case 'QnashowanswerForm':
-        case 'QnareviseanswerForm':
-        case 'QnavoteForm':
-            include_once $dir . '/lib/' . strtolower($cls).'.php';
-            break;
-        case 'QnA_Question':
-        case 'QnA_Answer':
-        case 'QnA_Vote':
-            include_once $dir . '/classes/' . $cls.'.php';
-            return false;
-            break;
-        default:
-            return true;
-        }
-    }
-
-    /**
      * Map URLs to actions
      *
      * @param Net_URL_Mapper $m path-to-action mapper
@@ -163,7 +121,7 @@ class QnAPlugin extends MicroAppPlugin
     {
         $versions[] = array(
             'name'        => 'QnA',
-            'version'     => STATUSNET_VERSION,
+            'version'     => GNUSOCIAL_VERSION,
             'author'      => 'Zach Copley',
             'homepage'    => 'http://status.net/wiki/Plugin:QnA',
             'description' =>
@@ -225,7 +183,7 @@ class QnAPlugin extends MicroAppPlugin
             );
             break;
         case Answer::ObjectType:
-            $question = QnA_Question::staticGet('uri', $questionObj->id);
+            $question = QnA_Question::getKV('uri', $questionObj->id);
             if (empty($question)) {
                 // FIXME: save the question
                 // TRANS: Exception thrown when answering a non-existing question.
@@ -308,7 +266,7 @@ class QnAPlugin extends MicroAppPlugin
                 $class .= ' limited-scope';
             }
 
-            $question = QnA_Question::staticGet('uri', $nli->notice->uri);
+            $question = QnA_Question::getKV('uri', $nli->notice->uri);
 
             if (!empty($question->closed)) {
                 $class .= ' closed';
@@ -328,7 +286,7 @@ class QnAPlugin extends MicroAppPlugin
 
             $cls = array('hentry', 'notice', 'answer');
 
-            $answer = QnA_Answer::staticGet('uri', $nli->notice->uri);
+            $answer = QnA_Answer::getKV('uri', $nli->notice->uri);
 
             if (!empty($answer) && !empty($answer->best)) {
                 $cls[] = 'best';
@@ -520,7 +478,7 @@ class QnAPlugin extends MicroAppPlugin
      * @param HTMLOutputter $out
      * @return Widget
      */
-    function entryForm($out, $options=array())
+    function entryForm($out)
     {
         return new QnanewquestionForm($out);
     }

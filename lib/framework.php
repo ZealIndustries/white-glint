@@ -17,23 +17,26 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-if (!defined('STATUSNET') && !defined('LACONICA')) { exit(1); }
+if (!defined('GNUSOCIAL')) { exit(1); }
 
-define('STATUSNET_BASE_VERSION', '1.0.1');
-define('STATUSNET_LIFECYCLE', ''); // 'dev', 'alpha[0-9]+', 'beta[0-9]+', 'rc[0-9]+', 'release'
-define('STATUSNET_VERSION', STATUSNET_BASE_VERSION . STATUSNET_LIFECYCLE);
+define('GNUSOCIAL_ENGINE', 'GNU social');
+define('GNUSOCIAL_ENGINE_URL', 'https://www.gnu.org/software/social/');
 
-define('LACONICA_VERSION', STATUSNET_VERSION); // compatibility
+define('GNUSOCIAL_BASE_VERSION', '1.1.1');
+define('GNUSOCIAL_LIFECYCLE', 'alpha'); // 'dev', 'alpha[0-9]+', 'beta[0-9]+', 'rc[0-9]+', 'release'
 
-define('STATUSNET_CODENAME', 'Get It Together');
+define('GNUSOCIAL_VERSION', GNUSOCIAL_BASE_VERSION . '-' . GNUSOCIAL_LIFECYCLE);
+
+define('GNUSOCIAL_CODENAME', 'Not decided yet');
 
 define('AVATAR_PROFILE_SIZE', 96);
 define('AVATAR_STREAM_SIZE', 48);
 define('AVATAR_MINI_SIZE', 24);
 
-define('NOTICES_PER_PAGE', 30);
-define('PROFILES_PER_PAGE', 30);
-define('MESSAGES_PER_PAGE', 30);
+define('NOTICES_PER_PAGE', 20);
+define('PROFILES_PER_PAGE', 20);
+define('MESSAGES_PER_PAGE', 20);
+define('GROUPS_PER_PAGE', 20);
 
 define('FOREIGN_NOTICE_SEND', 1);
 define('FOREIGN_NOTICE_RECV', 2);
@@ -72,10 +75,17 @@ if (!function_exists('dl')) {
 
 // global configuration object
 
-require_once('PEAR.php');
-require_once('PEAR/Exception.php');
-require_once('DB/DataObject.php');
-require_once('DB/DataObject/Cast.php'); # for dates
+require_once 'PEAR.php';
+require_once 'PEAR/Exception.php';
+global $_PEAR;
+$_PEAR = new PEAR;
+$_PEAR->setErrorHandling(PEAR_ERROR_CALLBACK, 'PEAR_ErrorToPEAR_Exception');
+
+require_once 'DB.php';
+require_once 'DB/DataObject.php';
+require_once 'DB/DataObject/Cast.php'; # for dates
+global $_DB;
+$_DB = new DB;
 
 require_once(INSTALLDIR.'/lib/language.php');
 
@@ -85,7 +95,7 @@ require_once(INSTALLDIR.'/lib/language.php');
 require_once(INSTALLDIR.'/lib/event.php');
 require_once(INSTALLDIR.'/lib/plugin.php');
 
-function addPlugin($name, $attrs = null)
+function addPlugin($name, array $attrs=array())
 {
     return StatusNet::addPlugin($name, $attrs);
 }
@@ -136,7 +146,6 @@ define('NICKNAME_FMT', VALIDATE_NUM.VALIDATE_ALPHA_LOWER);
 require_once INSTALLDIR.'/lib/util.php';
 require_once INSTALLDIR.'/lib/action.php';
 require_once INSTALLDIR.'/lib/mail.php';
-require_once INSTALLDIR.'/lib/subs.php';
 
 require_once INSTALLDIR.'/lib/clientexception.php';
 require_once INSTALLDIR.'/lib/serverexception.php';
@@ -159,11 +168,17 @@ function PEAR_ErrorToPEAR_Exception($err)
 
     common_log(LOG_ERR, "PEAR Error: $msg ($userInfo)");
 
-    if ($err->getCode()) {
-        throw new PEAR_Exception($msg, $err, $err->getCode());
-    } else {
-        throw new PEAR_Exception($msg, $err);
-    }
-}
+    // HACK: queue handlers get kicked by the long-query killer, and 
+    // keep the same broken connection. We die here to get a new
+    // process started.
 
-PEAR::setErrorHandling(PEAR_ERROR_CALLBACK, 'PEAR_ErrorToPEAR_Exception');
+    if (php_sapi_name() == 'cli' && preg_match('/nativecode=2006/', $userInfo)) {
+        common_log(LOG_ERR, "Lost DB connection; dying.");
+        exit(100);
+    }
+
+    if ($err->getCode()) {
+        throw new PEAR_Exception($err->getMessage(), $err->getCode());
+    }
+    throw new PEAR_Exception($err->getMessage());
+}

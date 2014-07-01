@@ -60,7 +60,6 @@ class AdminPanelNav extends Menu
         $name = $user->getProfile()->getBestName();
 
         // Stub section w/ home link
-		/*
         $this->action->elementStart('ul');
         $this->action->elementStart('li');
         // TRANS: Header in administrator navigation panel.
@@ -77,7 +76,7 @@ class AdminPanelNav extends Menu
 
         $this->action->elementEnd('ul');
         $this->action->elementEnd('li');
-        $this->action->elementEnd('ul');*/
+        $this->action->elementEnd('ul');
 
         $this->action->elementStart('ul');
         $this->action->elementStart('li');
@@ -110,14 +109,6 @@ class AdminPanelNav extends Menu
                 $this->out->menuItem(common_local_url('accessadminpanel'), _m('MENU','Access'),
                                      $menu_title, $action_name == 'accessadminpanel', 'nav_access_admin_panel');
             }
-/*
-            if (AdminPanelAction::canAdmin('design')) {
-                // TRANS: Menu item title in administrator navigation panel.
-                $menu_title = _('Design configuration');
-                // TRANS: Menu item in administrator navigation panel.
-                $this->out->menuItem(common_local_url('designadminpanel'), _m('MENU','Design'),
-                                     $menu_title, $action_name == 'designadminpanel', 'nav_design_admin_panel');
-            }*/
 
             if (AdminPanelAction::canAdmin('paths')) {
                 // TRANS: Menu item title in administrator navigation panel.

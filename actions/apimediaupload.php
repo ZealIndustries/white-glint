@@ -30,9 +30,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-require_once INSTALLDIR . '/lib/mediafile.php';
-
 /**
  * Upload an image via the API.  Returns a shortened URL for the image
  * to the user.
@@ -88,7 +85,7 @@ class ApiMediaUploadAction extends ApiAuthAction
         $upload = null;
 
         try {
-            $upload = MediaFile::fromUpload('media', $this->auth_user);
+            $upload = MediaFile::fromUpload('media', $this->auth_user->getProfile());
         } catch (Exception $e) {
             $this->clientError($e->getMessage(), $e->getCode());
             return;

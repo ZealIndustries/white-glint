@@ -30,7 +30,8 @@ $longoptions = array(
     'users=',
     'words=',
     'prefix=',
-    'groupprefix'
+    'groupprefix=',
+    'faves='
 );
 
 $helptext = <<<END_OF_CREATESIM_HELP
@@ -39,6 +40,7 @@ Creates a lot of test users and notices to (loosely) simulate a real server.
     -b --subscriptions Average subscriptions per user (default no. users/20)
     -g --groups        Number of groups (default 20)
     -j --joins         Number of groups per user (default 5)
+    -f --faves         Number of faves per user (default notices/10)
     -n --notices       Average notices per user (default 100)
     -t --tags          Number of distinct hash tags (default 10000)
     -u --users         Number of users (default 100)
@@ -71,7 +73,7 @@ function newGroup($i, $j)
     // Pick a random user to be the admin
 
     $n = rand(0, max($j - 1, 0));
-    $user = User::staticGet('nickname', sprintf('%s%d', $userprefix, $n));
+    $user = User::getKV('nickname', sprintf('%s%d', $userprefix, $n));
 
     $group = User_group::register(array('nickname' => sprintf('%s%d', $groupprefix, $i),
                                         'local'    => true,
@@ -86,7 +88,7 @@ function newNotice($i, $tagmax)
     $options = array('scope' => Notice::defaultScope());
 
     $n = rand(0, $i - 1);
-    $user = User::staticGet('nickname', sprintf('%s%d', $userprefix, $n));
+    $user = User::getKV('nickname', sprintf('%s%d', $userprefix, $n));
 
     $is_reply = rand(0, 1);
 
@@ -112,6 +114,39 @@ function newNotice($i, $tagmax)
                 $options['scope'] |= Notice::ADDRESSEE_SCOPE;
             }
         }
+    } else {
+        $is_directed = rand(0, 4);
+
+        if ($is_directed == 0) {
+            $subs = $user->getSubscribed(0, 100)->fetchAll();
+            if (count($subs) > 0) {
+                $seen = array();
+                $f = rand(0, 9);
+                if ($f <= 6) {
+                    $addrs = 1;
+                } else if ($f <= 8) {
+                    $addrs = 2;
+                } else {
+                    $addrs = 3;
+                }
+                for ($m = 0; $m < $addrs; $m++) {
+                    $x = rand(0, count($subs) - 1);
+                    if ($seen[$x]) {
+                        continue;
+                    }
+                    if ($subs[$x]->id == $user->id) {
+                        continue;
+                    }
+                    $seen[$x] = true;
+                    $rprofile = $subs[$x];
+                    $content = "@".$rprofile->nickname." ".$content;
+                }
+                $private_to_addressees = rand(0, 4);
+                if ($private_to_addressees == 0) {
+                    $options['scope'] |= Notice::ADDRESSEE_SCOPE;
+                }
+            }
+        }
     }
 
     $has_hash = rand(0, 2);
@@ -128,7 +163,7 @@ function newNotice($i, $tagmax)
 
     if ($in_group == 0) {
         $groups = $user->getGroups();
-        if ($groups->N > 0) {
+        if ($groups instanceof User_group) {
             $gval = rand(0, $groups->N - 1);
             $groups->fetch(); // go to 0th
             for ($i = 0; $i < $gval; $i++) {
@@ -152,6 +187,28 @@ function newNotice($i, $tagmax)
     $notice = Notice::saveNew($user->id, $content, 'createsim', $options);
 }
 
+function newMessage($i)
+{
+    global $userprefix;
+
+    $n = rand(0, $i - 1);
+    $user = User::getKV('nickname', sprintf('%s%d', $userprefix, $n));
+
+    $content = testNoticeContent();
+
+    $friends = $user->mutuallySubscribedUsers()->fetchAll();
+
+    if (count($friends) == 0) {
+        return;
+    }
+
+    $j = rand(0, count($friends) - 1);
+    
+    $other = $friends[$j];
+
+    $message = Message::saveNew($user->id, $other->id, $content, 'createsim');
+}
+
 function newSub($i)
 {
     global $userprefix;
@@ -159,7 +216,7 @@ function newSub($i)
 
     $fromnick = sprintf('%s%d', $userprefix, $f);
 
-    $from = User::staticGet('nickname', $fromnick);
+    $from = User::getKV('nickname', $fromnick);
 
     if (empty($from)) {
         throw new Exception("Can't find user '$fromnick'.");
@@ -176,13 +233,13 @@ function newSub($i)
 
     $tunic = sprintf('%s%d', $userprefix, $t);
 
-    $to = User::staticGet('nickname', $tunic);
+    $to = User::getKV('nickname', $tunic);
 
-    if (empty($to)) {
+    if (!($to instanceof User)) {
         throw new Exception("Can't find user '$tunic'.");
     }
 
-    subs_subscribe_to($from, $to);
+    Subscription::start($from->getProfile(), $to->getProfile());
 
     $from->free();
     $to->free();
@@ -197,7 +254,7 @@ function newJoin($u, $g)
 
     $userNick = sprintf('%s%d', $userprefix, $userNumber);
 
-    $user = User::staticGet('nickname', $userNick);
+    $user = User::getKV('nickname', $userNick);
 
     if (empty($user)) {
         throw new Exception("Can't find user '$fromnick'.");
@@ -207,7 +264,7 @@ function newJoin($u, $g)
 
     $groupNick = sprintf('%s%d', $groupprefix, $groupNumber);
 
-    $group = User_group::staticGet('nickname', $groupNick);
+    $group = User_group::getKV('nickname', $groupNick);
 
     if (empty($group)) {
         throw new Exception("Can't find group '$groupNick'.");
@@ -216,6 +273,50 @@ function newJoin($u, $g)
     if (!$user->isMember($group)) {
         $user->joinGroup($group);
     }
+}
+
+function newFave($u)
+{
+    global $userprefix;
+    global $groupprefix;
+
+    $userNumber = rand(0, $u - 1);
+
+    $userNick = sprintf('%s%d', $userprefix, $userNumber);
+
+    $user = User::getKV('nickname', $userNick);
+
+    if (empty($user)) {
+        throw new Exception("Can't find user '$userNick'.");
+    }
+
+    // NB: it's OK to like your own stuff!
+
+    $otherNumber = rand(0, $u - 1);
+
+    $otherNick = sprintf('%s%d', $userprefix, $otherNumber);
+
+    $other = User::getKV('nickname', $otherNick);
+
+    if (empty($other)) {
+        throw new Exception("Can't find user '$otherNick'.");
+    }
+
+    $notices = $other->getNotices()->fetchAll();
+
+    if (count($notices) == 0) {
+        return;
+    }
+
+    $idx = rand(0, count($notices) - 1);
+
+    $notice = $notices[$idx];
+
+    if ($user->hasFave($notice)) {
+        return;
+    }
+
+    Fave::addNew($user->getProfile(), $notice);
 }
 
 function testNoticeContent()
@@ -243,7 +344,7 @@ function testNoticeContent()
     return $text;
 }
 
-function main($usercount, $groupcount, $noticeavg, $subsavg, $joinsavg, $tagmax)
+function main($usercount, $groupcount, $noticeavg, $subsavg, $joinsavg, $favesavg, $messageavg, $tagmax)
 {
     global $config;
     $config['site']['dupelimit'] = -1;
@@ -271,7 +372,7 @@ function main($usercount, $groupcount, $noticeavg, $subsavg, $joinsavg, $tagmax)
 
     // # registrations + # notices + # subs
 
-    $events = $usercount + $groupcount + ($usercount * ($noticeavg + $subsavg + $joinsavg));
+    $events = $usercount + $groupcount + ($usercount * ($noticeavg + $subsavg + $joinsavg + $favesavg + $messageavg));
 
     $events -= $preuser;
     $events -= $pregroup;
@@ -281,8 +382,10 @@ function main($usercount, $groupcount, $noticeavg, $subsavg, $joinsavg, $tagmax)
     $nt = $gt + ($usercount * $noticeavg);
     $st = $nt + ($usercount * $subsavg);
     $jt = $st + ($usercount * $joinsavg);
+    $ft = $jt + ($usercount * $favesavg);
+    $mt = $ft + ($usercount * $messageavg);
 
-    printfv("$events events ($ut, $gt, $nt, $st, $jt)\n");
+    printfv("$events events ($ut, $gt, $nt, $st, $jt, $ft, $mt)\n");
 
     for ($i = 0; $i < $events; $i++)
     {
@@ -305,6 +408,12 @@ function main($usercount, $groupcount, $noticeavg, $subsavg, $joinsavg, $tagmax)
         } else if ($e > $st && $e <= $jt) {
             printfv("$i Making a new group join\n");
             newJoin($n, $g);
+        } else if ($e > $jt && $e <= $ft) {
+            printfv("$i Making a new fave\n");
+            newFave($n);
+        } else if ($e > $ft && $e <= $mt) {
+            printfv("$i Making a new message\n");
+            newMessage($n);
         } else {
             printfv("No event for $i!");
         }
@@ -318,6 +427,8 @@ $groupcount  = (have_option('g', 'groups')) ? get_option_value('g', 'groups') : 
 $noticeavg   = (have_option('n', 'notices')) ? get_option_value('n', 'notices') : 100;
 $subsavg     = (have_option('b', 'subscriptions')) ? get_option_value('b', 'subscriptions') : max($usercount/20, 10);
 $joinsavg    = (have_option('j', 'joins')) ? get_option_value('j', 'joins') : 5;
+$favesavg    = (have_option('f', 'faves')) ? get_option_value('f', 'faves') : max($noticeavg/10, 5);
+$messageavg  = (have_option('m', 'messages')) ? get_option_value('m', 'messages') : max($noticeavg/10, 5);
 $tagmax      = (have_option('t', 'tags')) ? get_option_value('t', 'tags') : 10000;
 $userprefix  = (have_option('x', 'prefix')) ? get_option_value('x', 'prefix') : 'testuser';
 $groupprefix = (have_option('z', 'groupprefix')) ? get_option_value('z', 'groupprefix') : 'testgroup';
@@ -334,7 +445,7 @@ if (is_readable($wordsfile)) {
 }
 
 try {
-    main($usercount, $groupcount, $noticeavg, $subsavg, $joinsavg, $tagmax);
+    main($usercount, $groupcount, $noticeavg, $subsavg, $joinsavg, $favesavg, $messageavg, $tagmax);
 } catch (Exception $e) {
     printfv("Got an exception: ".$e->getMessage());
 }

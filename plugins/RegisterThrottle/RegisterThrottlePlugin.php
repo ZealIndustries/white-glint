@@ -79,34 +79,8 @@ class RegisterThrottlePlugin extends Plugin
         $schema = Schema::get();
 
         // For storing user-submitted flags on profiles
-        $schema->ensureTable('registration_ip',
-                             array(new ColumnDef('user_id', 'integer', null,
-                                                 false, 'PRI'),
-                                   new ColumnDef('ipaddress', 'varchar', 15, false, 'MUL'),
-                                   new ColumnDef('created', 'timestamp', null, false, 'MUL')));
-
+        $schema->ensureTable('registration_ip', Registration_ip::schemaDef());
         return true;
-    }
-
-    /**
-     * Load related modules when needed
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value; true means continue processing, false means stop.
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'Registration_ip':
-            include_once $dir . '/'.$cls.'.php';
-            return false;
-        default:
-            return true;
-        }
     }
 
     /**
@@ -151,7 +125,7 @@ class RegisterThrottlePlugin extends Plugin
         if ($this->silenced) {
             $ids = Registration_ip::usersByIP($ipaddress);
             foreach ($ids as $id) {
-                $profile = Profile::staticGet('id', $id);
+                $profile = Profile::getKV('id', $id);
                 if ($profile && $profile->isSilenced()) {
                     // TRANS: Exception thrown when attempting to register from an IP address from which silenced users have registered.
                     throw new Exception(_m('A banned user has registered from this address.'));
@@ -168,11 +142,10 @@ class RegisterThrottlePlugin extends Plugin
      * We record the successful registration and IP address.
      *
      * @param Profile $profile new user's profile
-     * @param User $user new user
      *
      * @return boolean hook value
      */
-    function onEndUserRegister($profile, $user)
+    public function onEndUserRegister(Profile $profile)
     {
         $ipaddress = $this->_getIpAddress();
 
@@ -183,7 +156,7 @@ class RegisterThrottlePlugin extends Plugin
 
         $reg = new Registration_ip();
 
-        $reg->user_id   = $user->id;
+        $reg->user_id   = $profile->id;
         $reg->ipaddress = $ipaddress;
 
         $result = $reg->insert();
@@ -206,7 +179,7 @@ class RegisterThrottlePlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'RegisterThrottle',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Evan Prodromou',
                             'homepage' => 'http://status.net/wiki/Plugin:RegisterThrottle',
                             'description' =>
@@ -223,6 +196,7 @@ class RegisterThrottlePlugin extends Plugin
     private function _getIpAddress()
     {
         $keys = array('HTTP_X_FORWARDED_FOR',
+                      'HTTP_X_CLIENT',
                       'CLIENT-IP',
                       'REMOTE_ADDR');
 
@@ -282,7 +256,7 @@ class RegisterThrottlePlugin extends Plugin
             return true;
         }
 
-        $ri = Registration_ip::staticGet('user_id', $profile->id);
+        $ri = Registration_ip::getKV('user_id', $profile->id);
 
         if (empty($ri)) {
             return true;
@@ -295,7 +269,7 @@ class RegisterThrottlePlugin extends Plugin
                 continue;
             }
 
-            $other = Profile::staticGet('id', $id);
+            $other = Profile::getKV('id', $id);
 
             if (empty($other)) {
                 continue;

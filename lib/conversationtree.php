@@ -98,59 +98,7 @@ class ConversationTree extends NoticeList
             } else {
                 $this->tree[$notice->reply_to] = array($notice->id);
             }
-
         }
-
-        // Heal missing root notice with first notice in database. Hackish.
-        if(empty($this->tree['root'])) {
-            $notice = new Notice();
-            $notice->orderBy('id ASC');
-            $notice->limit(1);
-            $notice->find();
-            $notice->fetch();
-
-            $this->table[$notice->id] = $notice;
-
-            $this->tree['root'] = array($notice->id);
-            $this->tree[$notice->id] = array();
-        }
-
-        // Heal broken replies
-        foreach(array_keys($this->tree) as $ckey ) {
-            if($ckey == 'root') continue;
-            $fix = true;
-            foreach(array_keys($this->tree) as $skey) {
-                if( in_array($ckey, $this->tree[$skey]) ) {
-                    $fix = false;
-                    break;
-                }
-            }
-            if($fix) {
-                $this->tree[ $this->tree['root'][0] ] = array_merge($this->tree[$ckey], $this->tree[ $this->tree['root'][0] ]);
-            }
-        }
-
-		/* seems redundant since this is an oldschool toggle now anyway. commenting out...
-        // FIXME
-        // Flatten conversations by combining long chains
-        if(true && common_config('site', 'flatconversations')) {
-            print_r($this->tree);
-            foreach(array_keys($this->tree) as $id) {
-                if($id != 'root' && !empty($this->tree[$id])) $notices = $this->tree[$id];
-                else continue;
-
-                foreach($this->tree as $pkey => $parents) {
-                    if(in_array($id, $parents)) {
-                        if($pkey != 'root' && count($parents) === 1) {
-                            $this->tree[$pkey] = array_merge($parents, $notices);
-                            unset($this->tree[$id]);
-                        }
-                        break;
-                    }
-                }
-            print_r($this->tree);
-            }
-        }*/
 
         return $cnt;
     }
@@ -172,7 +120,7 @@ class ConversationTree extends NoticeList
         $item = $this->newListItem($notice);
         $item->show();
 
-        if (array_key_exists($id, $this->tree) && $this->tree[$id] != null) {
+        if (array_key_exists($id, $this->tree)) {
             $children = $this->tree[$id];
 
             $this->out->elementStart('ol', array('class' => 'notices'));

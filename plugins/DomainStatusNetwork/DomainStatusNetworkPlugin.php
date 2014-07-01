@@ -74,7 +74,7 @@ class DomainStatusNetworkPlugin extends Plugin
         }
 
         try {
-            $sn = Status_network::staticGet('nickname', $nickname);
+            $sn = Status_network::getKV('nickname', $nickname);
         } catch (Exception $e) {
             $this->log(LOG_ERR, $e->getMessage());
             return;
@@ -88,27 +88,6 @@ class DomainStatusNetworkPlugin extends Plugin
                 $this->log(LOG_INFO, "Setting email domain to {$domain}");
                 common_config_append('email', 'whitelist', $domain);
             }
-        }
-    }
-
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'GlobalregisterAction':
-        case 'GloballoginAction':
-        case 'GlobalrecoverAction':
-            include_once $dir . '/actions/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'DomainStatusNetworkInstaller':
-        case 'GlobalApiAction':
-        case 'FreeEmail':
-            include_once $dir . '/lib/' . strtolower($cls) . '.php';
-            return false;
-        default:
-            return true;
         }
     }
 
@@ -134,11 +113,11 @@ class DomainStatusNetworkPlugin extends Plugin
 
     static function nicknameAvailable($nickname)
     {
-        $sn = Status_network::staticGet('nickname', $nickname);
+        $sn = Status_network::getKV('nickname', $nickname);
         if (!empty($sn)) {
             return false;
         }
-        $usn = Unavailable_status_network::staticGet('nickname', $nickname);
+        $usn = Unavailable_status_network::getKV('nickname', $nickname);
         if (!empty($usn)) {
             return false;
         }
@@ -203,7 +182,7 @@ class DomainStatusNetworkPlugin extends Plugin
         $snt = Status_network_tag::withTag('domain='.$domain);
 
         while ($snt->fetch()) {
-            $sn = Status_network::staticGet('site_id', $snt->site_id);
+            $sn = Status_network::getKV('site_id', $snt->site_id);
             if (!empty($sn)) {
                 return $sn;
             }
@@ -214,7 +193,7 @@ class DomainStatusNetworkPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'DomainStatusNetwork',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Evan Prodromou',
                             'homepage' => 'http://status.net/wiki/Plugin:DomainStatusNetwork',
                             'rawdescription' =>
@@ -235,7 +214,7 @@ class DomainStatusNetworkPlugin extends Plugin
 
         StatusNet::switchSite($sn->nickname);
 
-        $user = User::staticGet('email', $email);
+        $user = User::getKV('email', $email);
 
         return !empty($user);
     }
@@ -317,7 +296,7 @@ class DomainStatusNetworkPlugin extends Plugin
 
         StatusNet::switchSite($sn->nickname);
 
-        $user = User::staticGet('email', $email);
+        $user = User::getKV('email', $email);
         
         if (empty($user)) {
             throw new ClientException(_('No such user.'));

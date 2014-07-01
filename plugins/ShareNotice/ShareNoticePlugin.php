@@ -32,7 +32,7 @@ class ShareNoticePlugin extends Plugin
         array('StatusNet', array('baseurl' => 'http://identi.ca'))
     );
 
-    function onEndShowStatusNetStyles($action) {
+    public function onEndShowStylesheets(Action $action) {
         $action->cssLink($this->path('css/sharenotice.css'));
         return true;
     }
@@ -214,7 +214,7 @@ class FacebookShareTarget extends NoticeShareTarget
         $url = 'http://status.net/wiki/Plugin:ShareNotice';
 
         $versions[] = array('name' => 'ShareNotice',
-            'version' => STATUSNET_VERSION,
+            'version' => GNUSOCIAL_VERSION,
             'author' => 'Brion Vibber',
             'homepage' => $url,
             'rawdescription' =>

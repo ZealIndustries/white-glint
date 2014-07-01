@@ -41,8 +41,8 @@ class PushInQueueHandler extends QueueHandler
         $post = $data['post'];
         $hmac = $data['hmac'];
 
-        $feedsub = FeedSub::staticGet('id', $feedsub_id);
-        if ($feedsub) {
+        $feedsub = FeedSub::getKV('id', $feedsub_id);
+        if ($feedsub instanceof FeedSub) {
             try {
                 $feedsub->receive($post, $hmac);
             } catch(Exception $e) {

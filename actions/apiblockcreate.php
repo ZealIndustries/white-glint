@@ -32,8 +32,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-
 /**
  * Blocks the user specified in the ID parameter as the authenticating user.
  * Destroys a friendship to the blocked user if it exists. Returns the
@@ -48,6 +46,8 @@ require_once INSTALLDIR . '/lib/apiauth.php';
  */
 class ApiBlockCreateAction extends ApiAuthAction
 {
+    protected $needPost = true;
+
     var $other   = null;
 
     /**
@@ -58,11 +58,10 @@ class ApiBlockCreateAction extends ApiAuthAction
      * @return boolean success flag
      *
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
-        $this->user   = $this->auth_user;
         $this->other  = $this->getTargetProfile($this->arg('id'));
 
         return true;
@@ -77,36 +76,20 @@ class ApiBlockCreateAction extends ApiAuthAction
      *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
-
-        if ($_SERVER['REQUEST_METHOD'] != 'POST') {
-            $this->clientError(
-                // TRANS: Client error. POST is a HTTP command. It should not be translated.
-                _('This method requires a POST.'),
-                400,
-                $this->format
-            );
-            return;
-        }
+        parent::handle();
 
         if (empty($this->user) || empty($this->other)) {
             // TRANS: Client error displayed when trying to block a non-existing user or a user from another site.
-            $this->clientError(_('No such user.'), 404, $this->format);
-            return;
+            $this->clientError(_('No such user.'), 404);
         }
 
         // Don't allow blocking yourself!
 
         if ($this->user->id == $this->other->id) {
-            $this->clientError(
-                // TRANS: Client error displayed when users try to block themselves.
-                _("You cannot block yourself!"),
-                403,
-                $this->format
-            );
-            return;
+            // TRANS: Client error displayed when users try to block themselves.
+            $this->clientError(_("You cannot block yourself!"), 403);
         }
 
         if (!$this->user->hasBlocked($this->other)) {
@@ -124,7 +107,7 @@ class ApiBlockCreateAction extends ApiAuthAction
             $this->endDocument($this->format);
         } else {
             // TRANS: Server error displayed when blocking a user has failed.
-            $this->serverError(_('Block user failed.'), 500, $this->format);
+            $this->serverError(_('Block user failed.'), 500);
         }
     }
 }

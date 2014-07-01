@@ -44,18 +44,15 @@ class FeaturedUsersSection extends ProfileSection
 {
     function show()
     {
-        /*
         $featured_nicks = common_config('nickname', 'featured');
         if (empty($featured_nicks)) {
             return;
         }
-         */
         parent::show();
     }
 
     function getProfiles()
     {
-        /*
         $featured_nicks = common_config('nickname', 'featured');
 
         if (!$featured_nicks) {
@@ -67,26 +64,16 @@ class FeaturedUsersSection extends ProfileSection
         foreach ($featured_nicks as $nick) {
             $quoted[] = "'$nick'";
         }
-         */
 
         $table = "user";
         if(common_config('db','quote_identifiers')) {
           $table = '"' . $table . '"';
         }
 
-        /*
         $qry = 'SELECT profile.* ' .
             'FROM profile JOIN '. $table .' on profile.id = '. $table .'.id ' .
           'WHERE '. $table .'.nickname in (' . implode(',', $quoted) . ') ' .
           'ORDER BY profile.created DESC ';
-         */
-
-        $qry = "SELECT profile.* " .
-            "FROM profile JOIN $table ON profile.id = $table.id " .
-            "LEFT JOIN profile_role ON profile_id = profile.id " .
-            "WHERE user.created > DATE_SUB(NOW(), INTERVAL 1 MONTH) " .
-            "AND profile_role.role IS NULL " .
-            'ORDER BY RAND() ';
 
         $limit = PROFILES_PER_SECTION + 1;
         $offset = 0;
@@ -99,21 +86,21 @@ class FeaturedUsersSection extends ProfileSection
 
         $profile = Memcached_DataObject::cachedQuery('Profile',
                                                      $qry,
-                                                     60);
+                                                     6 * 3600);
         return $profile;
     }
 
     function title()
     {
         // TRANS: Title for featured users section.
-        return _('New Users');
+        return _('Featured users');
     }
 
     function divId()
     {
         return 'featured_users';
     }
-    
+
     function moreUrl()
     {
         return common_local_url('featured');

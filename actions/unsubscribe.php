@@ -53,11 +53,9 @@ class UnsubscribeAction extends Action
             return;
         }
 
-        $user = common_current_user();
-
         if ($_SERVER['REQUEST_METHOD'] != 'POST') {
             common_redirect(common_local_url('subscriptions',
-                                             array('nickname' => $user->nickname)));
+                                             array('nickname' => $this->scoped->nickname)));
             return;
         }
 
@@ -80,19 +78,18 @@ class UnsubscribeAction extends Action
             return;
         }
 
-        $other = Profile::staticGet('id', $other_id);
+        $other = Profile::getKV('id', $other_id);
 
-        if (!$other) {
+        if (!($other instanceof Profile)) {
             // TRANS: Client error displayed when trying to unsubscribe while providing a non-existing profile ID.
             $this->clientError(_('No profile with that ID.'));
             return;
         }
 
-        $result = subs_unsubscribe_to($user, $other);
-
-        if (is_string($result)) {
-            $this->clientError($result);
-            return;
+        try {
+            Subscription::cancel($this->scoped, $other);
+        } catch (Exception $e) {
+            $this->clientError($e->getMessage());
         }
 
         if ($this->boolean('ajax')) {
@@ -105,10 +102,10 @@ class UnsubscribeAction extends Action
             $subscribe = new SubscribeForm($this, $other);
             $subscribe->show();
             $this->elementEnd('body');
-            $this->elementEnd('html');
+            $this->endHTML();
         } else {
             common_redirect(common_local_url('subscriptions',
-                                             array('nickname' => $user->nickname)),
+                                             array('nickname' => $this->scoped->nickname)),
                             303);
         }
     }

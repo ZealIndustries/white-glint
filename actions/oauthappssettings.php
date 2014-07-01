@@ -31,6 +31,8 @@ if (!defined('STATUSNET') && !defined('LACONICA')) {
     exit(1);
 }
 
+require_once INSTALLDIR . '/lib/applicationlist.php';
+
 /**
  * Show a user's registered OAuth applications
  *

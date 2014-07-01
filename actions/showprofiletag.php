@@ -70,7 +70,7 @@ class ShowprofiletagAction extends Action
             return false;
         }
 
-        $user = User::staticGet('nickname', $tagger);
+        $user = User::getKV('nickname', $tagger);
 
         if (!$user) {
             // TRANS: Client error displayed trying to perform an action related to a non-existing user.
@@ -212,7 +212,7 @@ class ShowprofiletagAction extends Action
         );
     }
 
-    function showLocalNav()
+    function showObjectNav()
     {
         $nav = new PeopletagGroupNav($this);
         $nav->show();
@@ -318,9 +318,9 @@ class ShowprofiletagAction extends Action
 
             if ($cnt > PROFILES_PER_MINILIST) {
                 $this->elementStart('p');
-                $this->element('a', array('href' => common_local_url('peopletagged',
-                                                                     array('tagger' => $this->tagger->nickname,
-                                                                           'tag' => $this->peopletag->tag)),
+                $this->element('a', array('href' => common_local_url('taggedprofiles',
+                                                                     array('nickname' => $this->tagger->nickname,
+                                                                           'profiletag' => $this->peopletag->tag)),
                                           'class' => 'more'),
                                // TRANS: Link for more "People in list x by a user"
                                // TRANS: if there are more than the mini list's maximum.

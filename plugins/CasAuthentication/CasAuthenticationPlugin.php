@@ -54,10 +54,10 @@ class CasAuthenticationPlugin extends AuthenticationPlugin
          case 'phpCAS':
             require_once(INSTALLDIR.'/plugins/CasAuthentication/extlib/CAS.php');
             return false;
-         case 'CasloginAction':
-            require_once(INSTALLDIR.'/plugins/CasAuthentication/' . strtolower(mb_substr($cls, 0, -6)) . '.php');
-            return false;
         }
+
+        // if it's not our exception, try standard places
+        return parent::onAutoload($cls);
     }
 
     function onArgsInitialize(&$args)
@@ -150,7 +150,7 @@ class CasAuthenticationPlugin extends AuthenticationPlugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'CAS Authentication',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Craig Andrews',
                             'homepage' => 'http://status.net/wiki/Plugin:CasAuthentication',
                             // TRANS: Plugin description. CAS is Central Authentication Service.
