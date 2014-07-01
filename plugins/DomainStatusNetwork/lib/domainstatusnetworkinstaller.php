@@ -117,7 +117,7 @@ class DomainStatusNetworkInstaller extends Installer
 
         $this->rootname = $config['ADMIN'];
         $this->rootpass = $config['ADMINPASS'];
-        $this->sitehost = $config['DBHOST'];
+        $this->sitehost = $config['SITEDBHOSTNAME'];
         $this->sitedb   = $config['SITEDB'];
 
         $tagstr = $config['TAGS'];
@@ -178,6 +178,7 @@ class DomainStatusNetworkInstaller extends Installer
         $sn->dbpass   = $this->password;
         $sn->dbname   = $this->database;
         $sn->sitename = $this->sitename;
+        $sn->created  = common_sql_now();
 
         $result = $sn->insert();
 
@@ -187,7 +188,7 @@ class DomainStatusNetworkInstaller extends Installer
 
         // Re-fetch; stupid auto-increment integer isn't working
 
-        $sn = Status_network::staticGet('nickname', $sn->nickname);
+        $sn = Status_network::getKV('nickname', $sn->nickname);
 
         if (empty($sn)) {
             throw new ServerException("Created {$this->nickname} status_network and could not find it again.");
@@ -266,6 +267,9 @@ class DomainStatusNetworkInstaller extends Installer
     function createDatabase()
     {
         // Create the New DB
+        /* FIXME
+         * Extension 'mysql_' is deprecated since PHP 5.5 - use mysqli instead.
+         */
         $res = mysql_connect($this->host, $this->rootname, $this->rootpass);
         if (!$res) {
             throw new ServerException("Cannot connect to {$this->host} as {$this->rootname}.");

@@ -8,7 +8,8 @@ if (isset($_SERVER) && array_key_exists('REQUEST_METHOD', $_SERVER)) {
 // XXX: we should probably have some common source for this stuff
 
 define('INSTALLDIR', realpath(dirname(__FILE__) . '/..'));
-define('STATUSNET', true);
+define('GNUSOCIAL', true);
+define('STATUSNET', true);  // compatibility
 
 require_once INSTALLDIR . '/lib/common.php';
 
@@ -100,7 +101,7 @@ class ActivityParseTests extends PHPUnit_Framework_TestCase
         $this->assertEquals('http://example.net/notice/12', $act->context->replyToID);
         $this->assertEquals('http://example.net/notice/12', $act->context->replyToUrl);
         $this->assertEquals('http://example.net/conversation/11', $act->context->conversation);
-        $this->assertEquals(array('http://example.net/user/1'), $act->context->attention);
+        $this->assertEquals(array('http://example.net/user/1'), array_keys($act->context->attention));
 
         $this->assertFalse(empty($act->objects[0]));
         $this->assertEquals($act->objects[0]->content,
@@ -532,7 +533,7 @@ $_example4 = <<<EXAMPLE4
  <link rel="related" href="http://example.net/notice/12"/>
  <thr:in-reply-to ref="http://example.net/notice/12" href="http://example.net/notice/12"></thr:in-reply-to>
  <link rel="ostatus:conversation" href="http://example.net/conversation/11"/>
- <link rel="ostatus:attention" href="http://example.net/user/1"/>
+ <link rel="mentioned" href="http://example.net/user/1"/>
  <content type="html">@&lt;span class=&quot;vcard&quot;&gt;&lt;a href=&quot;http://example.net/user/1&quot; class=&quot;url&quot;&gt;&lt;span class=&quot;fn nickname&quot;&gt;evan&lt;/span&gt;&lt;/a&gt;&lt;/span&gt; now is the time for all good men to come to the aid of their country. #&lt;span class=&quot;tag&quot;&gt;&lt;a href=&quot;http://example.net/tag/thetime&quot; rel=&quot;tag&quot;&gt;thetime&lt;/a&gt;&lt;/span&gt;</content>
  <category term="thetime"></category>
 </entry>
@@ -909,7 +910,6 @@ $_example10 = <<<EXAMPLE10
   </poco:urls>
  </author>
  <link rel="ostatus:conversation" href="http://lazarus.local/mublog/conversation/1131"/>
- <link rel="ostatus:attention" href="http://lazarus.local/mublog/group/22/id"/>
  <link rel="mentioned" href="http://lazarus.local/mublog/group/22/id"/>
  <category term="grouptest316173"></category>
  <source>

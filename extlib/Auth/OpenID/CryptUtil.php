@@ -20,7 +20,7 @@ if (!defined('Auth_OpenID_RAND_SOURCE')) {
      * The filename for a source of random bytes. Define this yourself
      * if you have a different source of randomness.
      */
-    define('Auth_OpenID_RAND_SOURCE', null);
+    define('Auth_OpenID_RAND_SOURCE', '/dev/urandom');
 }
 
 class Auth_OpenID_CryptUtil {
@@ -103,6 +103,20 @@ class Auth_OpenID_CryptUtil {
         }
 
         return $str;
+    }
+
+    static function constEq($s1, $s2)
+    {
+        if (strlen($s1) != strlen($s2)) {
+            return false;
+        }
+
+        $result = true;
+        $length = strlen($s1);
+        for ($i = 0; $i < $length; $i++) {
+            $result &= ($s1[$i] == $s2[$i]);
+        }
+        return $result;
     }
 }
 

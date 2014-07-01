@@ -4,47 +4,51 @@ Prerequisites
 The following software packages are *required* for this software to
 run correctly.
 
-- PHP 5.2.3+. It may be possible to run this software on earlier
-  versions of PHP, but many of the functions used are only available
-  in PHP 5.2 or above. 5.2.6 or later is needed for XMPP background
-  daemons on 64-bit platforms. PHP 5.3.x should work correctly in this
-  release, but problems with some plugins are possible.
-- MySQL 5.x. The StatusNet database is stored, by default, in a MySQL
-  server. It has been primarily tested on 5.x servers, although it may
-  be possible to install on earlier (or later!) versions. The server
-  *must* support the MyISAM storage engine -- the default for most
-  MySQL servers -- *and* the InnoDB storage engine.
-- A Web server. Preferably, you should have Apache 2.2.x with the
-  mod_rewrite extension installed and enabled.
+- PHP 5.3.2+    For newer versions, some functions that are used may be
+                disabled by default, such as the pcntl_* family. See the
+                section on 'Queues and daemons' for more information.
+- MariaDB 5.x   GNU Social uses, by default, a MariaDB server for data
+                storage. Versions 5.x and 10.x have both reportedly
+                worked well. It is also possible to run MySQL 5.x.
+- Web server    Apache, lighttpd and nginx will all work. CGI mode is
+                recommended and also some variant of 'suexec' (or a
+                proper setup php-fpm pool)
+                NOTE: mod_rewrite or its equivalent is extremely useful.
 
-Your PHP installation must include the following PHP extensions:
+Your PHP installation must include the following PHP extensions for a
+functional setup of GNU Social:
 
-- Curl. This is for fetching files by HTTP.
-- XMLWriter. This is for formatting XML and HTML output.
-- MySQL. For accessing the database.
-- GD. For scaling down avatar images.
-- mbstring. For handling Unicode (UTF-8) encoded strings.
+- Curl          Fetching files by HTTP.
+- XMLWriter     For formatting XML and HTML output.
+- mysqlnd       The native driver for PHP5 MariaDB connections. If you
+                use MySQL, 'mysql' or 'mysqli' may work.
+- GD            Image manipulation (scaling).
+- mbstring      For handling Unicode (UTF-8) encoded strings.
+- bcmath or gmp For Salmon signatures (part of OStatus)
+
+Better performance
+------------------
 
 For some functionality, you will also need the following extensions:
 
-- Memcache. A client for the memcached server, which caches database
-  information in volatile memory. This is important for adequate
-  performance on high-traffic sites. You will also need a memcached
-  server to store the data in.
-- Mailparse. Efficient parsing of email requires this extension.
-  Submission by email or SMS-over-email uses this extension.
-- Sphinx Search. A client for the sphinx server, an alternative
-  to MySQL or Postgresql fulltext search. You will also need a
-  Sphinx server to serve the search queries.
-- bcmath or gmp. For Salmon signatures (part of OStatus). Needed
-  if you have OStatus configured.
-- gettext. For multiple languages. Default on many PHP installs;
-  will be emulated if not present.
+- memcache      A client for the memcached server, which caches database
+                information in volatile memory. This is important for
+                adequate performance on high-traffic sites. You will
+                also need a memcached server to store the data in.
+- mailparse     Efficient parsing of email requires this extension.
+                Submission by email or SMS-over-email uses this.
+- sphinx        A client for the sphinx server, an alternative to MySQL
+                or Postgresql fulltext search. You will also need a
+                Sphinx server to serve the search queries.
+- gettext       For multiple languages. Default on many PHP installs;
+                will be emulated if not present.
 
-You will almost definitely get 2-3 times better performance from your
-site if you install a PHP bytecode cache/accelerator. Some well-known
-examples are: eaccelerator, Turck mmcache, xcache, apc. Zend Optimizer
-is a proprietary accelerator installed on some hosting sites.
+You may also experience better performance from your site if you install
+a PHP bytecode cache/accelerator. Currently the recommended cache module
+is 'xcache', which after installation (php5-xcache) can be enabled in
+your site's config.php with:
+
+    addPlugin('XCache');
 
 External libraries
 ------------------
@@ -58,16 +62,10 @@ and the URLs are listed here for your convenience.
 
 - DB_DataObject http://pear.php.net/package/DB_DataObject
 - Validate http://pear.php.net/package/Validate
-- OpenID from OpenIDEnabled (not the PEAR version!). We decided
-  to use the openidenabled.com version since it's more widely
-  implemented, and seems to be better supported.
-  http://openidenabled.com/php-openid/
+- OpenID by Janrain, http://janrain.com/openid-enabled/
 - PEAR DB. Although this is an older data access system (new
-  packages should probably use PHP DBO), the OpenID libraries
-  depend on PEAR DB so we use it here, too. DB_DataObject can
-  also use PEAR MDB2, which may give you better performance
-  but won't work with OpenID.
-  http://pear.php.net/package/DB
+  packages should use PDO), the OpenID libraries depend on PEAR DB
+  or MDB2.
 - OAuth.php from http://oauth.googlecode.com/svn/code/php/
 - markdown.php from http://michelf.com/projects/php-markdown/
 - PEAR Mail, for sending out mail notifications
@@ -90,25 +88,25 @@ and the URLs are listed here for your convenience.
 - HTTP_Request2, a library for making HTTP requests.
 - PEAR Net_URL2 is an HTTP_Request2 dependency.
 
-A design goal of StatusNet is that the basic Web functionality should
+A design goal of GNU Social is that the basic Web functionality should
 work on even the most restrictive commercial hosting services.
-However, additional functionality, such as receiving messages by
-Jabber/GTalk, require that you be able to run long-running processes
-on your account. In addition, posting by email or from SMS require
-that you be able to install a mail filter in your mail server.
+However, additional functionality, such as receiving messages by XMPP,
+require that you be able to run long-running processes on your account.
+In addition, posting by email require that you be able to install a mail
+filter in your mail server.
 
 Installation
 ============
 
-Installing the basic StatusNet Web component is relatively easy,
-especially if you've previously installed PHP/MySQL packages.
+Installing the basic GNU Social web component is relatively easy,
+especially if you've previously installed PHP/MariaDB packages.
 
 1. Unpack the tarball you downloaded on your Web server. Usually a
    command like this will work:
 
-       tar zxf statusnet-1.0.1.tar.gz
+       tar zxf gnusocial-*.tar.gz
 
-   ...which will make a statusnet-1.0.1 subdirectory in your current
+   ...which will make a gnusocial-x.y.z subdirectory in your current
    directory. (If you don't have shell access on your Web server, you
    may have to unpack the tarball on your local computer and FTP the
    files to the server.)
@@ -116,125 +114,123 @@ especially if you've previously installed PHP/MySQL packages.
 2. Move the tarball to a directory of your choosing in your Web root
    directory. Usually something like this will work:
 
-       mv statusnet-1.0.1 /var/www/statusnet
+       mv gnusocial-x.y.z /var/www/gnusocial
 
-   This will make your StatusNet instance available in the statusnet path of
-   your server, like "http://example.net/statusnet". "microblog" or
-   "statusnet" might also be good path names. If you know how to
-   configure virtual hosts on your web server, you can try setting up
-   "http://micro.example.net/" or the like.
+   This will often make your GNU Social instance available in the gnusocial
+   path of your server, like "http://example.net/gnusocial". "social" or
+   "blog" might also be good path names. If you know how to configure 
+   virtual hosts on your web server, you can try setting up
+   "http://social.example.net/" or the like.
+
+   If you have "rewrite" support on your webserver, and you should,
+   then please enable this in order to make full use of your site. This
+   will enable "Fancy URL" support, which you can read more about if you
+   scroll down a bit in this document.
 
 3. Make your target directory writeable by the Web server.
 
-       chmod a+w /var/www/statusnet/
+       chmod a+w /var/www/gnusocial/
 
    On some systems, this will probably work:
 
-       chgrp www-data /var/www/statusnet/
-       chmod g+w /var/www/statusnet/
+       chgrp www-data /var/www/gnusocial/
+       chmod g+w /var/www/gnusocial/
 
    If your Web server runs as another user besides "www-data", try
    that user's default group instead. As a last resort, you can create
-   a new group like "statusnet" and add the Web server's user to the group.
+   a new group like "gnusocial" and add the Web server's user to the group.
 
 4. You should also take this moment to make your avatar, background, and
    file subdirectories writeable by the Web server. An insecure way to do
    this is:
 
-       chmod a+w /var/www/statusnet/avatar
-       chmod a+w /var/www/statusnet/background
-       chmod a+w /var/www/statusnet/file
+       chmod a+w /var/www/gnusocial/avatar
+       chmod a+w /var/www/gnusocial/background
+       chmod a+w /var/www/gnusocial/file
 
    You can also make the avatar, background, and file directories
    writeable by the Web server group, as noted above.
 
-5. Create a database to hold your microblog data. Something like this
+5. Create a database to hold your site data. Something like this
    should work:
 
-       mysqladmin -u "username" --password="password" create statusnet
+       mysqladmin -u "root" --password="rootpassword" create gnusocial
 
-   Note that StatusNet must have its own database; you can't share the
-   database with another program. You can name it whatever you want,
+   Note that GNU Social should have its own database; you should not share
+   the database with another program. You can name it whatever you want,
    though.
 
    (If you don't have shell access to your server, you may need to use
-   a tool like PHPAdmin to create a database. Check your hosting
-   service's documentation for how to create a new MySQL database.)
+   a tool like phpMyAdmin to create a database. Check your hosting
+   service's documentation for how to create a new MariaDB database.)
 
-6. Create a new database account that StatusNet will use to access the
+6. Create a new database account that GNU Social will use to access the
    database. If you have shell access, this will probably work from the
-   MySQL shell:
+   MariaDB shell:
 
-       GRANT ALL on statusnet.*
-       TO 'statusnetuser'@'localhost'
-       IDENTIFIED BY 'statusnetpassword';
+       GRANT ALL on gnusocial.*
+       TO 'gnusocial'@'localhost'
+       IDENTIFIED BY 'agoodpassword';
 
-   You should change 'statusnetuser' and 'statusnetpassword' to your preferred new
-   username and password. You may want to test logging in to MySQL as
-   this new user.
+   You should change the user identifier 'gnusocial' and 'agoodpassword'
+   to your preferred new database username and password. You may want to
+   test logging in to MariaDB as this new user.
 
-7. In a browser, navigate to the StatusNet install script; something like:
+7. In a browser, navigate to the GNU Social install script; something like:
 
-       http://yourserver.example.com/statusnet/install.php
+       http://social.example.net/install.php
 
    Enter the database connection information and your site name. The
    install program will configure your site and install the initial,
    almost-empty database.
 
-8. You should now be able to navigate to your microblog's main directory
-   and see the "Public Timeline", which will be empty. If not, magic
-   has happened! You can now register a new user, post some notices,
-   edit your profile, etc. However, you may want to wait to do that stuff
-   if you think you can set up "fancy URLs" (see below), since some
-   URLs are stored in the database.
+8. You should now be able to navigate to your social site's main directory
+   and see the "Public Timeline", which will probably be empty. You can
+   now register new user, post some notices, edit your profile, etc.
 
 Fancy URLs
 ----------
 
-By default, StatusNet will use URLs that include the main PHP program's
-name in them. For example, a user's home profile might be
-found at:
+By default, GNU Social will use URLs that include the main PHP program's
+name in them. For example, a user's home profile might be found at:
 
-    http://example.org/statusnet/index.php/statusnet/fred
+    http://example.net/gnusocial/index.php/gnusocial/fred
 
 On certain systems that don't support this kind of syntax, they'll
 look like this:
 
-    http://example.org/statusnet/index.php?p=statusnet/fred
+    http://example.net/gnusocial/index.php?p=gnusocial/fred
 
 It's possible to configure the software so it looks like this instead:
 
-    http://example.org/statusnet/fred
+    http://example.net/gnusocial/fred
 
 These "fancy URLs" are more readable and memorable for users. To use
 fancy URLs, you must either have Apache 2.x with .htaccess enabled and
 mod_rewrite enabled, -OR- know how to configure "url redirection" in
-your server.
+your server (like lighttpd or nginx).
 
 1. Copy the htaccess.sample file to .htaccess in your StatusNet
-   directory. Note: if you have control of your server's httpd.conf or
-   similar configuration files, it can greatly improve performance to
-   import the .htaccess file into your conf file instead. If you're
-   not sure how to do it, you may save yourself a lot of headache by
-   just leaving the .htaccess file.
+   directory.
 
 2. Change the "RewriteBase" in the new .htaccess file to be the URL path
-   to your StatusNet installation on your server. Typically this will
-   be the path to your StatusNet directory relative to your Web root.
+   to your GNU Social installation on your server. Typically this will
+   be the path to your GNU Social directory relative to your Web root.
+   If you are installing it in the root directory, leave it as '/'.
 
-3. Add or uncomment or change a line in your config.php file so it says:
+3. Add, uncomment or change a line in your config.php file so it says:
 
        $config['site']['fancy'] = true;
 
 You should now be able to navigate to a "fancy" URL on your server,
 like:
 
-    http://example.net/statusnet/main/register
+    http://example.net/gnusocial/main/register
 
 If you changed your HTTP server configuration, you may need to restart
 the server first.
 
-If it doesn't work, double-check that AllowOverride for the StatusNet
+If it doesn't work, double-check that AllowOverride for the GNU Social
 directory is 'All' in your Apache configuration file. This is usually
 /etc/httpd.conf, /etc/apache/httpd.conf, or (on Debian and Ubuntu)
 /etc/apache2/sites-available/default. See the Apache documentation for
@@ -382,6 +378,18 @@ server is probably a good idea for high-volume sites.
 1. You'll need the "CLI" (command-line interface) version of PHP
    installed on whatever server you use.
 
+   Modern PHP versions in some operating systems have disabled functions
+   related to forking, which is required for daemons to operate. To make
+   this work, make sure that your php-cli config (/etc/php5/cli/php.ini)
+   does NOT have these functions listed under 'disable_functions':
+
+       * pcntl_fork, pcntl_wait, pcntl_wifexited, pcntl_wexitstatus,
+         pcntl_wifsignaled, pcntl_wtermsig
+
+   Other recommended settings for optimal performance are:
+       * mysqli.allow_persistent = On
+       * mysqli.reconnect = On
+
 2. If you're using a separate server for queues, install StatusNet
    somewhere on the server. You don't need to worry about the
    .htaccess file, but make sure that your config.php file is close
@@ -403,30 +411,27 @@ This will run the queue handlers:
 
 * queuedaemon.php - polls for queued items for inbox processing and
   pushing out to OStatus, SMS, XMPP, etc.
-* xmppdaemon.php - listens for new XMPP messages from users and stores
-  them as notices in the database; also pulls queued XMPP output from
-  queuedaemon.php to push out to clients.
+* imdaemon.php - if an IM plugin is enabled (like XMPP)
+* other daemons that you may have enabled
 
-These two daemons will automatically restart in most cases of failure
+These daemons will automatically restart in most cases of failure
 including memory leaks (if a memory_limit is set), but may still die
 or behave oddly if they lose connections to the XMPP or queue servers.
-
-Additional daemons may be also started by this script for certain
-plugins, such as the Twitter bridge.
 
 It may be a good idea to use a daemon-monitoring service, like 'monit',
 to check their status and keep them running.
 
 All the daemons write their process IDs (pids) to /var/run/ by
 default. This can be useful for starting, stopping, and monitoring the
-daemons.
+daemons. If you are running multiple sites on the same machine, it will
+be necessary to avoid collisions of these PID files by setting a site-
+specific directory in config.php:
 
-Since version 0.8.0, it's now possible to use a STOMP server instead of
-our kind of hacky home-grown DB-based queue solution. This is strongly
-recommended for best response time, especially when using XMPP.
+       $config['daemon']['piddir'] = __DIR__ . '/../run/';
 
-See the "queues" config section below for how to configure to use STOMP.
-As of this writing, the software has been tested with ActiveMQ 5.3.
+It is also possible to use a STOMP server instead of our kind of hacky
+home-grown DB-based queue solution. This is strongly recommended for
+best response time, especially when using XMPP.
 
 Themes
 ------

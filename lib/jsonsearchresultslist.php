@@ -217,7 +217,7 @@ class ResultItem
         $replier_profile = null;
 
         if ($this->notice->reply_to) {
-            $reply = Notice::staticGet(intval($this->notice->reply_to));
+            $reply = Notice::getKV(intval($this->notice->reply_to));
             if ($reply) {
                 $replier_profile = $reply->getProfile();
             }
@@ -232,16 +232,11 @@ class ResultItem
         $this->id           = $this->notice->id;
         $this->from_user_id = $this->profile->id;
 
-        $user = User::staticGet('id', $this->profile->id);
-
-        $this->iso_language_code = $user->language;
-
+        $this->iso_language_code = Profile_prefs::getConfigData($this->profile, 'site', 'language');
+        
         $this->source = $this->getSourceLink($this->notice->source);
 
-        $avatar = $this->profile->getAvatar(AVATAR_STREAM_SIZE);
-
-        $this->profile_image_url = ($avatar) ?
-            $avatar->displayUrl() : Avatar::defaultImage(AVATAR_STREAM_SIZE);
+        $this->profile_image_url = $this->profile->avatarUrl(AVATAR_STREAM_SIZE);
 
         $this->created_at = common_date_rfc2822($this->notice->created);
     }
@@ -268,7 +263,7 @@ class ResultItem
         case 'api':
             break;
         default:
-            $ns = Notice_source::staticGet($source);
+            $ns = Notice_source::getKV($source);
             if ($ns) {
                 $source_name = '<a href="' . $ns->url . '">' . $ns->name . '</a>';
             }

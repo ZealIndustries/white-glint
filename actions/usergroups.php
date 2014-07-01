@@ -88,7 +88,7 @@ class UsergroupsAction extends ProfileAction
             return false;
         }
 
-        $this->user = User::staticGet('nickname', $nickname);
+        $this->user = User::getKV('nickname', $nickname);
 
         if (!$this->user) {
             // TRANS: Client error displayed requesting groups for a non-existing user.
@@ -137,17 +137,15 @@ class UsergroupsAction extends ProfileAction
 
             $groups = $this->user->getGroups($offset, $limit);
 
-            if ($groups) {
+            if ($groups instanceof User_group) {
                 $gl = new GroupList($groups, $this->user, $this);
                 $cnt = $gl->show();
-                if (0 == $cnt) {
-                    $this->showEmptyListMessage();
-                }
-            }
-
-            $this->pagination($this->page > 1, $cnt > GROUPS_PER_PAGE,
+                $this->pagination($this->page > 1, $cnt > GROUPS_PER_PAGE,
                               $this->page, 'usergroups',
                               array('nickname' => $this->user->nickname));
+            } else {
+                $this->showEmptyListMessage();
+            }
 
             Event::handle('EndShowUserGroupsContent', array($this));
         }

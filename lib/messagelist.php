@@ -94,8 +94,6 @@ abstract class MessageList extends Widget
             $this->out->elementEnd('ul');
 
             $this->out->elementEnd('div');
-			
-			return $cnt;
     }
 
     /**

@@ -83,7 +83,7 @@ class RegisterAction extends Action
         }
 
         if (!empty($this->code)) {
-            $this->invite = Invitation::staticGet('code', $this->code);
+            $this->invite = Invitation::getKV('code', $this->code);
             if (empty($this->invite)) {
             // TRANS: Client error displayed when trying to register to an invite-only site without a valid invitation.
                 $this->clientError(_('Sorry, invalid invitation code.'));
@@ -181,7 +181,7 @@ class RegisterAction extends Action
             $code = $this->trimmed('code');
 
             if ($code) {
-                $invite = Invitation::staticGet($code);
+                $invite = Invitation::getKV($code);
             }
 
             if (common_config('site', 'inviteonly') && !($code && $invite)) {
@@ -192,9 +192,10 @@ class RegisterAction extends Action
 
             // Input scrubbing
             try {
-                $nickname = Nickname::normalize($nickname);
+                $nickname = Nickname::normalize($nickname, true);
             } catch (NicknameException $e) {
                 $this->showForm($e->getMessage());
+                return;
             }
             $email    = common_canonical_email($email);
 
@@ -205,26 +206,16 @@ class RegisterAction extends Action
             } else if ($email && !Validate::email($email, common_config('email', 'check_domain'))) {
                 // TRANS: Form validation error displayed when trying to register without a valid e-mail address.
                 $this->showForm(_('Not a valid email address.'));
-            } else if ($this->nicknameExists($nickname)) {
-                // TRANS: Form validation error displayed when trying to register with an existing nickname.
-                $this->showForm(_('Nickname already in use. Try another one.'));
-            } else if (!User::allowed_nickname($nickname)) {
-                // TRANS: Form validation error displayed when trying to register with an invalid nickname.
-                $this->showForm(_('Not a valid nickname.'));
             } else if ($this->emailExists($email)) {
                 // TRANS: Form validation error displayed when trying to register with an already registered e-mail address.
                 $this->showForm(_('Email address already exists.'));
             } else if (!is_null($homepage) && (strlen($homepage) > 0) &&
-                       !Validate::uri($homepage,
-                                      array('allowed_schemes' =>
-                                            array('http', 'https')))) {
+                       !common_valid_http_url($homepage)) {
                 // TRANS: Form validation error displayed when trying to register with an invalid homepage URL.
                 $this->showForm(_('Homepage is not a valid URL.'));
-                return;
             } else if (!is_null($fullname) && mb_strlen($fullname) > 255) {
                 // TRANS: Form validation error displayed when trying to register with a too long full name.
                 $this->showForm(_('Full name is too long (maximum 255 characters).'));
-                return;
             } else if (Profile::bioTooLong($bio)) {
                 // TRANS: Form validation error on registration page when providing too long a bio text.
                 // TRANS: %d is the maximum number of characters for bio; used for plural.
@@ -232,21 +223,15 @@ class RegisterAction extends Action
                                            'Bio is too long (maximum %d characters).',
                                            Profile::maxBio()),
                                         Profile::maxBio()));
-                return;
             } else if (!is_null($location) && mb_strlen($location) > 255) {
                 // TRANS: Form validation error displayed when trying to register with a too long location.
                 $this->showForm(_('Location is too long (maximum 255 characters).'));
-                return;
             } else if (strlen($password) < 6) {
                 // TRANS: Form validation error displayed when trying to register with too short a password.
                 $this->showForm(_('Password must be 6 or more characters.'));
-                return;
             } else if ($password != $confirm) {
                 // TRANS: Form validation error displayed when trying to register with non-matching passwords.
                 $this->showForm(_('Passwords do not match.'));
-            } else if (strlen(trim($email)) < 1) {
-                $this->showForm(_('An email address is required.'));
-                return;
             } else if ($user = User::register(array('nickname' => $nickname,
                                                     'password' => $password,
                                                     'email' => $email,
@@ -255,7 +240,7 @@ class RegisterAction extends Action
                                                     'bio' => $bio,
                                                     'location' => $location,
                                                     'code' => $code))) {
-                if (!$user) {
+                if (!($user instanceof User)) {
                     // TRANS: Form validation error displayed when trying to register with an invalid username or password.
                     $this->showForm(_('Invalid username or password.'));
                     return;
@@ -264,9 +249,7 @@ class RegisterAction extends Action
                 if (!common_set_user($user)) {
                     // TRANS: Server error displayed when saving fails during user registration.
                     $this->serverError(_('Error setting user.'));
-                    return;
                 }
-
                 // this is a real login
                 common_real_login(true);
                 if ($this->boolean('rememberme')) {
@@ -288,21 +271,6 @@ class RegisterAction extends Action
     }
 
     /**
-     * Does the given nickname already exist?
-     *
-     * Checks a canonical nickname against the database.
-     *
-     * @param string $nickname nickname to check
-     *
-     * @return boolean true if the nickname already exists
-     */
-    function nicknameExists($nickname)
-    {
-        $user = User::staticGet('nickname', $nickname);
-        return is_object($user);
-    }
-
-    /**
      * Does the given email address already exist?
      *
      * Checks a canonical email address against the database.
@@ -317,7 +285,7 @@ class RegisterAction extends Action
         if (!$email || strlen($email) == 0) {
             return false;
         }
-        $user = User::staticGet('email', $email);
+        $user = User::getKV('email', $email);
         return is_object($user);
     }
 
@@ -413,7 +381,7 @@ class RegisterAction extends Action
         $invite = null;
 
         if ($code) {
-            $invite = Invitation::staticGet($code);
+            $invite = Invitation::getKV($code);
         }
 
         if (common_config('site', 'inviteonly') && !($code && $invite)) {
@@ -597,15 +565,6 @@ class RegisterAction extends Action
     function showSuccess()
     {
         $this->registered = true;
-	
-		// Redirect to custom welcome page
-		if(class_exists('WelcomeAction')) {
-			common_redirect(common_local_url('welcome'), 303);
-		}
-		else if(file_exists(INSTALLDIR . '/doc-src/welcome')) {
-			common_redirect(common_local_url('doc', array('title' => 'welcome')), 303);
-		}
-
         $this->showPage();
     }
 

@@ -80,39 +80,7 @@ class BookmarkPlugin extends MicroAppPlugin
     {
         $schema = Schema::get();
 
-        // For storing user-submitted flags on profiles
-
-        $schema->ensureTable('bookmark',
-                             array(new ColumnDef('id',
-                                                 'char',
-                                                 36,
-                                                 false,
-                                                 'PRI'),
-                                   new ColumnDef('profile_id',
-                                                 'integer',
-                                                 null,
-                                                 false,
-                                                 'MUL'),
-                                   new ColumnDef('url',
-                                                 'varchar',
-                                                 255,
-                                                 false,
-                                                 'MUL'),
-                                   new ColumnDef('title',
-                                                 'varchar',
-                                                 255),
-                                   new ColumnDef('description',
-                                                 'text'),
-                                   new ColumnDef('uri',
-                                                 'varchar',
-                                                 255,
-                                                 false,
-                                                 'UNI'),
-                                   new ColumnDef('created',
-                                                 'datetime',
-                                                 null,
-                                                 false,
-                                                 'MUL')));
+        $schema->ensureTable('bookmark', Bookmark::schemaDef());
 
         return true;
     }
@@ -123,52 +91,17 @@ class BookmarkPlugin extends MicroAppPlugin
      * @param Action $action the action being run
      *
      * @return boolean hook value
-     *//*
+     */
     function onEndShowStyles($action)
     {
         $action->cssLink($this->path('bookmark.css'));
         return true;
-    }*/
-/*
+    }
+
     function onEndShowScripts($action)
     {
         $action->script($this->path('js/bookmark.js'));
         return true;
-    }*/
-    /**
-     * Load related modules when needed
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value; true means continue processing, false means stop.
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'ShowbookmarkAction':
-        case 'NewbookmarkAction':
-        case 'BookmarkpopupAction':
-        case 'NoticebyurlAction':
-        case 'BookmarkforurlAction':
-        case 'ImportdeliciousAction':
-            include_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'Bookmark':
-            include_once $dir.'/'.$cls.'.php';
-            return false;
-        case 'BookmarkListItem':
-        case 'BookmarkForm':
-        case 'InitialBookmarkForm':
-        case 'DeliciousBackupImporter':
-        case 'DeliciousBookmarkImporter':
-            include_once $dir.'/'.strtolower($cls).'.php';
-            return false;
-        default:
-            return true;
-        }
     }
 
     /**
@@ -180,6 +113,26 @@ class BookmarkPlugin extends MicroAppPlugin
      */
     function onRouterInitialized($m)
     {
+        if (common_config('singleuser', 'enabled')) {
+            $nickname = User::singleUserNickname();
+            $m->connect('bookmarks',
+                        array('action' => 'bookmarks', 'nickname' => $nickname));
+            $m->connect('bookmarks/rss',
+                        array('action' => 'bookmarksrss', 'nickname' => $nickname));
+        } else {
+            $m->connect(':nickname/bookmarks',
+                        array('action' => 'bookmarks'),
+                        array('nickname' => Nickname::DISPLAY_FMT));
+            $m->connect(':nickname/bookmarks/rss',
+                        array('action' => 'bookmarksrss'),
+                        array('nickname' => Nickname::DISPLAY_FMT));
+        }
+
+        $m->connect('api/bookmarks/:id.:format',
+                    array('action' => 'ApiTimelineBookmarks',
+                          'id' => Nickname::INPUT_FMT,
+                          'format' => '(xml|json|rss|atom|as)'));
+
         $m->connect('main/bookmark/new',
                     array('action' => 'newbookmark'),
                     array('id' => '[0-9]+'));
@@ -230,11 +183,13 @@ class BookmarkPlugin extends MicroAppPlugin
     {
         $versions[] = array('name' => 'Bookmark',
                             'version' => self::VERSION,
-                            'author' => 'Evan Prodromou',
+                            'author' => 'Evan Prodromou, Stephane Berube, Jean Baptiste Favre',
                             'homepage' => 'http://status.net/wiki/Plugin:Bookmark',
                             'description' =>
                             // TRANS: Plugin description.
-                            _m('Simple extension for supporting bookmarks.'));
+                            _m('Simple extension for supporting bookmarks. ') .
+                            'BookmarkList feature has been developped by Stephane Berube. ' .
+                            'Integration has been done by Jean Baptiste Favre.');
         return true;
     }
 
@@ -313,6 +268,41 @@ class BookmarkPlugin extends MicroAppPlugin
 	                                        
 	    Event::handle('EndOpenNoticeListItemElement', array($nli));
 	    return false;
+    }
+
+    /**
+     * Modify the default menu to link to our custom action
+     *
+     * Using event handlers, it's possible to modify the default UI for pages
+     * almost without limit. In this method, we add a menu item to the default
+     * primary menu for the interface to link to our action.
+     *
+     * The Action class provides a rich set of events to hook, as well as output
+     * methods.
+     *
+     * @param Action $action The current action handler. Use this to
+     * do any output.
+     *
+     * @return boolean hook value; true means continue processing, false means stop.
+     *
+     * @see Action
+     */
+    function onEndPersonalGroupNav($action)
+    {
+        $this->user = common_current_user();
+
+        if (!$this->user) {
+            // TRANS: Client error displayed when trying to display bookmarks for a non-existing user.
+            $this->clientError(_('No such user.'));
+            return false;
+        }
+
+        $action->menuItem(common_local_url('bookmarks', array('nickname' => $this->user->nickname)),
+                          // TRANS: Menu item in sample plugin.
+                          _m('Bookmarks'),
+                          // TRANS: Menu item title in sample plugin.
+                          _m('A list of your bookmarks'), false, 'nav_timeline_bookmarks');
+        return true;
     }
 
     /**
@@ -428,19 +418,19 @@ class BookmarkPlugin extends MicroAppPlugin
             }
         }
 
-        $replies = $activity->context->attention;
-
         $options['groups']  = array();
-        $options['replies'] = array();
+        $options['replies'] = array();  // TODO: context->attention
 
-        foreach ($replies as $replyURI) {
-            $other = Profile::fromURI($replyURI);
-            if (!empty($other)) {
-                $options['replies'][] = $replyURI;
+        foreach ($activity->context->attention as $attnUrl=>$type) {
+            $other = Profile::fromURI($attnUrl);
+            if ($other instanceof Profile) {
+                $options['replies'][] = $attnUrl;
             } else {
-                $group = User_group::staticGet('uri', $replyURI);
-                if (!empty($group)) {
-                    $options['groups'][] = $replyURI;
+                // Maybe we can get rid of this since every User_group got a Profile?
+                // TODO: Make sure the above replies get sorted properly for groups (or handled afterwards)
+                $group = User_group::getKV('uri', $attnUrl);
+                if ($group instanceof User_group) {
+                    $options['groups'][] = $attnUrl;
                 }
             }
         }
@@ -449,7 +439,7 @@ class BookmarkPlugin extends MicroAppPlugin
         // @fixme what about conversation ID?
 
         if (!empty($activity->context->replyToID)) {
-            $orig = Notice::staticGet('uri',
+            $orig = Notice::getKV('uri',
                                       $activity->context->replyToID);
             if (!empty($orig)) {
                 $options['reply_to'] = $orig->id;
@@ -536,13 +526,9 @@ class BookmarkPlugin extends MicroAppPlugin
         return new BookmarkListItem($nli);
     }
 
-    function entryForm($out, $options=array())
+    function entryForm($out)
     {
-        //return new InitialBookmarkForm($out);
-		$b = new BookmarkForm($out);
-		if(isset($options['to_group']))
-			$b->to_group = $options['to_group'];
-		return $b;
+        return new InitialBookmarkForm($out);
     }
 
     function tag()
@@ -575,5 +561,21 @@ class BookmarkPlugin extends MicroAppPlugin
             $notice->object_type = ActivityObject::BOOKMARK;
             $notice->update($original);
         }
+    }
+
+    public function activityObjectOutputJson(ActivityObject $obj, array &$out)
+    {
+        assert($obj->type == ActivityObject::BOOKMARK);
+
+        $bm = Bookmark::getKV('uri', $obj->id);
+
+        if (empty($bm)) {
+            throw new ServerException("Unknown bookmark: " . $obj->id);
+        }
+
+        $out['displayName'] = $bm->title;
+        $out['targetUrl']   = $bm->url;
+
+        return true;
     }
 }

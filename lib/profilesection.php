@@ -52,19 +52,19 @@ class ProfileSection extends Section
     {
         $profiles = $this->getProfiles();
 
-        if (!$profiles) {
+        if (!$profiles->N) {
             return false;
         }
 
         $cnt = 0;
 
-        $this->out->elementStart('ol', 'notices');
-
+        $this->out->elementStart('table');
+        $this->out->elementStart('tbody');
         while ($profiles->fetch() && ++$cnt <= PROFILES_PER_SECTION) {
             $this->showProfile($profiles);
         }
-
-        $this->out->elementEnd('ol');
+        $this->out->elementEnd('tbody');
+        $this->out->elementEnd('table');
 
         return ($cnt > PROFILES_PER_SECTION);
     }
@@ -76,8 +76,8 @@ class ProfileSection extends Section
 
     function showProfile($profile)
     {
-        $this->out->elementStart('li', 'notice');
-        $this->out->elementStart('div', 'entry-title');
+        $this->out->elementStart('tr');
+        $this->out->elementStart('td');
         $this->out->elementStart('span', 'vcard');
         $this->out->elementStart('a', array('title' => ($profile->fullname) ?
                                        $profile->fullname :
@@ -86,8 +86,8 @@ class ProfileSection extends Section
                                        'rel' => 'contact member',
                                        'class' => 'url'));
         $this->out->text(' ');
-        $avatar = $profile->getAvatar(AVATAR_MINI_SIZE);
-        $this->out->element('img', array('src' => (($avatar) ? $avatar->displayUrl() :  Avatar::defaultImage(AVATAR_MINI_SIZE)),
+        $avatarUrl = $profile->avatarUrl(AVATAR_MINI_SIZE);
+        $this->out->element('img', array('src' => $avatarUrl,
                                     'width' => AVATAR_MINI_SIZE,
                                     'height' => AVATAR_MINI_SIZE,
                                     'class' => 'avatar photo',
@@ -98,7 +98,11 @@ class ProfileSection extends Section
         $this->out->element('span', 'fn nickname', $profile->nickname);
         $this->out->elementEnd('a');
         $this->out->elementEnd('span');
-        $this->out->elementEnd('div');
-        $this->out->elementEnd('li');
+        $this->out->elementEnd('td');
+        if (isset($profile->value)) {
+            $this->out->element('td', 'value', $profile->value);
+        }
+
+        $this->out->elementEnd('tr');
     }
 }

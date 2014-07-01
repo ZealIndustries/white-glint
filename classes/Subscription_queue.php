@@ -14,14 +14,6 @@ class Subscription_queue extends Managed_DataObject
     public $subscribed;
     public $created;
 
-    /* Static get */
-    function staticGet($k,$v=null)
-    { return Memcached_DataObject::staticGet('Subscription_queue',$k,$v); }
-
-    /* Pkey get */
-    function pkeyGet($k)
-    { return Memcached_DataObject::pkeyGet('Subscription_queue',$k); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -70,8 +62,8 @@ class Subscription_queue extends Managed_DataObject
      */
     public function complete()
     {
-        $subscriber = Profile::staticGet('id', $this->subscriber);
-        $subscribed = Profile::staticGet('id', $this->subscribed);
+        $subscriber = Profile::getKV('id', $this->subscriber);
+        $subscribed = Profile::getKV('id', $this->subscribed);
         $sub = Subscription::start($subscriber, $subscribed, Subscription::FORCE);
         if ($sub) {
             $this->delete();
@@ -84,8 +76,8 @@ class Subscription_queue extends Managed_DataObject
      */
     public function abort()
     {
-        $subscriber = Profile::staticGet('id', $this->subscriber);
-        $subscribed = Profile::staticGet('id', $this->subscribed);
+        $subscriber = Profile::getKV('id', $this->subscriber);
+        $subscribed = Profile::getKV('id', $this->subscribed);
         if (Event::handle('StartCancelSubscription', array($subscriber, $subscribed))) {
             $this->delete();
             Event::handle('EndCancelSubscription', array($subscriber, $subscribed));
@@ -98,8 +90,8 @@ class Subscription_queue extends Managed_DataObject
      */
     public function notify()
     {
-        $other = Profile::staticGet('id', $this->subscriber);
-        $listenee = User::staticGet('id', $this->subscribed);
+        $other = Profile::getKV('id', $this->subscriber);
+        $listenee = User::getKV('id', $this->subscribed);
         mail_subscribe_pending_notify_profile($listenee, $other);
     }
 }

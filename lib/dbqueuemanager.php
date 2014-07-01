@@ -44,7 +44,7 @@ class DBQueueManager extends QueueManager
         $qi->created   = common_sql_now();
         $result        = $qi->insert();
 
-        if (!$result) {
+        if ($result === false) {
             common_log_db_error($qi, 'INSERT', __FILE__);
             throw new ServerException('DB error inserting queue item');
         }
@@ -71,35 +71,36 @@ class DBQueueManager extends QueueManager
      */
     public function poll()
     {
-        $this->_log(LOG_DEBUG, 'Checking for notices...');
+        //$this->_log(LOG_DEBUG, 'Checking for notices...');
         $qi = Queue_item::top($this->activeQueues());
         if (empty($qi)) {
-            $this->_log(LOG_DEBUG, 'No notices waiting; idling.');
+            //$this->_log(LOG_DEBUG, 'No notices waiting; idling.');
             return false;
         }
 
         $queue = $qi->transport;
-        $item = $this->decode($qi->frame);
+        try {
+            $item = $this->decode($qi->frame);
+        } catch (Exception $e) {
+            $this->_log(LOG_INFO, "[$queue] Discarding: ".$e->getMessage());
+            $this->_done($qi);
+            return true;
+        }
 
-        if ($item) {
-            $rep = $this->logrep($item);
-            $this->_log(LOG_INFO, "Got $rep for transport $queue");
-            
-            $handler = $this->getHandler($queue);
-            if ($handler) {
-                if ($handler->handle($item)) {
-                    $this->_log(LOG_INFO, "[$queue:$rep] Successfully handled item");
-                    $this->_done($qi);
-                } else {
-                    $this->_log(LOG_INFO, "[$queue:$rep] Failed to handle item");
-                    $this->_fail($qi);
-                }
-            } else {
-                $this->_log(LOG_INFO, "[$queue:$rep] No handler for queue $queue; discarding.");
+        $rep = $this->logrep($item);
+        $this->_log(LOG_DEBUG, "Got $rep for transport $queue");
+        
+        $handler = $this->getHandler($queue);
+        if ($handler) {
+            if ($handler->handle($item)) {
+                $this->_log(LOG_INFO, "[$queue:$rep] Successfully handled item");
                 $this->_done($qi);
+            } else {
+                $this->_log(LOG_INFO, "[$queue:$rep] Failed to handle item");
+                $this->_fail($qi);
             }
         } else {
-            $this->_log(LOG_INFO, "[$queue] Got empty/deleted item, discarding");
+            $this->_log(LOG_INFO, "[$queue:$rep] No handler for queue $queue; discarding.");
             $this->_done($qi);
         }
         return true;

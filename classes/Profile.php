@@ -44,11 +44,6 @@ class Profile extends Managed_DataObject
     public $created;                         // datetime()   not_null
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
 
-    /* Static get */
-    function staticGet($k,$v=NULL) {
-        return Memcached_DataObject::staticGet('Profile',$k,$v);
-    }
-
     public static function schemaDef()
     {
         $def = array(
@@ -83,129 +78,76 @@ class Profile extends Managed_DataObject
 
         return $def;
     }
-
-	function multiGet($keyCol, $keyVals, $skipNulls=true)
-	{
-	    return parent::multiGet('Profile', $keyCol, $keyVals, $skipNulls);
-	}
 	
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
+    public static function getByEmail($email)
+    {
+        // in the future, profiles should have emails stored...
+        $user = User::getKV('email', $email);
+        if (!($user instanceof User)) {
+            throw new NoSuchUserException(array('email'=>$email));
+        }
+        return $user->getProfile();
+    } 
+
     protected $_user = -1;  // Uninitialized value distinct from null
 
-    function getUser()
+    public function getUser()
     {
-        if (is_int($this->_user) && $this->_user == -1) {
-            $this->_user = User::staticGet('id', $this->id);
+        if ($this->_user === -1) {
+            $this->_user = User::getKV('id', $this->id);
+        }
+        if (!$this->_user instanceof User) {
+            throw new NoSuchUserException(array('id'=>$this->id));
         }
 
         return $this->_user;
     }
 
-    function adminProfiles($type=array())
+    protected $_group = -1;
+
+    public function getGroup()
     {
-        $PT = common_config('db','type')=='pgsql'?'"profile"':'profile';
-        $qry = "SELECT profile_role.*, $PT.* ".
-            "FROM $PT JOIN profile_role ON id = profile_role.profile_id ";
-
-        if(!empty($type)) {
-            if($type == array(Profile_role::MODERATOR)) {
-                $sprintf = 
-                    "LEFT OUTER JOIN profile_role exclude " .
-                    "ON profile_role.profile_id = exclude.profile_id " . 
-                    "AND exclude.role = '%s' " .
-                    "WHERE profile_role.role = '%s'" .
-                    "AND exclude.profile_id IS NULL";
-                $qry .= sprintf($sprintf, Profile_role::ADMINISTRATOR, Profile_role::MODERATOR);
-            }
-            else {
-                $where = array();
-                foreach($type as $role) {
-                    $where[] = sprintf("role = '%s'", $role);
-                }
-                $qry .= "WHERE " . implode(' OR ', $where);
-            }
+        if ($this->_group === -1) {
+            $this->_group = User_group::getKV('profile_id', $this->id);
         }
-        else {
-            $qry .= sprintf(" WHERE role = '%s' OR role = '%s'", Profile_role::ADMINISTRATOR, Profile_role::MODERATOR);
+        if (!$this->_group instanceof User_group) {
+            throw new NoSuchGroupException(array('profile_id'=>$this->id));
         }
 
-        $profile = Memcached_DataObject::cachedQuery('Profile',
-                                                     $qry,
-                                                     6 * 3600);
-
-        return $profile;
+        return $this->_group;
     }
 
-    protected $_avatars;
-
-    function getAvatar($width, $height=null)
+    public function isGroup()
     {
-        if (is_null($height)) {
-            $height = $width;
-        }
-
-        $avatar = $this->_getAvatar($width);
-
-        if (empty($avatar)) {
-
-            if (Event::handle('StartProfileGetAvatar', array($this, $width, &$avatar))) {
-                $avatar = Avatar::pkeyGet(
-                    array(
-                        'profile_id' => $this->id,
-                        'width'      => $width,
-                        'height'     => $height
-                    )
-                );
-                Event::handle('EndProfileGetAvatar', array($this, $width, &$avatar));
-            }
-
-            $this->_fillAvatar($width, $avatar);
-        }
-
-        return $avatar;
-    }
-
-    // XXX: @Fix me gargargar
-    function _getAvatar($width)
-    {
-        if (empty($this->_avatars)) {
-            $this->_avatars = array();
-        }
-
-        // GAR! I cannot figure out where _avatars gets pre-filled with the avatar from
-        // the previously used profile! Please shoot me now! --Zach
-        if (array_key_exists($width, $this->_avatars)) {
-            // Don't return cached avatar unless it's really for this profile
-            if (isset($this->_avatars[$width]->profile_id) && $this->_avatars[$width]->profile_id == $this->id) {
-                return $this->_avatars[$width];
-            }
-        }
-
-        return null;
-    }
-
-    function _fillAvatar($width, $avatar)
-    {
-      //common_debug("Storing avatar of width: {$avatar->width} and profile_id {$avatar->profile_id} in profile {$this->id}.");
-        $this->_avatars[$width] = $avatar;
-
-    }
-
-    function getOriginalAvatar()
-    {
-        $avatar = DB_DataObject::factory('avatar');
-        $avatar->profile_id = $this->id;
-        $avatar->original = true;
-        if ($avatar->find(true)) {
-            return $avatar;
-        } else {
-            return null;
+        try {
+            $this->getGroup();
+            return true;
+        } catch (NoSuchGroupException $e) {
+            return false;
         }
     }
 
-    function setOriginal($filename)
+    public function isLocal()
+    {
+        try {
+            $this->getUser();
+        } catch (NoSuchUserException $e) {
+            return false;
+        }
+        return true;
+    }
+
+    protected $_avatars = array();
+
+    public function getAvatar($width, $height=null)
+    {
+        return Avatar::byProfile($this, $width, $height);
+    }
+
+    public function setOriginal($filename)
     {
         $imagefile = new ImageFile($this->id, Avatar::path($filename));
 
@@ -217,11 +159,11 @@ class Profile extends Managed_DataObject
         $avatar->filename = $filename;
         $avatar->original = true;
         $avatar->url = Avatar::url($filename);
-        $avatar->created = DB_DataObject_Cast::dateTime(); # current time
+        $avatar->created = common_sql_now();
 
         // XXX: start a transaction here
-
-        if (!$this->delete_avatars() || !$avatar->insert()) {
+        if (!Avatar::deleteFromProfile($this, true) || !$avatar->insert()) {
+            // If we can't delete the old avatars, let's abort right here.
             @unlink(Avatar::path($filename));
             return null;
         }
@@ -229,50 +171,15 @@ class Profile extends Managed_DataObject
         foreach (array(AVATAR_PROFILE_SIZE, AVATAR_STREAM_SIZE, AVATAR_MINI_SIZE) as $size) {
             // We don't do a scaled one if original is our scaled size
             if (!($avatar->width == $size && $avatar->height == $size)) {
-                $scaled_filename = $imagefile->resize($size);
-
-                //$scaled = DB_DataObject::factory('avatar');
-                $scaled = new Avatar();
-                $scaled->profile_id = $this->id;
-                $scaled->width = $size;
-                $scaled->height = $size;
-                $scaled->original = false;
-                $scaled->mediatype = image_type_to_mime_type($imagefile->type);
-                $scaled->filename = $scaled_filename;
-                $scaled->url = Avatar::url($scaled_filename);
-                $scaled->created = DB_DataObject_Cast::dateTime(); # current time
-
-                if (!$scaled->insert()) {
-                    return null;
+                try {
+                    Avatar::newSize($this, $size);
+                } catch (Exception $e) {
+                    // should we abort the generation and live without smaller avatars?
                 }
             }
         }
 
         return $avatar;
-    }
-
-    /**
-     * Delete attached avatars for this user from the database and filesystem.
-     * This should be used instead of a batch delete() to ensure that files
-     * get removed correctly.
-     *
-     * @param boolean $original true to delete only the original-size file
-     * @return <type>
-     */
-    function delete_avatars($original=true)
-    {
-        $avatar = new Avatar();
-        $avatar->profile_id = $this->id;
-        $avatar->find();
-        while ($avatar->fetch()) {
-            if ($avatar->original) {
-                if ($original == false) {
-                    continue;
-                }
-            }
-            $avatar->delete();
-        }
-        return true;
     }
 
     /**
@@ -283,6 +190,20 @@ class Profile extends Managed_DataObject
     function getBestName()
     {
         return ($this->fullname) ? $this->fullname : $this->nickname;
+    }
+
+    /**
+     * Takes the currently scoped profile into account to give a name 
+     * to list in notice streams. Preferences may differ between profiles.
+     */
+    function getStreamName()
+    {
+        $user = common_current_user();
+        if ($user instanceof User && $user->streamNicknames()) {
+            return $this->nickname;
+        }
+
+        return $this->getBestName();
     }
 
     /**
@@ -328,9 +249,9 @@ class Profile extends Managed_DataObject
         return $stream->getNotices($offset, $limit, $since_id, $max_id);
     }
 
-    function getNotices($offset=0, $limit=NOTICES_PER_PAGE, $since_id=0, $max_id=0)
+    function getNotices($offset=0, $limit=NOTICES_PER_PAGE, $since_id=0, $max_id=0, Profile $scoped=null)
     {
-        $stream = new ProfileNoticeStream($this);
+        $stream = new ProfileNoticeStream($this, $scoped);
 
         return $stream->getNotices($offset, $limit, $since_id, $max_id);
     }
@@ -338,9 +259,8 @@ class Profile extends Managed_DataObject
     function isMember($group)
     {
     	$groups = $this->getGroups(0, null);
-    	$gs = $groups->fetchAll();
-    	foreach ($gs as $g) {
-    	    if ($group->id == $g->id) {
+        while ($groups instanceof User_group && $groups->fetch()) {
+    	    if ($groups->id == $group->id) {
     	        return true;
     	    }
     	}
@@ -389,7 +309,18 @@ class Profile extends Managed_DataObject
             $ids = array_slice($ids, $offset, $limit);
         }
 
-        return User_group::multiGet('id', $ids);
+        try {
+            return User_group::listFind('id', $ids);
+        } catch (NoResultException $e) {
+            return null;    // throw exception when we handle it everywhere
+        }
+    }
+
+    function getGroupCount() {
+        $groups = $this->getGroups(0, null);
+        return $groups instanceof User_group
+                ? $groups->N
+                : 0;
     }
 
     function isTagged($peopletag)
@@ -480,7 +411,7 @@ class Profile extends Managed_DataObject
         $lists = array();
 
         foreach ($ids as $id) {
-            $list = Profile_list::staticGet('id', $id);
+            $list = Profile_list::getKV('id', $id);
             if (!empty($list) &&
                 ($showPrivate || !$list->private)) {
 
@@ -624,15 +555,14 @@ class Profile extends Managed_DataObject
     function joinGroup(User_group $group)
     {
         $join = null;
-		if($this->isMember($group))
-			return false;
-		
         if ($group->join_policy == User_group::JOIN_POLICY_MODERATE) {
             $join = Group_join_queue::saveNew($this, $group);
         } else {
             if (Event::handle('StartJoinGroup', array($group, $this))) {
                 $join = Group_member::join($group->id, $this->id);
                 self::blow('profile:groups:%d', $this->id);
+                self::blow('group:member_ids:%d', $group->id);
+                self::blow('group:member_count:%d', $group->id);
                 Event::handle('EndJoinGroup', array($group, $this));
             }
         }
@@ -653,79 +583,83 @@ class Profile extends Managed_DataObject
         if (Event::handle('StartLeaveGroup', array($group, $this))) {
             Group_member::leave($group->id, $this->id);
             self::blow('profile:groups:%d', $this->id);
+            self::blow('group:member_ids:%d', $group->id);
+            self::blow('group:member_count:%d', $group->id);
             Event::handle('EndLeaveGroup', array($group, $this));
         }
     }
 
     function avatarUrl($size=AVATAR_PROFILE_SIZE)
     {
-        $avatar = $this->getAvatar($size);
-        if ($avatar) {
-            return $avatar->displayUrl();
-        } else {
-            return Avatar::defaultImage($size);
-        }
+        return Avatar::urlByProfile($this, $size);
     }
 
-    function getSubscriptions($offset=0, $limit=null)
+    function getSubscribed($offset=0, $limit=null)
     {
-        $subs = Subscription::bySubscriber($this->id,
-                                           $offset,
-                                           $limit);
-
-        $profiles = array();
-
-        while ($subs->fetch()) {
-            $profile = Profile::staticGet($subs->subscribed);
-            if ($profile) {
-                $profiles[] = $profile;
-            }
+        $subs = Subscription::getSubscribedIDs($this->id, $offset, $limit);
+        try {
+            $profiles = Profile::listFind('id', $subs);
+        } catch (NoResultException $e) {
+            return $e->obj;
         }
-
-        return new ArrayWrapper($profiles);
+        return $profiles;
     }
 
     function getSubscribers($offset=0, $limit=null)
     {
-        $subs = Subscription::bySubscribed($this->id,
-                                           $offset,
-                                           $limit);
-
-        $profiles = array();
-
-        while ($subs->fetch()) {
-            $profile = Profile::staticGet($subs->subscriber);
-            if ($profile) {
-                $profiles[] = $profile;
-            }
+        $subs = Subscription::getSubscriberIDs($this->id, $offset, $limit);
+        try {
+            $profiles = Profile::listFind('id', $subs);
+        } catch (NoResultException $e) {
+            return $e->obj;
         }
-
-        return new ArrayWrapper($profiles);
+        return $profiles;
     }
 
-    function getTaggedSubscribers($tag)
+    function getTaggedSubscribers($tag, $offset=0, $limit=null)
     {
         $qry =
           'SELECT profile.* ' .
-          'FROM profile JOIN (subscription, profile_tag, profile_list) ' .
+          'FROM profile JOIN subscription ' .
           'ON profile.id = subscription.subscriber ' .
-          'AND profile.id = profile_tag.tagged ' .
-          'AND profile_tag.tagger = profile_list.tagger AND profile_tag.tag = profile_list.tag ' .
+          'JOIN profile_tag ON (profile_tag.tagged = subscription.subscriber ' .
+          'AND profile_tag.tagger = subscription.subscribed) ' .
           'WHERE subscription.subscribed = %d ' .
+          "AND profile_tag.tag = '%s' " .
           'AND subscription.subscribed != subscription.subscriber ' .
-          'AND profile_tag.tagger = %d AND profile_tag.tag = "%s" ' .
-          'AND profile_list.private = false ' .
-          'ORDER BY subscription.created DESC';
+          'ORDER BY subscription.created DESC ';
+
+        if ($offset) {
+            $qry .= ' LIMIT ' . $limit . ' OFFSET ' . $offset;
+        }
 
         $profile = new Profile();
-        $tagged = array();
 
-        $cnt = $profile->query(sprintf($qry, $this->id, $this->id, $profile->escape($tag)));
+        $cnt = $profile->query(sprintf($qry, $this->id, $profile->escape($tag)));
 
-        while ($profile->fetch()) {
-            $tagged[] = clone($profile);
-        }
-        return $tagged;
+        return $profile;
+    }
+
+    function getTaggedSubscriptions($tag, $offset=0, $limit=null)
+    {
+        $qry =
+          'SELECT profile.* ' .
+          'FROM profile JOIN subscription ' .
+          'ON profile.id = subscription.subscribed ' .
+          'JOIN profile_tag on (profile_tag.tagged = subscription.subscribed ' .
+          'AND profile_tag.tagger = subscription.subscriber) ' .
+          'WHERE subscription.subscriber = %d ' .
+          "AND profile_tag.tag = '%s' " .
+          'AND subscription.subscribed != subscription.subscriber ' .
+          'ORDER BY subscription.created DESC ';
+
+        $qry .= ' LIMIT ' . $limit . ' OFFSET ' . $offset;
+
+        $profile = new Profile();
+
+        $profile->query(sprintf($qry, $this->id, $profile->escape($tag)));
+
+        return $profile;
     }
 
     /**
@@ -835,12 +769,8 @@ class Profile extends Managed_DataObject
      */
     function mutuallySubscribed($other)
     {
-        return ($this->isSubscribed($other) &&
-            $other->isSubscribed($this)) ||
-            $this->hasRole(Profile_role::MODERATOR) ||
-            $this->hasRole(Profile_role::ADMINISTRATOR) ||
-            (($other->hasRole(Profile_role::ADMINISTRATOR) || $other->hasRole(Profile_role::MODERATOR))
-                && !$this->hasRole(Profile_role::SILENCED));
+        return $this->isSubscribed($other) &&
+          $other->isSubscribed($this);
     }
 
     function hasFave($notice)
@@ -869,6 +799,11 @@ class Profile extends Managed_DataObject
         }
 
         return $cnt;
+    }
+
+    function favoriteNotices($own=false, $offset=0, $limit=NOTICES_PER_PAGE, $since_id=0, $max_id=0)
+    {
+        return Fave::stream($this->id, $offset, $limit, $own, $since_id, $max_id);
     }
 
     function noticeCount()
@@ -955,14 +890,41 @@ class Profile extends Managed_DataObject
         return ($biolimit > 0 && !empty($bio) && (mb_strlen($bio) > $biolimit));
     }
 
-    function delete()
+    function update($dataObject=false)
+    {
+        if (is_object($dataObject) && $this->nickname != $dataObject->nickname) {
+            try {
+                $local = $this->getUser();
+                common_debug("Updating User ({$this->id}) nickname from {$dataObject->nickname} to {$this->nickname}");
+                $origuser = clone($local);
+                $local->nickname = $this->nickname;
+                $result = $local->updateKeys($origuser);
+                if ($result === false) {
+                    common_log_db_error($local, 'UPDATE', __FILE__);
+                    // TRANS: Server error thrown when user profile settings could not be updated.
+                    throw new ServerException(_('Could not update user nickname.'));
+                }
+
+                // Clear the site owner, in case nickname changed
+                if ($local->hasRole(Profile_role::OWNER)) {
+                    User::blow('user:site_owner');
+                }
+            } catch (NoSuchUserException $e) {
+                // Nevermind...
+            }
+        }
+
+        return parent::update($dataObject);
+    }
+
+    function delete($useWhere=false)
     {
         $this->_deleteNotices();
         $this->_deleteSubscriptions();
         $this->_deleteMessages();
         $this->_deleteTags();
         $this->_deleteBlocks();
-        $this->delete_avatars();
+        Avatar::deleteFromProfile($this, true);
 
         // Warning: delete() will run on the batch objects,
         // not on individual objects.
@@ -977,7 +939,7 @@ class Profile extends Managed_DataObject
             $inst->delete();
         }
 
-        parent::delete();
+        return parent::delete($useWhere);
     }
 
     function _deleteNotices()
@@ -1001,7 +963,7 @@ class Profile extends Managed_DataObject
         $sub->find();
 
         while ($sub->fetch()) {
-            $other = Profile::staticGet('id', $sub->subscribed);
+            $other = Profile::getKV('id', $sub->subscribed);
             if (empty($other)) {
                 continue;
             }
@@ -1016,7 +978,7 @@ class Profile extends Managed_DataObject
         $subd->find();
 
         while ($subd->fetch()) {
-            $other = Profile::staticGet('id', $subd->subscriber);
+            $other = Profile::getKV('id', $subd->subscriber);
             if (empty($other)) {
                 continue;
             }
@@ -1065,7 +1027,7 @@ class Profile extends Managed_DataObject
 
     // XXX: identical to Notice::getLocation.
 
-    function getLocation()
+    public function getLocation()
     {
         $location = null;
 
@@ -1086,6 +1048,29 @@ class Profile extends Managed_DataObject
         }
 
         return $location;
+    }
+
+    public function shareLocation()
+    {
+        $cfg = common_config('location', 'share');
+
+        if ($cfg == 'always') {
+            return true;
+        } else if ($cfg == 'never') {
+            return false;
+        } else { // user
+            $share = common_config('location', 'sharedefault');
+
+            // Check if user has a personal setting for this
+            $prefs = User_location_prefs::getKV('user_id', $this->id);
+
+            if (!empty($prefs)) {
+                $share = $prefs->share_location;
+                $prefs->free();
+            }
+
+            return $share;
+        }
     }
 
     function hasRole($name)
@@ -1181,11 +1166,27 @@ class Profile extends Managed_DataObject
     function silence()
     {
         $this->grantRole(Profile_role::SILENCED);
+        if (common_config('notice', 'hidespam')) {
+            $this->flushVisibility();
+        }
     }
 
     function unsilence()
     {
         $this->revokeRole(Profile_role::SILENCED);
+        if (common_config('notice', 'hidespam')) {
+            $this->flushVisibility();
+        }
+    }
+
+    function flushVisibility()
+    {
+        // Get all notices
+        $stream = new ProfileNoticeStream($this, $this);
+        $ids = $stream->getNoticeIds(0, CachingNoticeStream::CACHE_WINDOW);
+        foreach ($ids as $id) {
+            self::blow('notice:in-scope-for:%d:null', $id);
+        }
     }
 
     /**
@@ -1199,7 +1200,7 @@ class Profile extends Managed_DataObject
      * @param $right string Name of the right, usually a constant in class Right
      * @return boolean whether the user has the right in question
      */
-    function hasRight($right)
+    public function hasRight($right)
     {
         $result = false;
 
@@ -1216,6 +1217,8 @@ class Profile extends Managed_DataObject
             case Right::SILENCEUSER:
             case Right::DELETEUSER:
             case Right::DELETEGROUP:
+            case Right::TRAINSPAM:
+            case Right::REVIEWSPAM:
                 $result = $this->hasRole(Profile_role::MODERATOR);
                 break;
             case Right::CONFIGURESITE:
@@ -1223,8 +1226,7 @@ class Profile extends Managed_DataObject
                 break;
             case Right::GRANTROLE:
             case Right::REVOKEROLE:
-                //$result = $this->hasRole(Profile_role::OWNER); On RDN administrators are in charge of promotion/demotion too
-                $result = $this->hasRole(Profile_role::ADMINISTRATOR);
+                $result = $this->hasRole(Profile_role::OWNER);
                 break;
             case Right::NEWNOTICE:
             case Right::NEWMESSAGE:
@@ -1239,8 +1241,7 @@ class Profile extends Managed_DataObject
                 $result = !$this->isSandboxed();
                 break;
             case Right::WEBLOGIN:
-#                $result = !$this->isSilenced();
-                $result = true; # Even silenced people can simply LOG IN.
+                $result = !$this->isSilenced();
                 break;
             case Right::API:
                 $result = !$this->isSilenced();
@@ -1265,13 +1266,13 @@ class Profile extends Managed_DataObject
         return $result;
     }
 
-    function hasRepeated($notice_id)
+    // FIXME: Can't put Notice typing here due to ArrayWrapper
+    public function hasRepeated($notice)
     {
         // XXX: not really a pkey, but should work
 
-        $notice = Memcached_DataObject::pkeyGet('Notice',
-                                                array('profile_id' => $this->id,
-                                                      'repeat_of' => $notice_id));
+        $notice = Notice::pkeyGet(array('profile_id' => $this->id,
+                                        'repeat_of' => $notice->id));
 
         return !empty($notice);
     }
@@ -1360,11 +1361,25 @@ class Profile extends Managed_DataObject
     }
 
     /**
+     * Returns the profile's canonical url, not necessarily a uri/unique id
+     *
+     * @return string $profileurl
+     */
+    public function getUrl()
+    {
+        if (empty($this->profileurl) ||
+                !filter_var($this->profileurl, FILTER_VALIDATE_URL)) {
+            throw new InvalidUrlException($this->profileurl);
+        }
+        return $this->profileurl;
+    }
+
+    /**
      * Returns the best URI for a profile. Plugins may override.
      *
      * @return string $uri
      */
-    function getUri()
+    public function getUri()
     {
         $uri = null;
 
@@ -1372,7 +1387,7 @@ class Profile extends Managed_DataObject
         if (Event::handle('StartGetProfileUri', array($this, &$uri))) {
 
             // check for a local user first
-            $user = User::staticGet('id', $this->id);
+            $user = User::getKV('id', $this->id);
 
             if (!empty($user)) {
                 $uri = $user->uri;
@@ -1384,17 +1399,30 @@ class Profile extends Managed_DataObject
         return $uri;
     }
 
-    function hasBlocked($other)
+    /**
+     * Returns an assumed acct: URI for a profile. Plugins are required.
+     *
+     * @return string $uri
+     */
+    public function getAcctUri()
     {
-        $block = Profile_block::get($this->id, $other->id);
+        $acct = null;
 
-        if (empty($block)) {
-            $result = false;
-        } else {
-            $result = true;
+        if (Event::handle('StartGetProfileAcctUri', array($this, &$acct))) {
+            Event::handle('EndGetProfileAcctUri', array($this, &$acct));
         }
 
-        return $result;
+        if ($acct === null) {
+            throw new ProfileNoAcctUriException($this);
+        }
+
+        return $acct;
+    }
+
+    function hasBlocked($other)
+    {
+        $block = Profile_block::exists($this, $other);
+        return !empty($block);
     }
 
     function getAtomFeed()
@@ -1402,7 +1430,7 @@ class Profile extends Managed_DataObject
         $feed = null;
 
         if (Event::handle('StartProfileGetAtomFeed', array($this, &$feed))) {
-            $user = User::staticGet('id', $this->id);
+            $user = User::getKV('id', $this->id);
             if (!empty($user)) {
                 $feed = common_local_url('ApiTimelineUser', array('id' => $user->id,
                                                                   'format' => 'atom'));
@@ -1418,8 +1446,8 @@ class Profile extends Managed_DataObject
         $profile = null;
 
         if (Event::handle('StartGetProfileFromURI', array($uri, &$profile))) {
-            // Get a local user or remote (OMB 0.1) profile
-            $user = User::staticGet('uri', $uri);
+            // Get a local user
+            $user = User::getKV('uri', $uri);
             if (!empty($user)) {
                 $profile = $user->getProfile();
             }
@@ -1480,39 +1508,6 @@ class Profile extends Managed_DataObject
         return $profile;
     }
 
-    function _streamDirect($offset, $limit, $since_id=null, $max_id=null, $images=false)
-    {
-        $notice = new Notice();
-
-        $notice->profile_id = $this->id;
-
-        $notice->selectAdd();
-        $notice->selectAdd('id');
-
-        Notice::addWhereSinceId($notice, $since_id);
-        Notice::addWhereMaxId($notice, $max_id);
-
-        $notice->orderBy('created DESC, id DESC');
-
-        if ($images) {
-            $notice->whereAdd('EXISTS (SELECT * FROM file_to_post WHERE notice.id = file_to_post.post_id)');
-        }
-
-        if (!is_null($offset)) {
-            $notice->limit($offset, $limit);
-        }
-
-        $notice->find();
-
-        $ids = array();
-
-        while ($notice->fetch()) {
-            $ids[] = $notice->id;
-        }
-
-        return $ids;
-    }
-
     /**
      * Magic function called at serialize() time.
      *
@@ -1529,34 +1524,9 @@ class Profile extends Managed_DataObject
         $skip = array('_user', '_avatars');
         return array_diff($vars, $skip);
     }
-    
-    static function fillAvatars(&$profiles, $width)
-    {
-    	$ids = array();
-    	foreach ($profiles as $profile) {
-            if (!empty($profile)) {
-                $ids[] = $profile->id;
-            }
-    	}
-    	
-    	$avatars = Avatar::pivotGet('profile_id', $ids, array('width' => $width,
-															  'height' => $width));
-    	
-    	foreach ($profiles as $profile) {
-            if (!empty($profile)) { // ???
-                $profile->_fillAvatar($width, $avatars[$profile->id]);
-            }
-    	}
-    }
-    
-    // Can't seem to find how to fix this.
 
-    function getProfile()
+    public function getProfile()
     {
         return $this;
-    }
-
-    static function pivotGet($key, $values, $otherCols=array()) {
-        return Memcached_DataObject::pivotGet('Profile', $key, $values, $otherCols);
     }
 }

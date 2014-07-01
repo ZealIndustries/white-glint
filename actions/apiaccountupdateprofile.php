@@ -31,8 +31,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-
 /**
  * API analog to the profile settings page
  * Only the parameters specified will be updated.
@@ -45,6 +43,8 @@ require_once INSTALLDIR . '/lib/apiauth.php';
  */
 class ApiAccountUpdateProfileAction extends ApiAuthAction
 {
+    protected $needPost = true;
+
     /**
      * Take arguments for running
      *
@@ -52,7 +52,7 @@ class ApiAccountUpdateProfileAction extends ApiAuthAction
      *
      * @return boolean success flag
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
@@ -71,37 +71,20 @@ class ApiAccountUpdateProfileAction extends ApiAuthAction
      *
      * See which request params have been set, and update the profile
      *
-     * @param array $args $_REQUEST data (unused)
-     *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
-
-        if ($_SERVER['REQUEST_METHOD'] != 'POST') {
-            $this->clientError(
-                // TRANS: Client error. POST is a HTTP command. It should not be translated.
-                _('This method requires a POST.'),
-                400, $this->format
-            );
-            return;
-        }
+        parent::handle();
 
         if (!in_array($this->format, array('xml', 'json'))) {
-            $this->clientError(
-                // TRANS: Client error displayed when coming across a non-supported API method.
-                _('API method not found.'),
-                404,
-                $this->format
-            );
-            return;
+            // TRANS: Client error displayed when coming across a non-supported API method.
+            $this->clientError(_('API method not found.'), 404);
         }
 
         if (empty($this->user)) {
             // TRANS: Client error displayed if a user could not be found.
-            $this->clientError(_('No such user.'), 404, $this->format);
-            return;
+            $this->clientError(_('No such user.'), 404);
         }
 
         $profile = $this->user->getProfile();
@@ -147,8 +130,6 @@ class ApiAccountUpdateProfileAction extends ApiAuthAction
             $this->serverError(_('Could not save profile.'));
             return;
         }
-
-        common_broadcast_profile($profile);
 
         $twitter_user = $this->twitterUserArray($profile, true);
 

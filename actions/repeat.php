@@ -45,17 +45,11 @@ class RepeatAction extends Action
     var $user = null;
     var $notice = null;
 
-    function prepare($args)
+    protected $needLogin = true;
+
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
-
-        $this->user = common_current_user();
-
-        if (empty($this->user)) {
-            // TRANS: Client error displayed when trying to repeat a notice while not logged in.
-            $this->clientError(_('Only logged-in users can repeat notices.'));
-            return false;
-        }
 
         $id = $this->trimmed('notice');
 
@@ -65,15 +59,15 @@ class RepeatAction extends Action
             return false;
         }
 
-        $this->notice = Notice::staticGet('id', $id);
+        $this->notice = Notice::getKV('id', $id);
 
-        if (empty($this->notice)) {
+        if (!($this->notice instanceof Notice)) {
             // TRANS: Client error displayed when trying to repeat a non-existing notice.
             $this->clientError(_('No notice specified.'));
             return false;
         }
 
-        $token  = $this->trimmed('token-'.$id);
+        $token = $this->trimmed('token-'.$id);
 
         if (empty($token) || $token != common_session_token()) {
             // TRANS: Client error displayed when the session token does not match or is not given.
@@ -91,21 +85,12 @@ class RepeatAction extends Action
      *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        if(function_exists('fastcgi_finish_request')) {
-            $finish = $this;
-        }
-        else {
-            $finish = null;
-        }
+        parent::handle();
 
-        $repeat = $this->notice->repeat($this->user->id, 'web', $finish);
+        $repeat = $this->notice->repeat($this->scoped->id, 'web');
 
-        if(!function_exists('fastcgi_finish_request')) finishSave($this->notice);
-    }
-
-    function finishSave($notice) {
         if ($this->boolean('ajax')) {
             $this->startHTML('text/xml;charset=utf-8');
             $this->elementStart('head');
@@ -118,11 +103,9 @@ class RepeatAction extends Action
                                 // TRANS: Confirmation text after repeating a notice.
                                 _('Repeated!'));
             $this->elementEnd('body');
-            $this->elementEnd('html');
-            $this->endXML();
+            $this->endHTML();
         } else {
             // @todo FIXME!
         }
     }
-
 }

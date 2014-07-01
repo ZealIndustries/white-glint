@@ -42,11 +42,10 @@ if (!defined('STATUSNET')) {
  */
 class BlacklistPlugin extends Plugin
 {
-    const VERSION = STATUSNET_VERSION;
+    const VERSION = GNUSOCIAL_VERSION;
 
     public $nicknames = array();
     public $urls      = array();
-    public $texts     = array();
     public $canAdmin  = true;
 
     function _getNicknamePatterns()
@@ -71,17 +70,6 @@ class BlacklistPlugin extends Plugin
                            $dbURLs);
     }
 
-    function _getTextPatterns()
-    {
-        $confTexts = $this->_configArray('blacklist', 'texts');
-
-        $dbTexts = Bio_blacklist::getPatterns();
-
-        return array_merge($this->texts,
-                           $confTexts,
-                           $dbTexts);
-    }
-
     /**
      * Database schema setup
      *
@@ -92,37 +80,8 @@ class BlacklistPlugin extends Plugin
         $schema = Schema::get();
 
         // For storing blacklist patterns for nicknames
-        $schema->ensureTable('nickname_blacklist',
-                             array(new ColumnDef('pattern',
-                                                 'varchar',
-                                                 255,
-                                                 false,
-                                                 'PRI'),
-                                   new ColumnDef('created',
-                                                 'datetime',
-                                                 null,
-                                                 false)));
-
-        $schema->ensureTable('homepage_blacklist',
-                             array(new ColumnDef('pattern',
-                                                 'varchar',
-                                                 255,
-                                                 false,
-                                                 'PRI'),
-                                   new ColumnDef('created',
-                                                 'datetime',
-                                                 null,
-                                                 false)));
-        $schema->ensureTable('bio_blacklist',
-                             array(new ColumnDef('pattern',
-                                                 'varchar',
-                                                 255,
-                                                 false,
-                                                 'PRI'),
-                                   new ColumnDef('created',
-                                                 'datetime',
-                                                 null,
-                                                 false)));
+        $schema->ensureTable('nickname_blacklist', Nickname_blacklist::schemaDef());
+        $schema->ensureTable('homepage_blacklist', Homepage_blacklist::schemaDef());
 
         return true;
     }
@@ -178,17 +137,6 @@ class BlacklistPlugin extends Plugin
 
         $nickname = strtolower($profile->nickname);
 
-        $bio = strtolower($action->trimmed('bio'));
-
-        if (!empty($bio)) {
-            if (!$this->_checkText($bio)) {
-                // TRANS: Validation failure for text. %s is the text.
-                $msg = sprintf(_m("You may not register with bio \"%s\"."),
-                               $bio);
-                throw new ClientException($msg);
-            }
-        }
-
         if (!empty($nickname)) {
             if (!$this->_checkNickname($nickname)) {
                 // TRANS: Validation failure for nickname. %s is the nickname.
@@ -230,17 +178,6 @@ class BlacklistPlugin extends Plugin
                 // TRANS: Validation failure for nickname. %s is the nickname.
                 $msg = sprintf(_m("You may not use nickname \"%s\"."),
                                $nickname);
-                throw new ClientException($msg);
-            }
-        }
-
-        $bio = strtolower($action->trimmed('bio'));
-
-        if (!empty($bio)) {
-            if (!$this->_checkText($bio)) {
-                // TRANS: Validation failure for text. %s is the text.
-                $msg = sprintf(_m("You may not use bio \"%s\"."),
-                               $bio);
                 throw new ClientException($msg);
             }
         }
@@ -313,28 +250,6 @@ class BlacklistPlugin extends Plugin
     }
 
     /**
-     * Helper for checking Texts
-     *
-     * Checks an text against our patterns for a match.
-     *
-     * @param string $bio bio to check
-     *
-     * @return boolean true means it's OK, false means it's bad
-     */
-    private function _checkText($bio)
-    {
-        $patterns = $this->_getTextPatterns();
-
-        foreach ($patterns as $pattern) {
-            if ($pattern != '' && preg_match("/$pattern/", $bio)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
      * Helper for checking nicknames
      *
      * Checks a nickname against our patterns for a match.
@@ -367,31 +282,6 @@ class BlacklistPlugin extends Plugin
     {
         $m->connect('panel/blacklist', array('action' => 'blacklistadminpanel'));
         return true;
-    }
-
-    /**
-     * Auto-load our classes if called
-     *
-     * @param string $cls Class to load
-     *
-     * @return boolean hook return
-     */
-    function onAutoload($cls)
-    {
-        switch (strtolower($cls))
-        {
-        case 'nickname_blacklist':
-        case 'homepage_blacklist':
-        case 'bio_blacklist':
-            include_once INSTALLDIR.'/plugins/Blacklist/'.ucfirst($cls).'.php';
-            return false;
-        case 'blacklistadminpanelaction':
-            $base = strtolower(mb_substr($cls, 0, -6));
-            include_once INSTALLDIR.'/plugins/Blacklist/'.$base.'.php';
-            return false;
-        default:
-            return true;
-        }
     }
 
     /**
@@ -572,14 +462,16 @@ class BlacklistPlugin extends Plugin
             }
         }
 
-        $nickname = strtolower($actor->poco->preferredUsername);
+        if (!empty($actor->poco)) {
+            $nickname = strtolower($actor->poco->preferredUsername);
 
-        if (!empty($nickname)) {
-            if (!$this->_checkNickname($nickname)) {
-                // TRANS: Exception thrown trying to post a notice while having a blocked nickname. %s is the blocked nickname.
-                $msg = sprintf(_m("Notices from nickname \"%s\" disallowed."),
-                               $nickname);
-                throw new ClientException($msg);
+            if (!empty($nickname)) {
+                if (!$this->_checkNickname($nickname)) {
+                    // TRANS: Exception thrown trying to post a notice while having a blocked nickname. %s is the blocked nickname.
+                    $msg = sprintf(_m("Notices from nickname \"%s\" are disallowed."),
+                                   $nickname);
+                    throw new ClientException($msg);
+                }
             }
         }
 
@@ -589,7 +481,7 @@ class BlacklistPlugin extends Plugin
     /**
      * Check URLs and homepages for blacklisted users.
      */
-    function onStartSubscribe($subscriber, $other)
+    function onStartSubscribe(Profile $subscriber, Profile $other)
     {
         foreach (array($other->profileurl, $other->homepage) as $url) {
 

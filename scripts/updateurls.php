@@ -52,13 +52,8 @@ function updateUserUrls()
 
                 updateProfileUrl($profile);
                 updateAvatarUrls($profile);
-
-                // Broadcast for remote users
-
-                common_broadcast_profile($profile);
-
             } catch (Exception $e) {
-                printv("Error updating URLs: " . $e->getMessage());
+                echo "Error updating URLs: " . $e->getMessage();
             }
             printfv("DONE.");
         }
@@ -112,7 +107,7 @@ function updateGroupUrls()
         while ($group->fetch()) {
             try {
                 printfv("Updating group {$group->nickname}...");
-                $orig = User_group::staticGet('id', $group->id);
+                $orig = User_group::getKV('id', $group->id);
                 if (!empty($group->original_logo)) {
                     $group->original_logo = Avatar::url(basename($group->original_logo));
                     $group->homepage_logo = Avatar::url(basename($group->homepage_logo));
@@ -129,7 +124,7 @@ function updateGroupUrls()
                 $group->update($orig);
                 printfv("DONE.");
             } catch (Exception $e) {
-                printv("Can't update avatars for group " . $group->nickname . ": ". $e->getMessage());
+                echo "Can't update avatars for group " . $group->nickname . ": ". $e->getMessage();
             }
         }
     }

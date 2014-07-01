@@ -28,6 +28,7 @@
  * @author   Craig Andrews <candrews@integralblue.com>
  * @author   Eric Helgeson <helfire@Erics-MBP.local>
  * @author   Evan Prodromou <evan@status.net>
+ * @author   Mikael Nordfeldth <mmn@hethane.se>
  * @author   Robin Millette <millette@controlyourself.ca>
  * @author   Sarven Capadisli <csarven@status.net>
  * @author   Tom Adams <tom@holizz.com>
@@ -42,7 +43,7 @@
 abstract class Installer
 {
     /** Web site info */
-    public $sitename, $server, $path, $fancy, $siteProfile;
+    public $sitename, $server, $path, $fancy, $siteProfile, $ssl;
     /** DB info */
     public $host, $database, $dbtype, $username, $password, $db;
     /** Administrator info */
@@ -234,7 +235,7 @@ abstract class Installer
                          '" is invalid; should be plain letters and numbers no longer than 64 characters.', true);
             $fail = true;
         }
-        // @fixme hardcoded list; should use User::allowed_nickname()
+        // @fixme hardcoded list; should use Nickname::isValid()
         // if/when it's safe to have loaded the infrastructure here
         $blacklist = array('main', 'panel', 'twitter', 'settings', 'rsd.xml', 'favorited', 'featured', 'favoritedrss', 'featuredrss', 'rss', 'getfile', 'api', 'groups', 'group', 'peopletag', 'tag', 'user', 'message', 'conversation', 'bookmarklet', 'notice', 'attachment', 'search', 'index.php', 'doc', 'opensearch', 'robots.txt', 'xd_receiver.html', 'facebook');
         if (in_array($this->adminNick, $blacklist)) {
@@ -258,16 +259,12 @@ abstract class Installer
      */
     function validateSiteProfile()
     {
-        $fail = false;
-
-        $sprofile = $this->siteProfile;
-
-        if (empty($sprofile))  {
+        if (empty($this->siteProfile))  {
             $this->updateStatus("No site profile selected.", true);
-            $fail = true;
+            return false;
         }
 
-        return !$fail;
+        return true;
     }
 
     /**
@@ -322,7 +319,7 @@ abstract class Installer
             $this->updateStatus(sprintf("Adding %s data to database...", $name));
             $res = $this->runDbScript($scr.'.sql', $conn);
             if ($res === false) {
-                $this->updateStatus(sprintf("Can't run %d script.", $name), true);
+                $this->updateStatus(sprintf("Can't run %s script.", $name), true);
                 return false;
             }
         }
@@ -339,10 +336,8 @@ abstract class Installer
      */
     function connectDatabase($dsn)
     {
-        // @fixme move this someplace more sensible
-        //set_include_path(INSTALLDIR . '/extlib' . PATH_SEPARATOR . get_include_path());
-        require_once 'DB.php';
-        return DB::connect($dsn);
+        global $_DB;
+        return $_DB->connect($dsn);
     }
 
     /**
@@ -412,13 +407,16 @@ abstract class Installer
             'sitename' => $this->sitename,
             'server' => $this->server,
             'path' => $this->path,
+            'ssl' => in_array($this->ssl, array('never', 'sometimes', 'always'))
+                     ? $this->ssl
+                     : 'never',
             'db_database' => $this->db['database'],
             'db_type' => $this->db['type']
         ));
 
         // assemble configuration file in a string
         $cfg =  "<?php\n".
-                "if (!defined('STATUSNET') && !defined('LACONICA')) { exit(1); }\n\n".
+                "if (!defined('GNUSOCIAL')) { exit(1); }\n\n".
 
                 // site name
                 "\$config['site']['name'] = {$vals['sitename']};\n\n".
@@ -426,6 +424,7 @@ abstract class Installer
                 // site location
                 "\$config['site']['server'] = {$vals['server']};\n".
                 "\$config['site']['path'] = {$vals['path']}; \n\n".
+                "\$config['site']['ssl'] = {$vals['ssl']}; \n\n".
 
                 // checks if fancy URLs are enabled
                 ($this->fancy ? "\$config['site']['fancy'] = true;\n\n":'').
@@ -560,14 +559,25 @@ abstract class Installer
      */
     function doInstall()
     {
+        global $config;
+
         $this->updateStatus("Initializing...");
         ini_set('display_errors', 1);
         error_reporting(E_ALL);
-        if (!defined('STATUSNET')) {
-            define('STATUSNET', 1);
+        if (!defined('GNUSOCIAL')) {
+            define('GNUSOCIAL', true);
         }
+        if (!defined('STATUSNET')) {
+            define('STATUSNET', true);
+        }
+
         require_once INSTALLDIR . '/lib/framework.php';
         StatusNet::initDefaults($this->server, $this->path);
+
+        if ($this->siteProfile == "singleuser") {
+            // Until we use ['site']['profile']==='singleuser' everywhere
+            $config['singleuser']['enabled'] = true;
+        }
 
         try {
             $this->db = $this->setupDatabase();
@@ -602,7 +612,7 @@ abstract class Installer
                 );
             } else {
                 $this->updateStatus(
-                    "Could not create initial StatusNet user (administrator).",
+                    "Could not create initial GNU social user.",
                     true
                 );
                 return false;
@@ -624,10 +634,8 @@ abstract class Installer
         // Set permissions back to something decent
         chmod(INSTALLDIR.'/config.php', 0644);
         
-        /*
-            TODO https needs to be considered
-        */
-        $link = "http://".$this->server.'/'.$this->path;
+        $scheme = $this->ssl === 'always' ? 'https' : 'http';
+        $link = "{$scheme}://{$this->server}/{$this->path}";
 
         $this->updateStatus("StatusNet has been installed at $link");
         $this->updateStatus(

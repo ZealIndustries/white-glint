@@ -31,9 +31,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-require_once INSTALLDIR . '/lib/mediafile.php';
-
 /**
  * Repeat a notice through the API
  *
@@ -67,7 +64,7 @@ class ApiStatusesRetweetAction extends ApiAuthAction
 
         $id = $this->trimmed('id');
 
-        $this->original = Notice::staticGet('id', $id);
+        $this->original = Notice::getKV('id', $id);
 
         if (empty($this->original)) {
             // TRANS: Client error displayed trying to repeat a non-existing notice through the API.

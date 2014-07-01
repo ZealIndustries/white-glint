@@ -53,26 +53,17 @@ class DefaultLocalNav extends Menu
         $this->action->elementStart('ul', array('id' => 'nav_local_default'));
 
         if (Event::handle('StartDefaultLocalNav', array($this, $user))) {
-            if (($this->action instanceof ShowstreamAction ||
-                $this->action instanceof ShowfavoritesAction ||
-                $this->action instanceof AllAction ||
-                $this->action instanceof RepliesAction)) {
-				
-				if(!empty($user) && $this->action->user->nickname == $user->nickname) {
-					$pn = new PersonalGroupNav($this->action);
-					// TRANS: Menu item in default local navigation panel.
-					$this->submenu(_m('MENU','Home'), $pn);
-				} else {
-					$on = new OtherGroupNav($this->action);
 
-					$this->submenu(_m('MENU','Current'), $on);
-				}
-			} else {
-				$bn = new PublicGroupNav($this->action);
-				// TRANS: Menu item in default local navigation panel.
-				$this->submenu(_m('MENU','Public'), $bn);
-			}
-/*
+            if (!empty($user)) {
+                $pn = new PersonalGroupNav($this->action);
+                // TRANS: Menu item in default local navigation panel.
+                $this->submenu(_m('MENU','Home'), $pn);
+            }
+
+            $bn = new PublicGroupNav($this->action);
+            // TRANS: Menu item in default local navigation panel.
+            $this->submenu(_m('MENU','Public'), $bn);
+
             if (!empty($user)) {
                 $sn = new GroupsNav($this->action, $user);
                 if ($sn->haveGroups()) {
@@ -87,7 +78,7 @@ class DefaultLocalNav extends Menu
                     // TRANS: Menu item in default local navigation panel.
                     $this->submenu(_m('MENU', 'Lists'), $sn);
                 }
-            }*/
+            }
 
             Event::handle('EndDefaultLocalNav', array($this, $user));
         }

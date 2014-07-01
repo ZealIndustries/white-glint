@@ -42,11 +42,6 @@ class Ostatus_profile extends Managed_DataObject
     public $created;
     public $modified;
 
-    public /*static*/ function staticGet($k, $v=null)
-    {
-        return parent::staticGet(__CLASS__, $k, $v);
-    }
-
     /**
      * Return table definition for Schema setup and DB_DataObject usage.
      *
@@ -88,7 +83,7 @@ class Ostatus_profile extends Managed_DataObject
     public function localProfile()
     {
         if ($this->profile_id) {
-            return Profile::staticGet('id', $this->profile_id);
+            return Profile::getKV('id', $this->profile_id);
         }
         return null;
     }
@@ -100,7 +95,7 @@ class Ostatus_profile extends Managed_DataObject
     public function localGroup()
     {
         if ($this->group_id) {
-            return User_group::staticGet('id', $this->group_id);
+            return User_group::getKV('id', $this->group_id);
         }
         return null;
     }
@@ -112,7 +107,7 @@ class Ostatus_profile extends Managed_DataObject
     public function localPeopletag()
     {
         if ($this->peopletag_id) {
-            return Profile_list::staticGet('id', $this->peopletag_id);
+            return Profile_list::getKV('id', $this->peopletag_id);
         }
         return null;
     }
@@ -233,7 +228,7 @@ class Ostatus_profile extends Managed_DataObject
      */
     public function garbageCollect()
     {
-        $feedsub = FeedSub::staticGet('uri', $this->feeduri);
+        $feedsub = FeedSub::getKV('uri', $this->feeduri);
         return $feedsub->garbageCollect();
     }
 
@@ -471,6 +466,7 @@ class Ostatus_profile extends Managed_DataObject
         return $this->processActivity($activity, $source);
     }
 
+    // TODO: Make this throw an exception
     public function processActivity($activity, $source)
     {
         $notice = null;
@@ -517,9 +513,18 @@ class Ostatus_profile extends Managed_DataObject
 
         $oprofile = $this->checkAuthorship($activity);
 
-        if (empty($oprofile)) {
+        if (!$oprofile instanceof Ostatus_profile) {
             common_log(LOG_INFO, "No author matched share activity");
             return null;
+        }
+
+        // The id URI will be used as a unique identifier for the notice,
+        // protecting against duplicate saves. It isn't required to be a URL;
+        // tag: URIs for instance are found in Google Buzz feeds.
+        $dupe = Notice::getKV('uri', $activity->id);
+        if ($dupe instanceof Notice) {
+            common_log(LOG_INFO, "OStatus: ignoring duplicate post: {$activity->id}");
+            return $dupe;
         }
 
         if (count($activity->objects) != 1) {
@@ -529,38 +534,48 @@ class Ostatus_profile extends Managed_DataObject
 
         $shared = $activity->objects[0];
 
-        if (!($shared instanceof Activity)) {
+        if (!$shared instanceof Activity) {
             // TRANS: Client exception thrown when trying to share a non-activity object.
             throw new ClientException(_m('Can only handle shared activities.'));
         }
 
-        $other = Ostatus_profile::ensureActivityObjectProfile($shared->actor);
-
-        // Save the item (or check for a dupe)
-
-        $sharedNotice = $other->processActivity($shared, $method);
-
-        if (empty($sharedNotice)) {
-            $sharedId = ($shared->id) ? $shared->id : $shared->objects[0]->id;
-            // TRANS: Client exception thrown when saving an activity share fails.
-            // TRANS: %s is a share ID.
-            throw new ClientException(sprintf(_m('Failed to save activity %s.'),
-                                              $sharedId));
+        $sharedId = $shared->id;
+        if (!empty($shared->objects[0]->id)) {
+            // Because StatusNet since commit 8cc4660 sets $shared->id to a TagURI which
+            // fucks up federation, because the URI is no longer recognised by the origin.
+            // So we set it to the object ID if it exists, otherwise we trust $shared->id
+            $sharedId = $shared->objects[0]->id;
+        }
+        if (empty($sharedId)) {
+            throw new ClientException(_m('Shared activity does not have an id'));
         }
 
-        // The id URI will be used as a unique identifier for for the notice,
-        // protecting against duplicate saves. It isn't required to be a URL;
-        // tag: URIs for instance are found in Google Buzz feeds.
-
-        $sourceUri = $activity->id;
-
-        $dupe = Notice::staticGet('uri', $sourceUri);
-        if ($dupe) {
-            common_log(LOG_INFO, "OStatus: ignoring duplicate post: $sourceUri");
-            return $dupe;
+        // First check if we have the shared activity. This has to be done first, because
+        // we can't use these functions to "ensureActivityObjectProfile" of a local user,
+        // who might be the creator of the shared activity in question.
+        $sharedNotice = Notice::getKV('uri', $sharedId);
+        if (!$sharedNotice instanceof Notice) {
+            // If no locally stored notice is found, process it!
+            // TODO: Remember to check Deleted_notice!
+            // TODO: If a post is shared that we can't retrieve - what to do?
+            try {
+                $other = self::ensureActivityObjectProfile($shared->actor);
+                $sharedNotice = $other->processActivity($shared, $method);
+                if (!$sharedNotice instanceof Notice) {
+                    // And if we apparently can't get the shared notice, we'll abort the whole thing.
+                    // TRANS: Client exception thrown when saving an activity share fails.
+                    // TRANS: %s is a share ID.
+                    throw new ClientException(sprintf(_m('Failed to save activity %s.'), $sharedId));
+                }
+            } catch (FeedSubException $e) {
+                // Remote feed could not be found or verified, should we
+                // transform this into an "RT @user Blah, blah, blah..."?
+                common_log(LOG_INFO, __METHOD__ . ' got a ' . get_class($e) . ': ' . $e->getMessage());
+                return null;
+            }
         }
 
-        // We'll also want to save a web link to the original notice, if provided.
+        // We'll want to save a web link to the original notice, if provided.
 
         $sourceUrl = null;
         if ($activity->link) {
@@ -582,7 +597,7 @@ class Ostatus_profile extends Managed_DataObject
         } else {
             // @todo FIXME: Fetch from $sourceUrl?
             // TRANS: Client exception. %s is a source URI.
-            throw new ClientException(sprintf(_m('No content for notice %s.'),$sourceUri));
+            throw new ClientException(sprintf(_m('No content for notice %s.'), $activity->id));
         }
 
         // Get (safe!) HTML and text versions of the content
@@ -631,7 +646,7 @@ class Ostatus_profile extends Managed_DataObject
 
         $options = array('is_local' => Notice::REMOTE,
                          'url' => $sourceUrl,
-                         'uri' => $sourceUri,
+                         'uri' => $activity->id,
                          'rendered' => $rendered,
                          'replies' => array(),
                          'groups' => array(),
@@ -648,17 +663,16 @@ class Ostatus_profile extends Managed_DataObject
         }
 
         if ($activity->context) {
-            // Any individual or group attn: targets?
-            $replies = $activity->context->attention;
-            $options['groups'] = $this->filterReplies($oprofile, $replies);
-            $options['replies'] = $replies;
+            // TODO: context->attention
+            list($options['groups'], $options['replies'])
+                = $this->filterAttention($oprofile, $activity->context->attention);
 
             // Maintain direct reply associations
             // @todo FIXME: What about conversation ID?
             if (!empty($activity->context->replyToID)) {
-                $orig = Notice::staticGet('uri',
+                $orig = Notice::getKV('uri',
                                           $activity->context->replyToID);
-                if (!empty($orig)) {
+                if ($orig instanceof Notice) {
                     $options['reply_to'] = $orig->id;
                 }
             }
@@ -715,7 +729,7 @@ class Ostatus_profile extends Managed_DataObject
 
         $oprofile = $this->checkAuthorship($activity);
 
-        if (empty($oprofile)) {
+        if (!$oprofile instanceof Ostatus_profile) {
             return null;
         }
 
@@ -723,12 +737,12 @@ class Ostatus_profile extends Managed_DataObject
 
         $note = $activity->objects[0];
 
-        // The id URI will be used as a unique identifier for for the notice,
+        // The id URI will be used as a unique identifier for the notice,
         // protecting against duplicate saves. It isn't required to be a URL;
         // tag: URIs for instance are found in Google Buzz feeds.
         $sourceUri = $note->id;
-        $dupe = Notice::staticGet('uri', $sourceUri);
-        if ($dupe) {
+        $dupe = Notice::getKV('uri', $sourceUri);
+        if ($dupe instanceof Notice) {
             common_log(LOG_INFO, "OStatus: ignoring duplicate post: $sourceUri");
             return $dupe;
         }
@@ -818,17 +832,15 @@ class Ostatus_profile extends Managed_DataObject
         }
 
         if ($activity->context) {
-            // Any individual or group attn: targets?
-            $replies = $activity->context->attention;
-            $options['groups'] = $this->filterReplies($oprofile, $replies);
-            $options['replies'] = $replies;
+            // TODO: context->attention
+            list($options['groups'], $options['replies'])
+                = $this->filterAttention($oprofile, $activity->context->attention);
 
             // Maintain direct reply associations
             // @todo FIXME: What about conversation ID?
             if (!empty($activity->context->replyToID)) {
-                $orig = Notice::staticGet('uri',
-                                          $activity->context->replyToID);
-                if (!empty($orig)) {
+                $orig = Notice::getKV('uri', $activity->context->replyToID);
+                if ($orig instanceof Notice) {
                     $options['reply_to'] = $orig->id;
                 }
             }
@@ -869,7 +881,7 @@ class Ostatus_profile extends Managed_DataObject
                                      $content,
                                      'ostatus',
                                      $options);
-            if ($saved) {
+            if ($saved instanceof Notice) {
                 Ostatus_source::saveNew($saved, $this, $method);
                 if (!empty($attachment)) {
                     File_to_post::processNew($attachment->id, $saved->id);
@@ -900,26 +912,26 @@ class Ostatus_profile extends Managed_DataObject
      * @param array in/out &$attention_uris set of URIs, will be pruned on output
      * @return array of group IDs
      */
-    protected function filterReplies($sender, &$attention_uris)
+    protected function filterAttention($sender, array $attention)
     {
-        common_log(LOG_DEBUG, "Original reply recipients: " . implode(', ', $attention_uris));
+        common_log(LOG_DEBUG, "Original reply recipients: " . implode(', ', array_keys($attention)));
         $groups = array();
         $replies = array();
-        foreach (array_unique($attention_uris) as $recipient) {
+        foreach ($attention as $recipient=>$type) {
             // Is the recipient a local user?
-            $user = User::staticGet('uri', $recipient);
-            if ($user) {
+            $user = User::getKV('uri', $recipient);
+            if ($user instanceof User) {
                 // @todo FIXME: Sender verification, spam etc?
                 $replies[] = $recipient;
                 continue;
             }
 
             // Is the recipient a local group?
-            // $group = User_group::staticGet('uri', $recipient);
+            // TODO: $group = User_group::getKV('uri', $recipient);
             $id = OStatusPlugin::localGroupFromUrl($recipient);
             if ($id) {
-                $group = User_group::staticGet('id', $id);
-                if ($group) {
+                $group = User_group::getKV('id', $id);
+                if ($group instanceof User_group) {
                     // Deliver to all members of this local group if allowed.
                     $profile = $sender->localProfile();
                     if ($profile->isMember($group)) {
@@ -935,7 +947,7 @@ class Ostatus_profile extends Managed_DataObject
 
             // Is the recipient a remote user or group?
             try {
-                $oprofile = Ostatus_profile::ensureProfileURI($recipient);
+                $oprofile = self::ensureProfileURI($recipient);
                 if ($oprofile->isGroup()) {
                     // Deliver to local members of this remote group.
                     // @todo FIXME: Sender verification?
@@ -951,10 +963,9 @@ class Ostatus_profile extends Managed_DataObject
             }
 
         }
-        $attention_uris = $replies;
         common_log(LOG_DEBUG, "Local reply recipients: " . implode(', ', $replies));
         common_log(LOG_DEBUG, "Local group recipients: " . implode(', ', $groups));
-        return $groups;
+        return array($groups, $replies);
     }
 
     /**
@@ -971,7 +982,7 @@ class Ostatus_profile extends Managed_DataObject
     {
         $oprofile = self::getFromProfileURL($profile_url);
 
-        if (!empty($oprofile)) {
+        if ($oprofile instanceof Ostatus_profile) {
             return $oprofile;
         }
 
@@ -999,7 +1010,7 @@ class Ostatus_profile extends Managed_DataObject
 
             $oprofile = self::getFromProfileURL($finalUrl);
 
-            if (!empty($oprofile)) {
+            if ($oprofile instanceof Ostatus_profile) {
                 return $oprofile;
             }
         }
@@ -1016,14 +1027,14 @@ class Ostatus_profile extends Managed_DataObject
 
         // Check if they've got an LRDD header
 
-        $lrdd = LinkHeader::getLink($response, 'lrdd', 'application/xrd+xml');
-
-        if (!empty($lrdd)) {
-
-            $xrd = Discovery::fetchXrd($lrdd);
+        $lrdd = LinkHeader::getLink($response, 'lrdd');
+        try {
+            $xrd = new XML_XRD();
+            $xrd->loadFile($lrdd);
             $xrdHints = DiscoveryHints::fromXRD($xrd);
-
             $hints = array_merge($hints, $xrdHints);
+        } catch (Exception $e) {
+            // No hints available from XRD
         }
 
         // If discovery found a feedurl (probably from LRDD), use it.
@@ -1057,25 +1068,20 @@ class Ostatus_profile extends Managed_DataObject
      */
     static function getFromProfileURL($profile_url)
     {
-        $profile = Profile::staticGet('profileurl', $profile_url);
-
-        if (empty($profile)) {
+        $profile = Profile::getKV('profileurl', $profile_url);
+        if (!$profile instanceof Profile) {
             return null;
         }
 
         // Is it a known Ostatus profile?
-
-        $oprofile = Ostatus_profile::staticGet('profile_id', $profile->id);
-
-        if (!empty($oprofile)) {
+        $oprofile = Ostatus_profile::getKV('profile_id', $profile->id);
+        if ($oprofile instanceof Ostatus_profile) {
             return $oprofile;
         }
 
         // Is it a local user?
-
-        $user = User::staticGet('id', $profile->id);
-
-        if (!empty($user)) {
+        $user = User::getKV('id', $profile->id);
+        if ($user instanceof User) {
             // @todo i18n FIXME: use sprintf and add i18n (?)
             throw new OStatusShadowException($profile, "'$profile_url' is the profile for local user '{$user->nickname}'.");
         }
@@ -1104,7 +1110,10 @@ class Ostatus_profile extends Managed_DataObject
 
         $huburi = $discover->getHubLink();
         $hints['hub'] = $huburi;
-        $salmonuri = $discover->getAtomLink(Salmon::NS_REPLIES);
+
+        // XXX: NS_REPLIES is deprecated anyway, so let's remove it in the future.
+        $salmonuri = $discover->getAtomLink(Salmon::REL_SALMON)
+                        ?: $discover->getAtomLink(Salmon::NS_REPLIES);
         $hints['salmon'] = $salmonuri;
 
         if (!$huburi && !common_config('feedsub', 'fallback_hub')) {
@@ -1254,11 +1263,7 @@ class Ostatus_profile extends Managed_DataObject
         // http://status.net/open-source/issues/2663
         chmod(Avatar::path($filename), 0644);
 
-        $profile = $this->localProfile();
-
-        if (!empty($profile)) {
-            $profile->setOriginal($filename);
-        }
+        $self->setOriginal($filename);
 
         $orig = clone($this);
         $this->avatar = $url;
@@ -1332,7 +1337,7 @@ class Ostatus_profile extends Managed_DataObject
         }
         if ($url) {
             $opts = array('allowed_schemes' => array('http', 'https'));
-            if (Validate::uri($url, $opts)) {
+            if (common_valid_http_url($url)) {
                 return $url;
             }
         }
@@ -1397,7 +1402,7 @@ class Ostatus_profile extends Managed_DataObject
     protected static function getActivityObjectProfile($object)
     {
         $uri = self::getActivityObjectProfileURI($object);
-        return Ostatus_profile::staticGet('uri', $uri);
+        return Ostatus_profile::getKV('uri', $uri);
     }
 
     /**
@@ -1453,7 +1458,7 @@ class Ostatus_profile extends Managed_DataObject
             throw new Exception(_m('No profile URI.'));
         }
 
-        $user = User::staticGet('uri', $homeuri);
+        $user = User::getKV('uri', $homeuri);
         if ($user) {
             // TRANS: Exception.
             throw new Exception(_m('Local user cannot be referenced as remote.'));
@@ -1464,10 +1469,10 @@ class Ostatus_profile extends Managed_DataObject
             throw new Exception(_m('Local group cannot be referenced as remote.'));
         }
 
-        $ptag = Profile_list::staticGet('uri', $homeuri);
-        if ($ptag) {
-            $local_user = User::staticGet('id', $ptag->tagger);
-            if (!empty($local_user)) {
+        $ptag = Profile_list::getKV('uri', $homeuri);
+        if ($ptag instanceof Profile_list) {
+            $local_user = User::getKV('id', $ptag->tagger);
+            if ($local_user instanceof User) {
                 // TRANS: Exception.
                 throw new Exception(_m('Local list cannot be referenced as remote.'));
             }
@@ -1487,7 +1492,9 @@ class Ostatus_profile extends Managed_DataObject
                 $discover = new FeedDiscovery();
                 $discover->discoverFromFeedURL($hints['feedurl']);
             }
-            $salmonuri = $discover->getAtomLink(Salmon::NS_REPLIES);
+            // XXX: NS_REPLIES is deprecated anyway, so let's remove it in the future.
+            $salmonuri = $discover->getAtomLink(Salmon::REL_SALMON)
+                            ?: $discover->getAtomLink(Salmon::NS_REPLIES);
         }
 
         if (array_key_exists('hub', $hints)) {
@@ -1520,21 +1527,51 @@ class Ostatus_profile extends Managed_DataObject
             self::updateProfile($profile, $object, $hints);
 
             $oprofile->profile_id = $profile->insert();
-            if (!$oprofile->profile_id) {
+            if ($oprofile->profile_id === false) {
                 // TRANS: Server exception.
                 throw new ServerException(_m('Cannot save local profile.'));
             }
         } else if ($object->type == ActivityObject::GROUP) {
+            $profile = new Profile();
+            $profile->query('BEGIN');
+
             $group = new User_group();
             $group->uri = $homeuri;
             $group->created = common_sql_now();
             self::updateGroup($group, $object, $hints);
 
+            // TODO: We should do this directly in User_group->insert()!
+            // currently it's duplicated in User_group->update()
+            // AND User_group->register()!!!
+            $fields = array(/*group field => profile field*/
+                        'nickname'      => 'nickname',
+                        'fullname'      => 'fullname',
+                        'mainpage'      => 'profileurl',
+                        'homepage'      => 'homepage',
+                        'description'   => 'bio',
+                        'location'      => 'location',
+                        'created'       => 'created',
+                        'modified'      => 'modified',
+                        );
+            foreach ($fields as $gf=>$pf) {
+                $profile->$pf = $group->$gf;
+            }
+            $profile_id = $profile->insert();
+            if ($profile_id === false) {
+                $profile->query('ROLLBACK');
+                throw new ServerException(_('Profile insertion failed.'));
+            }
+
+            $group->profile_id = $profile_id;
+
             $oprofile->group_id = $group->insert();
-            if (!$oprofile->group_id) {
+            if ($oprofile->group_id === false) {
+                $profile->query('ROLLBACK');
                 // TRANS: Server exception.
                 throw new ServerException(_m('Cannot save local profile.'));
             }
+
+            $profile->query('COMMIT');
         } else if ($object->type == ActivityObject::_LIST) {
             $ptag = new Profile_list();
             $ptag->uri = $homeuri;
@@ -1542,15 +1579,15 @@ class Ostatus_profile extends Managed_DataObject
             self::updatePeopletag($ptag, $object, $hints);
 
             $oprofile->peopletag_id = $ptag->insert();
-            if (!$oprofile->peopletag_id) {
-            // TRANS: Server exception.
+            if ($oprofile->peopletag_id === false) {
+                // TRANS: Server exception.
                 throw new ServerException(_m('Cannot save local list.'));
             }
         }
 
         $ok = $oprofile->insert();
 
-        if (!$ok) {
+        if ($ok === false) {
             // TRANS: Server exception.
             throw new ServerException(_m('Cannot save OStatus profile.'));
         }
@@ -1624,7 +1661,7 @@ class Ostatus_profile extends Managed_DataObject
             $profile->profileurl = $object->link;
         } else if (array_key_exists('profileurl', $hints)) {
             $profile->profileurl = $hints['profileurl'];
-        } else if (Validate::uri($object->id, array('allowed_schemes' => array('http', 'https')))) {
+        } else if (common_valid_http_url($object->id)) {
             $profile->profileurl = $object->id;
         }
 
@@ -1663,7 +1700,7 @@ class Ostatus_profile extends Managed_DataObject
         }
     }
 
-    protected static function updateGroup($group, $object, $hints=array())
+    protected static function updateGroup(User_group $group, $object, $hints=array())
     {
         $orig = clone($group);
 
@@ -1681,7 +1718,7 @@ class Ostatus_profile extends Managed_DataObject
         $group->location = self::getActivityObjectLocation($object, $hints);
         $group->homepage = self::getActivityObjectHomepage($object, $hints);
 
-        if ($group->id) {
+        if ($group->id) {   // If no id, we haven't called insert() yet, so don't run update()
             common_log(LOG_DEBUG, "Updating OStatus group $group->id from remote info $object->id: " . var_export($object, true) . var_export($hints, true));
             $group->update($orig);
         }
@@ -1867,16 +1904,16 @@ class Ostatus_profile extends Managed_DataObject
                 // TRANS: Exception.
                 throw new Exception(_m('Not a valid webfinger address.'));
             }
-            $oprofile = Ostatus_profile::staticGet('uri', $uri);
-            if (!empty($oprofile)) {
+            $oprofile = Ostatus_profile::getKV('uri', $uri);
+            if ($oprofile instanceof Ostatus_profile) {
                 return $oprofile;
             }
         }
 
         // Try looking it up
-        $oprofile = Ostatus_profile::staticGet('uri', 'acct:'.$addr);
+        $oprofile = Ostatus_profile::getKV('uri', 'acct:'.$addr);
 
-        if (!empty($oprofile)) {
+        if ($oprofile instanceof Ostatus_profile) {
             self::cacheSet(sprintf('ostatus_profile:webfinger:%s', $addr), $oprofile->uri);
             return $oprofile;
         }
@@ -1912,7 +1949,6 @@ class Ostatus_profile extends Managed_DataObject
 
         // If we got a feed URL, try that
         if (array_key_exists('feedurl', $hints)) {
-			$feedUrl = $hints['feedurl'];
             try {
                 common_log(LOG_INFO, "Discovery on acct:$addr with feed URL " . $hints['feedurl']);
                 $oprofile = self::ensureFeedURL($hints['feedurl'], $hints);
@@ -1926,7 +1962,6 @@ class Ostatus_profile extends Managed_DataObject
 
         // If we got a profile page, try that!
         if (array_key_exists('profileurl', $hints)) {
-			$profileUrl = $hints['profileurl'];
             try {
                 common_log(LOG_INFO, "Discovery on acct:$addr with profile URL $profileUrl");
                 $oprofile = self::ensureProfileURL($hints['profileurl'], $hints);
@@ -1969,7 +2004,7 @@ class Ostatus_profile extends Managed_DataObject
 
             $profile_id = $profile->insert();
 
-            if (!$profile_id) {
+            if ($profile_id === false) {
                 common_log_db_error($profile, 'INSERT', __FILE__);
                 // TRANS: Exception. %s is a webfinger address.
                 throw new Exception(sprintf(_m('Could not save profile for "%s".'),$addr));
@@ -1988,7 +2023,7 @@ class Ostatus_profile extends Managed_DataObject
 
             $result = $oprofile->insert();
 
-            if (!$result) {
+            if ($result === false) {
                 common_log_db_error($oprofile, 'INSERT', __FILE__);
                 // TRANS: Exception. %s is a webfinger address.
                 throw new Exception(sprintf(_m('Could not save OStatus profile for "%s".'),$addr));
@@ -2054,35 +2089,36 @@ class Ostatus_profile extends Managed_DataObject
 
         // First, try to query it
 
-        $oprofile = Ostatus_profile::staticGet('uri', $uri);
+        $oprofile = Ostatus_profile::getKV('uri', $uri);
+
+        if ($oprofile instanceof Ostatus_profile) {
+            return $oprofile;
+        }
 
         // If unfound, do discovery stuff
-
-        if (empty($oprofile)) {
-            if (preg_match("/^(\w+)\:(.*)/", $uri, $match)) {
-                $protocol = $match[1];
-                switch ($protocol) {
-                case 'http':
-                case 'https':
-                    $oprofile = Ostatus_profile::ensureProfileURL($uri);
-                    break;
-                case 'acct':
-                case 'mailto':
-                    $rest = $match[2];
-                    $oprofile = Ostatus_profile::ensureWebfinger($rest);
-                    break;
-                default:
-                    // TRANS: Server exception.
-                    // TRANS: %1$s is a protocol, %2$s is a URI.
-                    throw new ServerException(sprintf(_m('Unrecognized URI protocol for profile: %1$s (%2$s).'),
-                                                      $protocol,
-                                                      $uri));
-                    break;
-                }
-            } else {
-                // TRANS: Server exception. %s is a URI.
-                throw new ServerException(sprintf(_m('No URI protocol for profile: %s.'),$uri));
+        if (preg_match("/^(\w+)\:(.*)/", $uri, $match)) {
+            $protocol = $match[1];
+            switch ($protocol) {
+            case 'http':
+            case 'https':
+                $oprofile = self::ensureProfileURL($uri);
+                break;
+            case 'acct':
+            case 'mailto':
+                $rest = $match[2];
+                $oprofile = self::ensureWebfinger($rest);
+                break;
+            default:
+                // TRANS: Server exception.
+                // TRANS: %1$s is a protocol, %2$s is a URI.
+                throw new ServerException(sprintf(_m('Unrecognized URI protocol for profile: %1$s (%2$s).'),
+                                                  $protocol,
+                                                  $uri));
+                break;
             }
+        } else {
+            // TRANS: Server exception. %s is a URI.
+            throw new ServerException(sprintf(_m('No URI protocol for profile: %s.'),$uri));
         }
 
         return $oprofile;

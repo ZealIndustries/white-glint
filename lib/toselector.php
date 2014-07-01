@@ -86,22 +86,18 @@ class ToSelector extends Widget
             // TRANS: Option in drop-down of potential addressees.
             $choices['public:everyone'] = _m('SENDTO','Everyone');
             $default = 'public:everyone';
-        } else {
-			// XXX: better name...?
-			// TRANS: Option in drop-down of potential addressees.
-			// TRANS: %s is a StatusNet sitename.
-			$choices['public:site'] = sprintf(_('My colleagues at %s'), common_config('site', 'name'));
-		}
+        }
+        // XXX: better name...?
+        // TRANS: Option in drop-down of potential addressees.
+        // TRANS: %s is a StatusNet sitename.
+        $choices['public:site'] = sprintf(_('My colleagues at %s'), common_config('site', 'name'));
 
         $groups = $this->user->getGroups();
-		
-		$privateButtonShow = '';
 
-        while ($groups->fetch()) {
+        while ($groups instanceof User_group && $groups->fetch()) {
             $value = 'group:'.$groups->id;
             if (($this->to instanceof User_group) && $this->to->id == $groups->id) {
                 $default = $value;
-				$privateButtonShow = ' visible';
             }
             $choices[$value] = $groups->getBestName();
         }
@@ -122,7 +118,7 @@ class ToSelector extends Widget
                              false,
                              $default);
 
-        $this->out->elementStart('span', 'checkbox-wrapper'.$privateButtonShow);
+        $this->out->elementStart('span', 'checkbox-wrapper');
         $this->out->checkbox('notice_private',
                              // TRANS: Checkbox label in widget for selecting potential addressees to mark the notice private.
                              _('Private?'),
@@ -149,21 +145,18 @@ class ToSelector extends Widget
             }
             break;
         case 'profile':
-            $profile = Profile::staticGet('id', $value);
-            $options['replies'] = array($profile->getUri());/* removing private non-group notices
+            $profile = Profile::getKV('id', $value);
+            $options['replies'] = array($profile->getUri());
             if ($private) {
                 $options['scope'] = Notice::ADDRESSEE_SCOPE;
-            }*/
+            }
             break;
         case 'public':
             if ($value == 'everyone' && !common_config('site', 'private')) {
                 $options['scope'] = 0;
             } else if ($value == 'site') {
                 $options['scope'] = Notice::SITE_SCOPE;
-            }/* removing private non-group notices
-			if ($private) {
-				$options['scope'] = Notice::FOLLOWER_SCOPE;
-			}*/
+            }
             break;
         default:
             // TRANS: Client exception thrown in widget for selecting potential addressees when an invalid fill option was received.

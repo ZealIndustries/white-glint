@@ -85,6 +85,11 @@ class GroupProfileBlock extends ProfileBlock
         return $this->group->description;
     }
 
+    function otherProfiles()
+    {
+        return array();
+    }
+
     function showActions()
     {
         $cur = common_current_user();
@@ -110,7 +115,7 @@ class GroupProfileBlock extends ProfileBlock
                 }
                 Event::handle('EndGroupSubscribe', array($this, $this->group));
             }
-            $this->out->elementEnd('li');/*
+            $this->out->elementEnd('li');
             if ($cur && $cur->isAdmin($this->group)) {
                 $this->out->elementStart('li', 'entity_edit');
                 $this->out->element('a', array('href' => common_local_url('editgroup',
@@ -130,7 +135,7 @@ class GroupProfileBlock extends ProfileBlock
                                     // TRANS: Link text for link on user profile.
                                     _m('MENU','Logo'));
                 $this->out->elementEnd('li');
-            }*/
+            }
             if ($cur && $cur->hasRight(Right::DELETEGROUP)) {
                 $this->out->elementStart('li', 'entity_delete');
                 $df = new DeleteGroupForm($this->out, $this->group);
@@ -162,16 +167,14 @@ class GroupProfileBlock extends ProfileBlock
 
     function showAliases()
     {
-		$this->out->elementStart('p', 'profile_block_nickname');
         $aliases = $this->group->getAliases();
-		if($this->group->fullname)
-			$this->out->text('!'.$this->group->nickname);
 
         if (!empty($aliases)) {
+            $this->out->elementStart('ul', 'group_aliases');
             foreach ($aliases as $alias) {
-                $this->out->element('span', 'group_alias', $alias);
+                $this->out->element('li', 'group_alias', $alias);
             }
+            $this->out->elementEnd('ul');
         }
-		$this->out->elementEnd('p');
     }
 }

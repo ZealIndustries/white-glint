@@ -35,7 +35,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiprivateauth.php';
 require_once INSTALLDIR . '/lib/atomlistnoticefeed.php';
 
 /**
@@ -67,7 +66,7 @@ class ApiTimelineListAction extends ApiPrivateAuthAction
      * @return boolean success flag
      *
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
@@ -82,18 +81,15 @@ class ApiTimelineListAction extends ApiPrivateAuthAction
      *
      * Just show the notices
      *
-     * @param array $args $_REQUEST data (unused)
-     *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
+        parent::handle();
 
         if (empty($this->list)) {
             // TRANS: Client error displayed trying to perform an action related to a non-existing list.
-            $this->clientError(_('List not found.'), 404, $this->format);
-            return false;
+            $this->clientError(_('List not found.'), 404);
         }
 
         $this->getNotices();
@@ -152,8 +148,7 @@ class ApiTimelineListAction extends ApiPrivateAuthAction
             } catch (Atom10FeedException $e) {
                 // TRANS: Server error displayed whe trying to get a timeline fails.
                 // TRANS: %s is the error message.
-                $this->serverError( sprintf(_('Could not generate feed for list - %s'),$e->getMessage()));
-                return;
+                $this->serverError(sprintf(_('Could not generate feed for list - %s'), $e->getMessage()));
             }
 
             break;
@@ -177,13 +172,8 @@ class ApiTimelineListAction extends ApiPrivateAuthAction
             $this->initDocument('json');
             break;
         default:
-            $this->clientError(
-                // TRANS: Client error displayed when coming across a non-supported API method.
-                _('API method not found.'),
-                404,
-                $this->format
-            );
-            break;
+            // TRANS: Client error displayed when coming across a non-supported API method.
+            $this->clientError(_('API method not found.'), 404);
         }
     }
 

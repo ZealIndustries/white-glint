@@ -38,8 +38,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apibareauth.php';
-
 /**
  * Returns the most recent notices (default 20) posted by the target user.
  * This is the equivalent of 'You and friends' page accessed via Web.
@@ -67,16 +65,15 @@ class ApiTimelineHomeAction extends ApiBareAuthAction
      *
      * @return boolean success flag
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
-        $this->user = $this->getTargetUser($this->arg('id'));
+        $this->target = $this->getTargetProfile($this->arg('id'));
 
-        if (empty($this->user)) {
+        if (!($this->target instanceof Profile)) {
             // TRANS: Client error displayed when requesting most recent dents by user and friends for a non-existing user.
-            $this->clientError(_('No such user.'), 404, $this->format);
-            return;
+            $this->clientError(_('No such user.'), 404);
         }
 
         $this->notices = $this->getNotices();
@@ -89,13 +86,11 @@ class ApiTimelineHomeAction extends ApiBareAuthAction
      *
      * Just show the notices
      *
-     * @param array $args $_REQUEST data (unused)
-     *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
+        parent::handle();
         $this->showTimeline();
     }
 
@@ -106,30 +101,22 @@ class ApiTimelineHomeAction extends ApiBareAuthAction
      */
     function showTimeline()
     {
-        $profile    = $this->user->getProfile();
-        $avatar     = $profile->getAvatar(AVATAR_PROFILE_SIZE);
         $sitename   = common_config('site', 'name');
         // TRANS: Timeline title for user and friends. %s is a user nickname.
-        $title      = sprintf(_("%s and friends"), $this->user->nickname);
+        $title      = sprintf(_("%s and friends"), $this->target->nickname);
         $taguribase = TagURI::base();
-        $id         = "tag:$taguribase:HomeTimeline:" . $this->user->id;
+        $id         = "tag:$taguribase:HomeTimeline:" . $this->target->id;
 
         $subtitle   = sprintf(
             // TRANS: Message is used as a subtitle. %1$s is a user nickname, %2$s is a site name.
             _('Updates from %1$s and friends on %2$s!'),
-            $this->user->nickname, $sitename
+            $this->target->nickname, $sitename
         );
 
-        $link = common_local_url(
-            'all',
-            array('nickname' => $this->user->nickname)
-        );
-
+        $logo = $this->target->avatarUrl(AVATAR_PROFILE_SIZE);
+        $link = common_local_url('all',
+                    array('nickname' => $this->target->nickname));
         $self = $this->getSelfUri();
-
-        $logo = (!empty($avatar))
-            ? $avatar->displayUrl()
-            : Avatar::defaultImage(AVATAR_PROFILE_SIZE);
 
         switch($this->format) {
         case 'xml':
@@ -178,8 +165,7 @@ class ApiTimelineHomeAction extends ApiBareAuthAction
             break;
         default:
             // TRANS: Client error displayed when coming across a non-supported API method.
-            $this->clientError(_('API method not found.'), $code = 404);
-            break;
+            $this->clientError(_('API method not found.'), 404);
         }
     }
 
@@ -192,7 +178,7 @@ class ApiTimelineHomeAction extends ApiBareAuthAction
     {
         $notices = array();
 
-        $stream = new InboxNoticeStream($this->user);
+        $stream = new InboxNoticeStream($this->target->getUser(), $this->scoped);
         
         $notice = $stream->getNotices(($this->page-1) * $this->count,
                                       $this->count,
@@ -251,7 +237,7 @@ class ApiTimelineHomeAction extends ApiBareAuthAction
                 array($this->arg('action'),
                       common_user_cache_hash($this->auth_user),
                       common_language(),
-                      $this->user->id,
+                      $this->target->id,
                       strtotime($this->notices[0]->created),
                       strtotime($this->notices[$last]->created))
             )

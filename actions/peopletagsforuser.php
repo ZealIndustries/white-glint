@@ -77,7 +77,7 @@ class PeopletagsforuserAction extends Action
             return false;
         }
 
-        $this->user = User::staticGet('nickname', $nickname);
+        $this->user = User::getKV('nickname', $nickname);
 
         if (!$this->user) {
             // TRANS: Client error displayed trying to perform an action related to a non-existing user.
@@ -152,7 +152,7 @@ class PeopletagsforuserAction extends Action
         $this->elementEnd('div');
     }
 
-    function showLocalNav()
+    function showObjectNav()
     {
         $nav = new PeopletagNav($this, $this->tagged);
         $nav->show();

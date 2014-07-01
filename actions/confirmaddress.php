@@ -48,7 +48,7 @@ class ConfirmaddressAction extends Action
 {
     /** type of confirmation. */
 
-    var $type = null;
+    var $address;
 
     /**
      * Accept a confirmation code
@@ -74,7 +74,7 @@ class ConfirmaddressAction extends Action
             $this->clientError(_('No confirmation code.'));
             return;
         }
-        $confirm = Confirm_address::staticGet('code', $code);
+        $confirm = Confirm_address::getKV('code', $code);
         if (!$confirm) {
             // TRANS: Client error displayed when providing a non-existing confirmation code in the contact address confirmation action.
             $this->clientError(_('Confirmation code not found.'));
@@ -87,41 +87,81 @@ class ConfirmaddressAction extends Action
             return;
         }
         $type = $confirm->address_type;
-        if (!in_array($type, array('email', 'jabber', 'sms'))) {
-            // TRANS: Server error for a unknow address type %s, which can be 'email', 'jabber', or 'sms'.
-            $this->serverError(sprintf(_('Unrecognized address type %s.'), $type));
+        $transports = array();
+        Event::handle('GetImTransports', array(&$transports));
+        if (!in_array($type, array('email', 'sms')) && !in_array($type, array_keys($transports))) {
+            // TRANS: Server error for an unknown address type, which can be 'email', 'sms', or the name of an IM network (such as 'xmpp' or 'aim')
+            $this->serverError(sprintf(_('Unrecognized address type %s'), $type));
             return;
         }
-        if ($cur->$type == $confirm->address) {
-            // TRANS: Client error for an already confirmed email/jabber/sms address.
-            $this->clientError(_('That address has already been confirmed.'));
-            return;
-        }
-
+        $this->address = $confirm->address;
         $cur->query('BEGIN');
+        if (in_array($type, array('email', 'sms')))
+        {
+            if ($cur->$type == $confirm->address) {
+                // TRANS: Client error for an already confirmed email/jabber/sms address.
+                $this->clientError(_('That address has already been confirmed.'));
+                return;
+            }
 
-        $orig_user = clone($cur);
+            $orig_user = clone($cur);
 
-        $cur->$type = $confirm->address;
+            $cur->$type = $confirm->address;
 
-        if ($type == 'sms') {
-            $cur->carrier  = ($confirm->address_extra)+0;
-            $carrier       = Sms_carrier::staticGet($cur->carrier);
-            $cur->smsemail = $carrier->toEmailAddress($cur->sms);
-        }
+            if ($type == 'sms') {
+                $cur->carrier  = ($confirm->address_extra)+0;
+                $carrier       = Sms_carrier::getKV($cur->carrier);
+                $cur->smsemail = $carrier->toEmailAddress($cur->sms);
+            }
 
+            $result = $cur->updateKeys($orig_user);
 
-        $result = $cur->updateKeys($orig_user);
+            if (!$result) {
+                common_log_db_error($cur, 'UPDATE', __FILE__);
+                // TRANS: Server error displayed when confirming an e-mail address or IM address fails.
+                $this->serverError(_('Could not update user.'));
+                return;
+            }
 
-        if (!$result) {
-            common_log_db_error($cur, 'UPDATE', __FILE__);
-            // TRANS: Server error displayed when a user update to the database fails in the contact address confirmation action.
-            $this->serverError(_('Could not update user.'));
-            return;
-        }
+            if ($type == 'email') {
+                $cur->emailChanged();
+            }
 
-        if ($type == 'email') {
-            $cur->emailChanged();
+        } else {
+
+            $user_im_prefs = new User_im_prefs();
+            $user_im_prefs->transport = $confirm->address_type;
+            $user_im_prefs->user_id = $cur->id;
+            if ($user_im_prefs->find() && $user_im_prefs->fetch()) {
+                if($user_im_prefs->screenname == $confirm->address){
+                    // TRANS: Client error for an already confirmed IM address.
+                    $this->clientError(_('That address has already been confirmed.'));
+                    return;
+                }
+                $user_im_prefs->screenname = $confirm->address;
+                $result = $user_im_prefs->update();
+
+                if (!$result) {
+                    common_log_db_error($user_im_prefs, 'UPDATE', __FILE__);
+                    // TRANS: Server error displayed when updating IM preferences fails.
+                    $this->serverError(_('Could not update user IM preferences.'));
+                    return;
+                }
+            }else{
+                $user_im_prefs = new User_im_prefs();
+                $user_im_prefs->screenname = $confirm->address;
+                $user_im_prefs->transport = $confirm->address_type;
+                $user_im_prefs->user_id = $cur->id;
+                $result = $user_im_prefs->insert();
+
+                if (!$result) {
+                    common_log_db_error($user_im_prefs, 'INSERT', __FILE__);
+                    // TRANS: Server error displayed when adding IM preferences fails.
+                    $this->serverError(_('Could not insert user IM preferences.'));
+                    return;
+                }
+            }
+
         }
 
         $result = $confirm->delete();
@@ -135,8 +175,6 @@ class ConfirmaddressAction extends Action
         }
 
         $cur->query('COMMIT');
-
-        $this->type = $type;
         $this->showPage();
     }
 
@@ -159,13 +197,12 @@ class ConfirmaddressAction extends Action
     function showContent()
     {
         $cur  = common_current_user();
-        $type = $this->type;
 
         $this->element('p', null,
                        // TRANS: Success message for the contact address confirmation action.
                        // TRANS: %s can be 'email', 'jabber', or 'sms'.
                        sprintf(_('The address "%s" has been '.
                                  'confirmed for your account.'),
-                               $cur->$type));
+                               $this->address));
     }
 }

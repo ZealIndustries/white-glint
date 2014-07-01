@@ -27,7 +27,7 @@
  * @link      http://status.net/
  */
 
-if (!defined('STATUSNET') && !defined('LACONICA')) {
+if (!defined('STATUSNET')) {
     exit(1);
 }
 
@@ -51,32 +51,11 @@ class RealtimePlugin extends Plugin
      * When it's time to initialize the plugin, calculate and
      * pass the URLs we need.
      */
-
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'KeepalivechannelAction':
-        case 'ClosechannelAction':
-        case 'NoticeonlyAction':
-            include_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'Realtime_channel':
-            include_once $dir.'/'.$cls.'.php';
-            return false;
-        default:
-            return true;
-        }
-    }
-
     function onInitializePlugin()
     {
         // FIXME: need to find a better way to pass this pattern in
-        $this->showurl = common_local_url('noticeonly',
+        $this->showurl = common_local_url('shownotice',
                                             array('notice' => '0000000000'));
-
         return true;
     }
 
@@ -93,9 +72,8 @@ class RealtimePlugin extends Plugin
      * @param Net_URL_Mapper $m path-to-action mapper
      * @return boolean hook return
      */
-    function onStartInitializeRouter($m)
+    function onRouterInitialized($m)
     {
-        $m->connect('notice/:notice/r', array('action' => 'noticeonly'), array('notice' => '[0-9]+'));
         $m->connect('main/channel/:channelkey/keepalive',
                     array('action' => 'keepalivechannel'),
                     array('channelkey' => '[a-z0-9]{32}'));
@@ -162,12 +140,7 @@ class RealtimePlugin extends Plugin
         return true;
     }
 
-    function onEndDeleteOwnNotice($user, $notice) {
-        $this->_addToTimelines($notice, array('notice_delete' => $notice->id));
-    }
-
-
-    function onEndShowStatusNetStyles($action)
+    public function onEndShowStylesheets(Action $action)
     {
         $action->cssLink(Plugin::staticPath('Realtime', 'realtimeupdate.css'),
                          null,
@@ -175,7 +148,8 @@ class RealtimePlugin extends Plugin
         return true;
     }
 
-    function _addToTimelines($notice, $hson=null) {
+    function onHandleQueuedNotice($notice)
+    {
         $paths = array();
 
         // Add to the author's timeline
@@ -187,7 +161,7 @@ class RealtimePlugin extends Plugin
             return true;
         }
 
-        $user = User::staticGet('id', $notice->profile_id);
+        $user = User::getKV('id', $notice->profile_id);
 
         if (!empty($user)) {
             $paths[] = array('showstream', $user->nickname, null);
@@ -195,10 +169,10 @@ class RealtimePlugin extends Plugin
 
         // Add to the public timeline
 
-        //if ($notice->is_local == Notice::LOCAL_PUBLIC ||
-        //    ($notice->is_local == Notice::REMOTE && !common_config('public', 'localonly'))) {
+        if ($notice->is_local == Notice::LOCAL_PUBLIC ||
+            ($notice->is_local == Notice::REMOTE && !common_config('public', 'localonly'))) {
             $paths[] = array('public', null, null);
-        //}
+        }
 
         // Add to the tags timeline
 
@@ -216,7 +190,7 @@ class RealtimePlugin extends Plugin
         $ni = $notice->whoGets();
 
         foreach (array_keys($ni) as $user_id) {
-            $user = User::staticGet('id', $user_id);
+            $user = User::getKV('id', $user_id);
             $paths[] = array('all', $user->nickname, null);
         }
 
@@ -227,7 +201,7 @@ class RealtimePlugin extends Plugin
 
         if ($reply->find()) {
             while ($reply->fetch()) {
-                $user = User::staticGet('id', $reply->profile_id);
+                $user = User::getKV('id', $reply->profile_id);
                 if (!empty($user)) {
                     $paths[] = array('replies', $user->nickname, null);
                 }
@@ -242,19 +216,14 @@ class RealtimePlugin extends Plugin
 
         if ($gi->find()) {
             while ($gi->fetch()) {
-                $ug = User_group::staticGet('id', $gi->group_id);
+                $ug = User_group::getKV('id', $gi->group_id);
                 $paths[] = array('showgroup', $ug->nickname, null);
             }
         }
 
-        // Add to the conversation timeline
-        if($notice->conversation) $paths[] = array('conversation', $notice->conversation);
-
         if (count($paths) > 0) {
 
             $json = $this->noticeAsJson($notice);
-			if(is_array($hson))
-				$json = array_merge($json, $hson);
 
             $this->_connect();
 
@@ -263,15 +232,12 @@ class RealtimePlugin extends Plugin
 
             foreach ($paths as $path) {
 
-				// @fixme This is a hack
-				if(isset($path[2]))
-					list($action, $arg1, $arg2) = $path;
-				else {
-					list($action, $arg1) = $path;
-					$arg2 = null;
-				}
+                list($action, $arg1, $arg2) = $path;
 
                 $channels = Realtime_channel::getAllChannels($action, $arg1, $arg2);
+                $this->log(LOG_INFO, sprintf(_("%d candidate channels for notice %d"),
+                                             count($channels), 
+                                             $notice->id));
 
                 foreach ($channels as $channel) {
 
@@ -281,9 +247,16 @@ class RealtimePlugin extends Plugin
                     if (is_null($channel->user_id)) {
                         $profile = null;
                     } else {
-                        $profile = Profile::staticGet('id', $channel->user_id);
+                        $profile = Profile::getKV('id', $channel->user_id);
                     }
-                    if (($action != 'public' || $notice->showsOnPublic($profile)) && $notice->inScope($profile)) {
+                    if ($notice->inScope($profile)) {
+                        $this->log(LOG_INFO, 
+                                   sprintf(_("Delivering notice %d to channel (%s, %s, %s) for user '%s'"),
+                                           $notice->id,
+                                           $channel->action,
+                                           $channel->arg1,
+                                           $channel->arg2,
+                                           ($profile) ? ($profile->nickname) : "<public>"));
                         $timeline = $this->_pathToChannel(array($channel->channel_key));
                         $this->_publish($timeline, $json);
                     }
@@ -292,11 +265,6 @@ class RealtimePlugin extends Plugin
 
             $this->_disconnect();
         }
-    }
-
-    function onHandleQueuedNotice($notice)
-    {
-        $this->_addToTimelines($notice, null);
 
         return true;
     }
@@ -359,7 +327,7 @@ class RealtimePlugin extends Plugin
         // Add needed repeat data
 
         if (!empty($notice->repeat_of)) {
-            $original = Notice::staticGet('id', $notice->repeat_of);
+            $original = Notice::getKV('id', $notice->repeat_of);
             if (!empty($original)) {
                 $arr['retweeted_status']['url'] = $original->bestUrl();
                 $arr['retweeted_status']['html'] = htmlspecialchars($original->rendered);
@@ -399,7 +367,7 @@ class RealtimePlugin extends Plugin
         $convurl = null;
 
         if ($notice->hasConversation()) {
-            $conv = Conversation::staticGet(
+            $conv = Conversation::getKV(
                 'id',
                 $notice->conversation
             );
@@ -527,12 +495,6 @@ class RealtimePlugin extends Plugin
                 return null;
             }
             break;
-         case 'conversation':
-             $conversation = $action->trimmed('id');
-             if (!empty($conversation)) {
-                 $path = array($action_name, $conversation);
-             }
-             break;
          default:
             return null;
         }

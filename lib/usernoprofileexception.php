@@ -2,7 +2,7 @@
 /**
  * StatusNet, the distributed open-source microblogging tool
  *
- * class for an exception when the user profile is missing
+ * Class for an exception when the user profile is missing
  *
  * PHP version 5
  *
@@ -27,9 +27,7 @@
  * @link      http://status.net/
  */
 
-if (!defined('STATUSNET')) {
-    exit(1);
-}
+if (!defined('GNUSOCIAL')) { exit(1); }
 
 /**
  * Class for an exception when the user profile is missing
@@ -41,9 +39,9 @@ if (!defined('STATUSNET')) {
  * @link     http://status.net/
  */
 
-class UserNoProfileException extends ServerException
+class UserNoProfileException extends NoProfileException
 {
-    var $user = null;
+    protected $user = null;
 
     /**
      * constructor
@@ -51,7 +49,7 @@ class UserNoProfileException extends ServerException
      * @param User $user User that's missing a profile
      */
 
-    public function __construct($user)
+    public function __construct(User $user)
     {
         $this->user = $user;
 
@@ -60,7 +58,7 @@ class UserNoProfileException extends ServerException
         $message = sprintf(_('User %1$s (%2$d) has no profile record.'),
                            $user->nickname, $user->id);
 
-        parent::__construct($message);
+        parent::__construct($user->id, $message);
     }
 
     /**

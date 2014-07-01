@@ -33,9 +33,6 @@ class Group_alias extends Managed_DataObject
     public $group_id;                        // int(4)   not_null
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
 
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('Group_alias',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -55,5 +52,14 @@ class Group_alias extends Managed_DataObject
                 'group_alias_group_id_idx' => array('group_id'),
             ),
         );
+    }
+
+    public function getProfile()
+    {
+        $group = User_group::getKV('id', $this->group_id);
+        if (!($group instanceof User_group)) {
+            return null;    // TODO: Throw exception when other code is ready
+        }
+        return $group->getProfile();
     }
 }

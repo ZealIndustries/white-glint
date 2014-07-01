@@ -58,18 +58,6 @@ class MinifyPlugin extends Plugin
         return true;
     }
 
-    function onAutoload($cls)
-    {
-        switch ($cls)
-        {
-         case 'MinifyAction':
-            require_once(INSTALLDIR.'/plugins/Minify/' . strtolower(mb_substr($cls, 0, -6)) . '.php');
-            return false;
-         default:
-            return true;
-        }
-    }
-
     function onLoginAction($action, &$login)
     {
         switch ($action)
@@ -156,7 +144,7 @@ class MinifyPlugin extends Plugin
     }
 
     function minifyUrl($src) {
-        return common_local_url('minify',null,array('f' => $src ,v => STATUSNET_VERSION));
+        return common_local_url('minify',null,array('f' => $src ,v => GNUSOCIAL_VERSION));
     }
 
     static function minifyJs($code) {
@@ -172,7 +160,7 @@ class MinifyPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'Minify',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Craig Andrews',
                             'homepage' => 'http://status.net/wiki/Plugin:Minify',
                             'rawdescription' =>

@@ -55,18 +55,12 @@ class AccountProfileBlock extends ProfileBlock
     {
         parent::__construct($out);
         $this->profile = $profile;
-        $this->user    = User::staticGet('id', $profile->id);
+        $this->user    = User::getKV('id', $profile->id);
     }
 
     function avatar()
     {
-        $avatar = $this->profile->getAvatar(AVATAR_PROFILE_SIZE);
-        if (empty($avatar)) {
-            $avatar = $this->profile->getAvatar(73);
-        }
-        return (!empty($avatar)) ?
-            $avatar->displayUrl() :
-            Avatar::defaultImage(AVATAR_PROFILE_SIZE);
+        return $this->profile->avatarUrl(AVATAR_PROFILE_SIZE);
     }
 
     function name()
@@ -92,6 +86,15 @@ class AccountProfileBlock extends ProfileBlock
     function description()
     {
         return $this->profile->bio;
+    }
+
+    function otherProfiles()
+    {
+        $others = array();
+
+        Event::handle('OtherAccountProfiles', array($this->profile, &$others));
+        
+        return $others;
     }
 
     function showTags()
@@ -263,7 +266,6 @@ class AccountProfileBlock extends ProfileBlock
                             $this->roleButton('administrator', _m('role', 'Administrator'));
                             // TRANS: Role that can be set for a user profile.
                             $this->roleButton('moderator', _m('role', 'Moderator'));
-							Event::handle('EndUserRoleBlock', array($this->out));
                             $this->out->elementEnd('ul');
                             $this->out->elementEnd('li');
                         }
@@ -305,12 +307,4 @@ class AccountProfileBlock extends ProfileBlock
         }
         $this->out->elementEnd('div');
     }
-	
-	function showName() {
-		parent::showName();
-		$this->out->elementStart('p', 'profile_block_nickname');
-		if($this->profile->fullname)
-			$this->out->text('@'.$this->profile->nickname);
-		$this->out->elementEnd('p');
-	}
 }

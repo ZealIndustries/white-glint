@@ -31,9 +31,7 @@ Batch script for synching local friends with Twitter friends.
 END_OF_TRIM_HELP;
 
 require_once INSTALLDIR . '/scripts/commandline.inc';
-require_once INSTALLDIR . '/lib/parallelizingdaemon.php';
 require_once INSTALLDIR . '/plugins/TwitterBridge/twitter.php';
-require_once INSTALLDIR . '/plugins/TwitterBridge/twitteroauthclient.php';
 
 /**
  * Daemon to sync local friends with Twitter friends
@@ -203,7 +201,7 @@ class SyncTwitterFriendsDaemon extends ParallelizingDaemon
             return false;
         }
 
-        $user = $flink->getUser();
+        $profile = $flink->getProfile();
 
         foreach ($friends as $friend) {
 
@@ -228,20 +226,20 @@ class SyncTwitterFriendsDaemon extends ParallelizingDaemon
 
                 // Get associated user and subscribe her
 
-                $friend_user = User::staticGet('id', $friend_flink->user_id);
+                $friend_profile = Profile::getKV('id', $friend_flink->user_id);
 
-                if (!empty($friend_user)) {
-                    $result = subs_subscribe_to($user, $friend_user);
-
-                    if ($result === true) {
+                if ($friend_profile instanceof Profile) {
+                    try {
+                        $other = Profile::getKV('id', $invites->user_id);
+                        Subscription::start($profile, $friend_profile);
                         common_log(LOG_INFO,
                                    $this->name() . ' - Subscribed ' .
-                                   "$friend_user->nickname to $user->nickname.");
-                    } else {
+                                   "{$friend_profile->nickname} to {$profile->nickname}.");
+                    } catch (Exception $e) {
                         common_debug($this->name() .
-                                     ' - Tried subscribing ' .
-                                     "$friend_user->nickname to $user->nickname - " .
-                                     $result);
+                                     ' - Tried and failed subscribing ' .
+                                     "{$friend_profile->nickname} to {$profile->nickname} - " .
+                                     $e->getMessage());
                     }
                 }
             }

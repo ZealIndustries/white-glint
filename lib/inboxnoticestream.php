@@ -57,7 +57,7 @@ class InboxNoticeStream extends ScopingNoticeStream
             $profile = Profile::current();
         }
         // Note: we don't use CachingNoticeStream since RawInboxNoticeStream
-        // uses Inbox::staticGet(), which is cached.
+        // uses Inbox::getKV(), which is cached.
         parent::__construct(new RawInboxNoticeStream($user), $profile);
     }
 }
@@ -85,7 +85,7 @@ class RawInboxNoticeStream extends NoticeStream
     function __construct($user)
     {
         $this->user  = $user;
-        $this->inbox = Inbox::staticGet('user_id', $user->id);
+        $this->inbox = Inbox::getKV('user_id', $user->id);
     }
 
     /**
@@ -134,5 +134,31 @@ class RawInboxNoticeStream extends NoticeStream
         $ids = array_slice($ids, $offset, $limit);
 
         return $ids;
+    }
+
+    function getNotices($offset, $limit, $sinceId, $maxId)
+    {
+        $all = array();
+
+        do {
+
+            $ids = $this->getNoticeIds($offset, $limit, $sinceId, $maxId);
+
+            $notices = Notice::pivotGet('id', $ids);
+
+            // By default, takes out false values
+
+            $notices = array_filter($notices);
+
+            $all = array_merge($all, $notices);
+
+            if (count($notices < count($ids))) {
+                $offset += $limit;
+                $limit  -= count($notices);
+            }
+
+        } while (count($notices) < count($ids) && count($ids) > 0);
+
+        return new ArrayWrapper($all);
     }
 }

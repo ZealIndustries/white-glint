@@ -15,10 +15,6 @@ class Profile_tag extends Managed_DataObject
     public $tag;                             // varchar(64)  primary_key not_null
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
 
-    /* Static get */
-    function staticGet($k,$v=null)
-    { return Memcached_DataObject::staticGet('Profile_tag',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -44,10 +40,6 @@ class Profile_tag extends Managed_DataObject
                 'profile_tag_tagged_idx' => array('tagged'),
             ),
         );
-    }
-
-    function pkeyGet($kv) {
-        return Memcached_DataObject::pkeyGet('Profile_tag', $kv);
     }
 
     function links()
@@ -161,8 +153,8 @@ class Profile_tag extends Managed_DataObject
             return $ptag;
         }
 
-        $tagger_profile = Profile::staticGet('id', $tagger);
-        $tagged_profile = Profile::staticGet('id', $tagged);
+        $tagger_profile = Profile::getKV('id', $tagger);
+        $tagged_profile = Profile::getKV('id', $tagged);
 
         if (Event::handle('StartTagProfile', array($tagger_profile, $tagged_profile, $tag))) {
 
@@ -193,7 +185,7 @@ class Profile_tag extends Managed_DataObject
             if ($profile_list->taggedCount() >= common_config('peopletag', 'maxpeople')) {
                 // TRANS: Client exception thrown when trying to add more people than allowed to a list.
                 throw new ClientException(sprintf(_('You already have %1$d or more people in list %2$s, ' .
-                                                    'which is the maximum allowed number.' .
+                                                    'which is the maximum allowed number. ' .
                                                     'Try unlisting others first.'),
                                                     common_config('peopletag', 'maxpeople'), $tag));
                 return false;
@@ -284,14 +276,17 @@ class Profile_tag extends Managed_DataObject
                'tag = "%s", tagger = "%s" ' .
                'WHERE tag = "%s" ' .
                'AND tagger = "%s"';
-        $result = $tags->query(sprintf($qry, $tags->escape($new->tag), $tags->escape($new->tagger),
-                                             $tags->escape($orig->tag), $tags->escape($orig->tagger)));
+        $result = $tags->query(sprintf($qry,
+                                       $tags->escape($new->tag),
+                                       $tags->escape($new->tagger),
+                                       $tags->escape($orig->tag),
+                                       $tags->escape($orig->tagger)));
 
-        if (!$result) {
+        if ($result === false) {
             common_log_db_error($tags, 'UPDATE', __FILE__);
-            return false;
+            throw new Exception('Could not move Profile_tag, see db log for details.');
         }
-        return true;
+        return $result;
     }
 
     static function blowCaches($tagger, $tagged) {
@@ -307,8 +302,8 @@ class Profile_tag extends Managed_DataObject
         $profile->query('SELECT profile.* ' .
                         'FROM profile JOIN profile_tag ' .
                         'ON profile.id = profile_tag.tagged ' .
-                        'WHERE profile_tag.tagger = ' . $tags->escape($tagger) . ' ' .
-                        'AND profile_tag.tag = "' . $tags->escape($tag) . '" ');
+                        'WHERE profile_tag.tagger = ' . $profile->escape($tagger) . ' ' .
+                        'AND profile_tag.tag = "' . $profile->escape($tag) . '" ');
         $tagged = array();
         while ($profile->fetch()) {
             $tagged[] = clone($profile);
@@ -327,10 +322,10 @@ class Profile_tag extends Managed_DataObject
         return $result;
     }
 
-    function delete()
+    function delete($useWhere=false)
     {
-        $result = parent::delete();
-        if ($result) {
+        $result = parent::delete($useWhere);
+        if ($result !== false) {
             self::blow('profile_list:tagged_count:%d:%s', 
                        $this->tagger,
                        $this->tag);

@@ -51,14 +51,13 @@ class MailboxAction extends Action
         parent::prepare($args);
 
         $nickname   = common_canonical_nickname($this->arg('nickname'));
-        $this->user = User::staticGet('nickname', $nickname);
+        $this->user = User::getKV('nickname', $nickname);
         $this->page = $this->trimmed('page');
 
         if (!$this->page) {
             $this->page = 1;
         }
 
-		if($this->trimmed('peek') == null)
         common_set_returnto($this->selfUrl());
 
         return true;
@@ -98,11 +97,6 @@ class MailboxAction extends Action
         $message_form = new MessageForm($this);
         $message_form->show();
     }
-	
-	function showLocalNav() {
-        $nav = new MailboxMenu($this);
-        $nav->show();
-	}
 
     function showContent()
     {
@@ -166,5 +160,11 @@ class MailboxAction extends Action
     function isReadOnly($args)
     {
          return true;
+    }
+
+    function showObjectNav()
+    {
+        $mm = new MailboxMenu($this);
+        $mm->show();
     }
 }

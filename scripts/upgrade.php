@@ -45,6 +45,7 @@ function main()
         initInbox();
         fixupGroupURI();
 
+        initGroupProfileId();
         initLocalGroup();
         initNoticeReshare();
     
@@ -124,7 +125,7 @@ function fixupNoticeConversation()
             if (empty($notice->reply_to)) {
                 $notice->conversation = $notice->id;
             } else {
-                $reply = Notice::staticGet('id', $notice->reply_to);
+                $reply = Notice::getKV('id', $notice->reply_to);
 
                 if (empty($reply)) {
                     $notice->conversation = $notice->id;
@@ -159,7 +160,7 @@ function fixupGroupURI()
 
     if ($group->find()) {
         while ($group->fetch()) {
-            $orig = User_group::staticGet('id', $group->id);
+            $orig = User_group::getKV('id', $group->id);
             $group->uri = $group->getUri();
             $group->update($orig);
         }
@@ -241,6 +242,45 @@ function initInbox()
     printfnq("DONE.\n");
 }
 
+function initGroupProfileId()
+{
+    printfnq("Ensuring all User_group entries have a Profile and profile_id...");
+
+    $group = new User_group();
+    $group->whereAdd('NOT EXISTS (SELECT id FROM profile WHERE id = user_group.profile_id)');
+    $group->find();
+
+    while ($group->fetch()) {
+        try {
+            // We must create a new, incrementally assigned profile_id
+            $profile = new Profile();
+            $profile->nickname   = $group->nickname;
+            $profile->fullname   = $group->fullname;
+            $profile->profileurl = $group->mainpage;
+            $profile->homepage   = $group->homepage;
+            $profile->bio        = $group->description;
+            $profile->location   = $group->location;
+            $profile->created    = $group->created;
+            $profile->modified   = $group->modified;
+
+            $profile->query('BEGIN');
+            $id = $profile->insert();
+            if (empty($id)) {
+                $profile->query('ROLLBACK');
+                throw new Exception('Profile insertion failed, profileurl: '.$profile->profileurl);
+            }
+            $group->query("UPDATE user_group SET profile_id={$id} WHERE id={$group->id}");
+            $profile->query('COMMIT');
+
+            $profile->free();
+        } catch (Exception $e) {
+            printfv("Error initializing Profile for group {$group->nickname}:" . $e->getMessage());
+        }
+    }
+
+    printfnq("DONE.\n");
+}
+
 function initLocalGroup()
 {
     printfnq("Ensuring all local user groups have a local_group...");
@@ -281,7 +321,7 @@ function initNoticeReshare()
     if ($notice->find()) {
         while ($notice->fetch()) {
             try {
-                $orig = Notice::staticGet('id', $notice->id);
+                $orig = Notice::getKV('id', $notice->id);
                 $notice->verb = ActivityVerb::SHARE;
                 $notice->object_type = ActivityObject::ACTIVITY;
                 $notice->update($orig);

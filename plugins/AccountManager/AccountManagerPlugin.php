@@ -40,19 +40,6 @@ class AccountManagerPlugin extends Plugin
         parent::__construct();
     }
 
-    function onAutoload($cls)
-    {
-        switch ($cls)
-        {
-         case 'AccountManagementControlDocumentAction':
-            require_once(INSTALLDIR.'/plugins/AccountManager/AccountManagementControlDocumentAction.php');
-            return false;
-         case 'AccountManagementSessionStatusAction':
-            require_once(INSTALLDIR.'/plugins/AccountManager/AccountManagementSessionStatusAction.php');
-            return false;
-        }
-    }
-
     /**
      * Hook for RouterInitialized event.
      *
@@ -70,8 +57,8 @@ class AccountManagerPlugin extends Plugin
     }
 
     function onStartHostMetaLinks(&$links) {
-        $links[] = array('rel' => AccountManagerPlugin::AM_REL,
-                              'href' =>  common_local_url('AccountManagementControlDocument'));
+        $links[] = new XML_XRD_Element_Link(AccountManagerPlugin::AM_REL,
+                        common_local_url('AccountManagementControlDocument'));
     }
 
     function onStartShowHTML($action)
@@ -103,7 +90,7 @@ class AccountManagerPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'AccountManager',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Craig Andrews',
                             'homepage' => 'http://status.net/wiki/Plugin:AccountManager',
                             'rawdescription' =>

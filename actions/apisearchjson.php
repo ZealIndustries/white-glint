@@ -20,19 +20,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * @category  Search
- * @package   StatusNet
+ * @package   GNUsocial
  * @author    Zach Copley <zach@status.net>
  * @copyright 2008-2010 StatusNet, Inc.
+ * @copyright 2013 Free Software Foundation, Inc.
  * @license   http://www.fsf.org/licensing/licenses/agpl-3.0.html GNU Affero General Public License version 3.0
- * @link      http://status.net/
+ * @link      http://www.gnu.org/software/social/
  */
 
-if (!defined('STATUSNET') && !defined('LACONICA')) {
-    exit(1);
-}
-
-require_once INSTALLDIR.'/lib/apiprivateauth.php';
-require_once INSTALLDIR.'/lib/jsonsearchresultslist.php';
+if (!defined('GNUSOCIAL')) { exit(1); }
 
 /**
  * Action handler for Twitter-compatible API search
@@ -63,8 +59,6 @@ class ApiSearchJSONAction extends ApiPrivateAuthAction
      */
     function prepare($args)
     {
-        common_debug("apisearchjson prepare()");
-
         parent::prepare($args);
 
         $this->query = $this->trimmed('q');
@@ -118,25 +112,16 @@ class ApiSearchJSONAction extends ApiPrivateAuthAction
 
         $notice = new Notice();
 
-        // lcase it for comparison
-        $q = strtolower($this->query);
-
+        $this->notices = array();
         $search_engine = $notice->getSearchEngine('notice');
         $search_engine->set_sort_mode('chron');
-        $search_engine->limit(($this->page - 1) * $this->rpp, $this->rpp + 1, true);
-        if (false === $search_engine->query($q)) {
-            $cnt = 0;
-        } else {
+        $search_engine->limit(($this->page - 1) * $this->rpp, $this->rpp + 1);
+        if ($search_engine->query($this->query)) {
             $cnt = $notice->find();
+            $this->notices = $notice->fetchAll();
         }
 
-        // TODO: max_id, lang, geocode
-
-        $results = new JSONSearchResultsList($notice, $q, $this->rpp, $this->page, $this->since_id);
-
-        $this->initDocument('json');
-        $results->show();
-        $this->endDocument('json');
+       $this->showJsonTimeline($this->notices);
     }
 
     /**

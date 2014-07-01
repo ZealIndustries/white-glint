@@ -38,8 +38,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-
 /**
  * Deletes one of the authenticating user's statuses (notices).
  *
@@ -77,7 +75,7 @@ class ApiStatusesDestroyAction extends ApiAuthAction
             $this->notice_id = (int)$this->arg('id');
         }
 
-        $this->notice = Notice::staticGet((int)$this->notice_id);
+        $this->notice = Notice::getKV((int)$this->notice_id);
 
         return true;
      }
@@ -124,7 +122,7 @@ class ApiStatusesDestroyAction extends ApiAuthAction
             return;
         }
 
-        if ($this->user->id == $this->notice->profile_id || $this->user->hasRight(Right::DELETEOTHERSNOTICE)) {
+        if ($this->user->id == $this->notice->profile_id) {
             if (Event::handle('StartDeleteOwnNotice', array($this->user, $this->notice))) {
                 $this->notice->delete();
                 Event::handle('EndDeleteOwnNotice', array($this->user, $this->notice));

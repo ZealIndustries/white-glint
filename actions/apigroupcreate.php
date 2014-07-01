@@ -35,8 +35,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-
 /**
  * Make a new group. Sets the authenticated user as the administrator of the group.
  *
@@ -51,6 +49,8 @@ require_once INSTALLDIR . '/lib/apiauth.php';
  */
 class ApiGroupCreateAction extends ApiAuthAction
 {
+    protected $needPost = true;
+
     var $group       = null;
     var $nickname    = null;
     var $fullname    = null;
@@ -67,13 +67,11 @@ class ApiGroupCreateAction extends ApiAuthAction
      *
      * @return boolean success flag
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
-        $this->user  = $this->auth_user;
-
-        $this->nickname    = Nickname::normalize($this->arg('nickname'));
+        $this->nickname    = Nickname::normalize($this->arg('nickname'), true);
         $this->fullname    = $this->arg('full_name');
         $this->homepage    = $this->arg('homepage');
         $this->description = $this->arg('description');
@@ -88,28 +86,15 @@ class ApiGroupCreateAction extends ApiAuthAction
      *
      * Save the new group
      *
-     * @param array $args $_REQUEST data (unused)
-     *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
-
-        if ($_SERVER['REQUEST_METHOD'] != 'POST') {
-             $this->clientError(
-                 // TRANS: Client error. POST is a HTTP command. It should not be translated.
-                 _('This method requires a POST.'),
-                 400,
-                 $this->format
-             );
-             return;
-        }
+        parent::handle();
 
         if (empty($this->user)) {
             // TRANS: Client error given when a user was not found (404).
-            $this->clientError(_('No such user.'), 404, $this->format);
-            return;
+            $this->clientError(_('No such user.'), 404);
         }
 
         if ($this->validateParams() == false) {
@@ -133,13 +118,8 @@ class ApiGroupCreateAction extends ApiAuthAction
             $this->showSingleJsonGroup($group);
             break;
         default:
-            $this->clientError(
-                // TRANS: Client error displayed when coming across a non-supported API method.
-                _('API method not found.'),
-                404,
-                $this->format
-            );
-            break;
+            // TRANS: Client error displayed when coming across a non-supported API method.
+            $this->clientError(_('API method not found.'), 404);
         }
     }
 
@@ -150,78 +130,33 @@ class ApiGroupCreateAction extends ApiAuthAction
      */
     function validateParams()
     {
-        if ($this->groupNicknameExists($this->nickname)) {
-            $this->clientError(
-                // TRANS: Client error trying to create a group with a nickname this is already in use.
-                _('Nickname already in use. Try another one.'),
-                403,
-                $this->format
-            );
-            return false;
-        } else if (!User_group::allowedNickname($this->nickname)) {
-            $this->clientError(
-                // TRANS: Client error in form for group creation.
-                _('Not a valid nickname.'),
-                403,
-                $this->format
-            );
-            return false;
+        if (!is_null($this->homepage)
+                && strlen($this->homepage) > 0
+                && !common_valid_http_url($this->homepage)) {
+            // TRANS: Client error in form for group creation.
+            $this->clientError(_('Homepage is not a valid URL.'), 403);
 
-        } elseif (
-            !is_null($this->homepage)
-            && strlen($this->homepage) > 0
-            && !Validate::uri(
-                $this->homepage, array(
-                    'allowed_schemes' =>
-                    array('http', 'https')
-                )
-            )) {
-            $this->clientError(
-                // TRANS: Client error in form for group creation.
-                _('Homepage is not a valid URL.'),
-                403,
-                $this->format
-            );
-            return false;
-        } elseif (
-            !is_null($this->fullname)
-            && mb_strlen($this->fullname) > 255) {
-                $this->clientError(
-                    // TRANS: Client error in form for group creation.
-                    _('Full name is too long (maximum 255 characters).'),
-                    403,
-                    $this->format
-                );
-            return false;
+        } elseif (!is_null($this->fullname)
+                && mb_strlen($this->fullname) > 255) {
+            // TRANS: Client error in form for group creation.
+            $this->clientError(_('Full name is too long (maximum 255 characters).'), 403);
+
         } elseif (User_group::descriptionTooLong($this->description)) {
-            $this->clientError(
-                sprintf(
-                    // TRANS: Client error shown when providing too long a description during group creation.
-                    // TRANS: %d is the maximum number of allowed characters.
-                    _m('Description is too long (maximum %d character).',
-                      'Description is too long (maximum %d characters).',
-                      User_group::maxDescription()),
-                    User_group::maxDescription()
-                ),
-                403,
-                $this->format
-            );
-            return false;
-        } elseif (
-            !is_null($this->location)
-            && mb_strlen($this->location) > 255) {
-                $this->clientError(
-                    // TRANS: Client error shown when providing too long a location during group creation.
-                    _('Location is too long (maximum 255 characters).'),
-                    403,
-                    $this->format
-                );
-            return false;
+            // TRANS: Client error shown when providing too long a description during group creation.
+            // TRANS: %d is the maximum number of allowed characters.
+            $this->clientError(sprintf(_m('Description is too long (maximum %d character).',
+                                'Description is too long (maximum %d characters).',
+                                User_group::maxDescription()), User_group::maxDescription()), 403);
+
+        } elseif (!is_null($this->location)
+                && mb_strlen($this->location) > 255) {
+            // TRANS: Client error shown when providing too long a location during group creation.
+            $this->clientError(_('Location is too long (maximum 255 characters).'), 403);
         }
 
         if (!empty($this->aliasstring)) {
             $this->aliases = array_map(
-                'common_canonical_nickname',
+                array('Nickname', 'normalize'), // static call to Nickname::normalize
                 array_unique(preg_split('/[\s,]+/', $this->aliasstring))
             );
         } else {
@@ -229,86 +164,18 @@ class ApiGroupCreateAction extends ApiAuthAction
         }
 
         if (count($this->aliases) > common_config('group', 'maxaliases')) {
-            $this->clientError(
-                sprintf(
+            $this->clientError(sprintf(
                     // TRANS: Client error shown when providing too many aliases during group creation.
                     // TRANS: %d is the maximum number of allowed aliases.
                     _m('Too many aliases! Maximum %d allowed.',
                        'Too many aliases! Maximum %d allowed.',
                        common_config('group', 'maxaliases')),
-                    common_config('group', 'maxaliases')
-                ),
-                403,
-                $this->format
-            );
-            return false;
-        }
-
-        foreach ($this->aliases as $alias) {
-
-            if (!Nickname::isValid($alias)) {
-                $this->clientError(
-                    // TRANS: Client error shown when providing an invalid alias during group creation.
-                    // TRANS: %s is the invalid alias.
-                    sprintf(_('Invalid alias: "%s".'), $alias),
-                    403,
-                    $this->format
-                );
-                return false;
-            }
-            if ($this->groupNicknameExists($alias)) {
-                $this->clientError(
-                    sprintf(
-                        // TRANS: Client error displayed when trying to use an alias during group creation that is already in use.
-                        // TRANS: %s is the alias that is already in use.
-                        _('Alias "%s" already in use. Try another one.'),
-                        $alias
-                    ),
-                    403,
-                    $this->format
-                );
-                return false;
-            }
-
-            // XXX assumes alphanum nicknames
-
-            if (strcmp($alias, $this->nickname) == 0) {
-                $this->clientError(
-                    // TRANS: Client error displayed when trying to use an alias during group creation that is the same as the group's nickname.
-                    _('Alias can\'t be the same as nickname.'),
-                    403,
-                    $this->format
-                );
-                return false;
-            }
+                    common_config('group', 'maxaliases')),
+                403);
         }
 
         // Everything looks OK
 
         return true;
-    }
-
-    /**
-     * Check to see whether a nickname is already in use by a group
-     *
-     * @param String $nickname The nickname in question
-     *
-     * @return boolean true or false
-     */
-    function groupNicknameExists($nickname)
-    {
-        $local = Local_group::staticGet('nickname', $nickname);
-
-        if (!empty($local)) {
-            return true;
-        }
-
-        $alias = Group_alias::staticGet('alias', $nickname);
-
-        if (!empty($alias)) {
-            return true;
-        }
-
-        return false;
     }
 }

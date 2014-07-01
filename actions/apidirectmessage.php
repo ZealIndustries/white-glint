@@ -34,8 +34,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-
 /**
  * Show a list of direct messages from or to the authenticating user
  *
@@ -72,8 +70,7 @@ class ApiDirectMessageAction extends ApiAuthAction
 
         if (empty($this->user)) {
             // TRANS: Client error given when a user was not found (404).
-            $this->clientError(_('No such user.'), 404, $this->format);
-            return;
+            $this->clientError(_('No such user.'), 404);
         }
 
         $server   = common_root_url();

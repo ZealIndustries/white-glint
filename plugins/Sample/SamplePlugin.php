@@ -170,59 +170,8 @@ class SamplePlugin extends Plugin
         $schema = Schema::get();
 
         // For storing user-submitted flags on profiles
-
-        $schema->ensureTable('user_greeting_count',
-            array(
-                'fields' => array(
-                    'user_id' => array('type' => 'int', 'not null' => true),
-                    'greeting_count' => array('type' => 'int'),
-                ),
-                'primary key' => array('user_id'),
-                'foreign keys' => array(
-                    // Not all databases will support foreign keys, but even
-                    // when not enforced it's helpful to include these definitions
-                    // as documentation.
-                    'user_greeting_count_user_id_fkey' => array('user', array('user_id' => 'id')),
-                ),
-            )
-        );
-
+        $schema->ensureTable('user_greeting_count', User_greeting_count::schemaDef());
         return true;
-    }
-
-    /**
-     * Load related modules when needed
-     *
-     * Most non-trivial plugins will require extra modules to do their work. Typically
-     * these include data classes, action classes, widget classes, or external libraries.
-     *
-     * This method receives a class name and loads the PHP file related to that class. By
-     * tradition, action classes typically have files named for the action, all lower-case.
-     * Data classes are in files with the data class name, initial letter capitalized.
-     *
-     * Note that this method will be called for *all* overloaded classes, not just ones
-     * in this plugin! So, make sure to return true by default to let other plugins, and
-     * the core code, get a chance.
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value; true means continue processing, false means stop.
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'HelloAction':
-            include_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'User_greeting_count':
-            include_once $dir . '/'.$cls.'.php';
-            return false;
-        default:
-            return true;
-        }
     }
 
     /**
@@ -276,7 +225,7 @@ class SamplePlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'Sample',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Brion Vibber, Evan Prodromou',
                             'homepage' => 'http://status.net/wiki/Plugin:Sample',
                             'rawdescription' =>

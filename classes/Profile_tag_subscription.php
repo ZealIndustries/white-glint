@@ -15,10 +15,6 @@ class Profile_tag_subscription extends Managed_DataObject
     public $created;                                // datetime   not_null default_0000-00-00%2000%3A00%3A00
     public $modified;                               // timestamp()   not_null default_CURRENT_TIMESTAMP
 
-    /* Static get */
-    function staticGet($k,$v=null)
-    { return Memcached_DataObject::staticGet('Profile_tag_subscription',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -43,11 +39,6 @@ class Profile_tag_subscription extends Managed_DataObject
                 'profile_tag_subscription_created_idx' => array('created'),
             ),
         );
-    }
-
-    function pkeyGet($kv)
-    {
-        return Memcached_DataObject::pkeyGet('Profile_tag_subscription', $kv);
     }
 
     static function add($peopletag, $profile)
@@ -77,7 +68,7 @@ class Profile_tag_subscription extends Managed_DataObject
                 throw new Exception(_('Adding list subscription failed.'));
             }
 
-            $ptag = Profile_list::staticGet('id', $peopletag->id);
+            $ptag = Profile_list::getKV('id', $peopletag->id);
             $ptag->subscriberCount(true);
 
             Event::handle('EndSubscribePeopletag', array($peopletag, $profile));
@@ -118,7 +109,7 @@ class Profile_tag_subscription extends Managed_DataObject
         $subs->find();
 
         while($subs->fetch()) {
-            $profile = Profile::staticGet('id', $subs->profile_id);
+            $profile = Profile::getKV('id', $subs->profile_id);
             Event::handle('StartUnsubscribePeopletag', array($profile_list, $profile));
             // Delete anyway
             $subs->delete();
@@ -136,10 +127,10 @@ class Profile_tag_subscription extends Managed_DataObject
         return $result;
     }
 
-    function delete()
+    function delete($useWhere=false)
     {
-        $result = parent::delete();
-        if ($result) {
+        $result = parent::delete($useWhere);
+        if ($result !== false) {
             self::blow('profile_list:subscriber_count:%d', 
                        $this->profile_tag_id);
         }

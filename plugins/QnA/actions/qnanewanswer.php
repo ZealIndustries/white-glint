@@ -93,7 +93,7 @@ class QnanewanswerAction extends Action
 
         $id = substr($this->trimmed('id'), 9);
 
-        $this->question = QnA_Question::staticGet('id', $id);
+        $this->question = QnA_Question::getKV('id', $id);
 
         if (empty($this->question)) {
             throw new ClientException(
@@ -151,10 +151,8 @@ class QnanewanswerAction extends Action
         if ($this->boolean('ajax')) {
             common_debug("ajaxy part");
             $answer = $this->question->getAnswer($profile);
-            header('Content-Type: text/xml;charset=utf-8');
-            $this->xw->startDocument('1.0', 'UTF-8');
 
-            $this->elementStart('html');
+            $this->startHTML('text/xml;charset=utf-8');
             $this->elementStart('head');
             // TRANS: Page title after sending an answer.
             $this->element('title', null, _m('Answers'));
@@ -166,7 +164,7 @@ class QnanewanswerAction extends Action
             $nli->show();
 
             $this->elementEnd('body');
-            $this->elementEnd('html');
+            $this->endHTML();
         } else {
             common_debug("not ajax");
             common_redirect($this->question->bestUrl(), 303);
@@ -228,7 +226,7 @@ class QnanewanswerAction extends Action
         $this->elementStart('body');
         $this->element('p', array('id' => 'error'), $msg);
         $this->elementEnd('body');
-        $this->elementEnd('html');
+        $this->endHTML();
     }
 
     /**
@@ -254,7 +252,7 @@ class QnanewanswerAction extends Action
         $form->show();
 
         $this->elementEnd('body');
-        $this->elementEnd('html');
+        $this->endHTML();
     }
 
     /**

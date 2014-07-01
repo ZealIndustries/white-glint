@@ -127,12 +127,8 @@ class SubscribeForm extends Form
     function formActions()
     {
         // TRANS: Button text to subscribe to a user.
-        /*$this->out->submit('submit', _m('BUTTON','Subscribe'), 'submit', null,
+        $this->out->submit('submit', _m('BUTTON','Subscribe'), 'submit', null,
                            // TRANS: Button title to subscribe to a user.
-                           _('Subscribe to this user.'));*/
-		$this->out->element('button', array('title' => _('Subscribe to this user.'),
-											'type' => 'submit',
-											'class' => 'submit'),
-							 _m('BUTTON','Subscribe'));
+                           _('Subscribe to this user.'));
     }
 }

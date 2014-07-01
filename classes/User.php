@@ -17,16 +17,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-if (!defined('STATUSNET') && !defined('LACONICA')) {
-    exit(1);
-}
+if (!defined('GNUSOCIAL')) { exit(1); }
 
 /**
  * Table Definition for user
  */
-
-require_once INSTALLDIR.'/classes/Memcached_DataObject.php';
-require_once 'Validate.php';
 
 class User extends Managed_DataObject
 {
@@ -64,9 +59,6 @@ class User extends Managed_DataObject
     public $private_stream;                  // tinyint(1)   default_0
     public $created;                         // datetime()   not_null
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
-
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('User',$k,$v); }
 
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
@@ -123,16 +115,18 @@ class User extends Managed_DataObject
         );
     }
 
-    protected $_profile = -1;
+    protected $_profile = null;
 
     /**
      * @return Profile
+     *
+     * @throws UserNoProfileException if user has no profile
      */
-    function getProfile()
+    public function getProfile()
     {
-        if (is_int($this->_profile) && $this->_profile == -1) { // invalid but distinct from null
-            $this->_profile = Profile::staticGet('id', $this->id);
-            if (empty($this->_profile)) {
+        if (!($this->_profile instanceof Profile)) {
+            $this->_profile = Profile::getKV('id', $this->id);
+            if (!($this->_profile instanceof Profile)) {
                 throw new UserNoProfileException($this);
             }
         }
@@ -142,14 +136,12 @@ class User extends Managed_DataObject
 
     function isSubscribed($other)
     {
-        $profile = $this->getProfile();
-        return $profile->isSubscribed($other);
+        return $this->getProfile()->isSubscribed($other);
     }
 
     function hasPendingSubscription($other)
     {
-        $profile = $this->getProfile();
-        return $profile->hasPendingSubscription($other);
+        return $this->getProfile()->hasPendingSubscription($other);
     }
 
     // 'update' won't write key columns, so we have to do it ourselves.
@@ -158,7 +150,7 @@ class User extends Managed_DataObject
     {
         $this->_connect();
         $parts = array();
-        foreach (array('nickname', 'email', 'incomingemail', 'sms', 'carrier', 'smsemail', 'language', 'timezone') as $k) {
+        foreach (array('nickname', 'email', 'incomingemail', 'sms', 'carrier', 'smsemail') as $k) {
             if (strcmp($this->$k, $orig->$k) != 0) {
                 $parts[] = $k . ' = ' . $this->_quote($this->$k);
             }
@@ -181,65 +173,23 @@ class User extends Managed_DataObject
     }
 
     /**
-     * Check whether the given nickname is potentially usable, or if it's
-     * excluded by any blacklists on this system.
-     *
-     * WARNING: INPUT IS NOT VALIDATED OR NORMALIZED. NON-NORMALIZED INPUT
-     * OR INVALID INPUT MAY LEAD TO FALSE RESULTS.
-     *
-     * @param string $nickname
-     * @return boolean true if clear, false if blacklisted
-     */
-    static function allowed_nickname($nickname)
-    {
-        // XXX: should already be validated for size, content, etc.
-        $blacklist = common_config('nickname', 'blacklist');
-
-        //all directory and file names should be blacklisted
-        $d = dir(INSTALLDIR);
-        while (false !== ($entry = $d->read())) {
-            $blacklist[]=$entry;
-        }
-        $d->close();
-
-        //all top level names in the router should be blacklisted
-        $router = Router::get();
-        foreach(array_keys($router->m->getPaths()) as $path){
-            if(preg_match('/^\/(.*?)[\/\?]/',$path,$matches)){
-                $blacklist[]=$matches[1];
-            }
-        }
-        return !in_array($nickname, $blacklist);
-    }
-
-    /**
      * Get the most recent notice posted by this user, if any.
      *
      * @return mixed Notice or null
      */
     function getCurrentNotice()
     {
-        $profile = $this->getProfile();
-        return $profile->getCurrentNotice();
+        return $this->getProfile()->getCurrentNotice();
     }
 
     function getCarrier()
     {
-        return Sms_carrier::staticGet('id', $this->carrier);
-    }
-
-    /**
-     * @deprecated use Subscription::start($sub, $other);
-     */
-    function subscribeTo($other)
-    {
-        return Subscription::start($this->getProfile(), $other);
+        return Sms_carrier::getKV('id', $this->carrier);
     }
 
     function hasBlocked($other)
     {
-        $profile = $this->getProfile();
-        return $profile->hasBlocked($other);
+        return $this->getProfile()->hasBlocked($other);
     }
 
     /**
@@ -263,7 +213,7 @@ class User extends Managed_DataObject
      *              ?string 'uri' permalink to notice; defaults to local notice URL
      * @return mixed User object or false on failure
      */
-    static function register($fields) {
+    static function register(array $fields) {
 
         // MAGICALLY put fields into current scope
 
@@ -271,19 +221,18 @@ class User extends Managed_DataObject
 
         $profile = new Profile();
 
-        if(!empty($email))
-        {
+        if (!empty($email)) {
             $email = common_canonical_email($email);
         }
 
-        $nickname = common_canonical_nickname($nickname);
-        $profile->nickname = $nickname;
-        if(! User::allowed_nickname($nickname)){
-            common_log(LOG_WARNING, sprintf("Attempted to register a nickname that is not allowed: %s", $profile->nickname),
-                       __FILE__);
+        try {
+            $profile->nickname = Nickname::normalize($nickname, true);
+        } catch (NicknameException $e) {
+            common_log(LOG_WARNING, sprintf('Bad nickname during User registration for %s: %s', $nickname, $e->getMessage()), __FILE__);
             return false;
         }
-        $profile->profileurl = common_profile_url($nickname);
+
+        $profile->profileurl = common_profile_url($profile->nickname);
 
         if (!empty($fullname)) {
             $profile->fullname = $fullname;
@@ -311,14 +260,14 @@ class User extends Managed_DataObject
 
         $user = new User();
 
-        $user->nickname = $nickname;
+        $user->nickname = $profile->nickname;
 
         $invite = null;
 
         // Users who respond to invite email have proven their ownership of that address
 
         if (!empty($code)) {
-            $invite = Invitation::staticGet($code);
+            $invite = Invitation::getKV($code);
             if ($invite && $invite->address && $invite->address_type == 'email' && $invite->address == $email) {
                 $user->email = $invite->address;
             }
@@ -346,13 +295,12 @@ class User extends Managed_DataObject
 
         $user->created = common_sql_now();
 
-        if (Event::handle('StartUserRegister', array(&$user, &$profile))) {
+        if (Event::handle('StartUserRegister', array($profile))) {
 
             $profile->query('BEGIN');
 
             $id = $profile->insert();
-
-            if (empty($id)) {
+            if ($id === false) {
                 common_log_db_error($profile, 'INSERT', __FILE__);
                 return false;
             }
@@ -371,8 +319,9 @@ class User extends Managed_DataObject
 
             $result = $user->insert();
 
-            if (!$result) {
+            if ($result === false) {
                 common_log_db_error($user, 'INSERT', __FILE__);
+                $profile->query('ROLLBACK');
                 return false;
             }
 
@@ -401,6 +350,7 @@ class User extends Managed_DataObject
 
             if (!$result) {
                 common_log_db_error($subscription, 'INSERT', __FILE__);
+                $profile->query('ROLLBACK');
                 return false;
             }
 
@@ -422,6 +372,7 @@ class User extends Managed_DataObject
 
                 if (!$result) {
                     common_log_db_error($confirm, 'INSERT', __FILE__);
+                    $profile->query('ROLLBACK');
                     return false;
                 }
             }
@@ -435,12 +386,12 @@ class User extends Managed_DataObject
             $defnick = common_config('newuser', 'default');
 
             if (!empty($defnick)) {
-                $defuser = User::staticGet('nickname', $defnick);
+                $defuser = User::getKV('nickname', $defnick);
                 if (empty($defuser)) {
                     common_log(LOG_WARNING, sprintf("Default user %s does not exist.", $defnick),
                                __FILE__);
                 } else {
-                    Subscription::start($user, $defuser);
+                    Subscription::start($profile, $defuser->getProfile());
                 }
             }
 
@@ -455,7 +406,7 @@ class User extends Managed_DataObject
             $welcome = common_config('newuser', 'welcome');
 
             if (!empty($welcome)) {
-                $welcomeuser = User::staticGet('nickname', $welcome);
+                $welcomeuser = User::getKV('nickname', $welcome);
                 if (empty($welcomeuser)) {
                     common_log(LOG_WARNING, sprintf("Welcome user %s does not exist.", $defnick),
                                __FILE__);
@@ -470,7 +421,7 @@ class User extends Managed_DataObject
                 }
             }
 
-            Event::handle('EndUserRegister', array(&$profile, &$user));
+            Event::handle('EndUserRegister', array($profile));
         }
 
         return $user;
@@ -486,22 +437,27 @@ class User extends Managed_DataObject
 
         if ($invites->find()) {
             while ($invites->fetch()) {
-                $other = User::staticGet($invites->user_id);
-                subs_subscribe_to($other, $this);
+                try {
+                    $other = Profile::getKV('id', $invites->user_id);
+                    if (!($other instanceof Profile)) {    // remove when getKV throws exceptions
+                        continue;
+                    }
+                    Subscription::start($other, $this->getProfile());
+                } catch (Exception $e) {
+                    continue;
+                }
             }
         }
     }
 
     function hasFave($notice)
     {
-        $profile = $this->getProfile();
-        return $profile->hasFave($notice);
+        return $this->getProfile()->hasFave($notice);
     }
 
     function mutuallySubscribed($other)
     {
-        $profile = $this->getProfile();
-        return $profile->mutuallySubscribed($other);
+        return $this->getProfile()->mutuallySubscribed($other);
     }
 
     function mutuallySubscribedUsers()
@@ -519,60 +475,23 @@ class User extends Managed_DataObject
         return $user;
     }
 
-    function adminUsers($type=array())
-    {
-        $UT = common_config('db','type')=='pgsql'?'"user"':'user';
-        $qry = "SELECT profile_role.*, $UT.* ".
-            "FROM $UT JOIN profile_role ON id = profile_role.profile_id ";
-
-        if(!empty($type)) {
-            if($type == array(Profile_role::MODERATOR)) {
-                $sprintf = 
-                    "LEFT OUTER JOIN profile_role exclude " .
-                    "ON profile_role.profile_id = exclude.profile_id " . 
-                    "AND exclude.role = '%s' " .
-                    "WHERE profile_role.role = '%s'" .
-                    "AND exclude.profile_id IS NULL";
-                $qry .= sprintf($sprintf, Profile_role::ADMINISTRATOR, Profile_role::MODERATOR);
-            }
-            else {
-                $where = array();
-                foreach($type as $role) {
-                    $where[] = sprintf("role = '%s'", $role);
-                }
-                $qry .= "WHERE " . implode(' OR ', $where);
-            }
-        }
-        else {
-            $qry .= sprintf("WHERE role = '%s' OR role = '%s' GROUP BY profile_id", Profile_role::ADMINISTRATOR, Profile_role::MODERATOR);
-        }
-
-        $user = Memcached_DataObject::cachedQuery('User',
-                                                     $qry,
-                                                     6 * 3600);
-
-        return $user;
-    }
-
     function getReplies($offset=0, $limit=NOTICES_PER_PAGE, $since_id=0, $before_id=0)
     {
         return Reply::stream($this->id, $offset, $limit, $since_id, $before_id);
     }
 
     function getTaggedNotices($tag, $offset=0, $limit=NOTICES_PER_PAGE, $since_id=0, $before_id=0) {
-        $profile = $this->getProfile();
-        return $profile->getTaggedNotices($tag, $offset, $limit, $since_id, $before_id);
+        return $this->getProfile()->getTaggedNotices($tag, $offset, $limit, $since_id, $before_id);
     }
 
-    function getNotices($offset=0, $limit=NOTICES_PER_PAGE, $since_id=0, $before_id=0, $images=false)
+    function getNotices($offset=0, $limit=NOTICES_PER_PAGE, $since_id=0, $before_id=0)
     {
-        $profile = $this->getProfile();
-        return $profile->getNotices($offset, $limit, $since_id, $before_id, $images);
+        return $this->getProfile()->getNotices($offset, $limit, $since_id, $before_id);
     }
 
     function favoriteNotices($own=false, $offset=0, $limit=NOTICES_PER_PAGE, $since_id=0, $max_id=0)
     {
-        return Fave::stream($this->id, $offset, $limit, $own, $since_id, $max_id);
+        return $this->getProfile()->favoriteNotices($own, $offset, $limit, $since_id, $max_id);
     }
 
     function noticeInbox($offset=0, $limit=NOTICES_PER_PAGE, $since_id=0, $before_id=0)
@@ -618,8 +537,7 @@ class User extends Managed_DataObject
 
     function blowFavesCache()
     {
-        $profile = $this->getProfile();
-        $profile->blowFavesCache();
+        $this->getProfile()->blowFavesCache();
     }
 
     function getSelfTags()
@@ -632,7 +550,7 @@ class User extends Managed_DataObject
         return Profile_tag::setTags($this->id, $this->id, $newtags, $privacy);
     }
 
-    function block($other)
+    function block(Profile $other)
     {
         // Add a new block record
 
@@ -678,11 +596,11 @@ class User extends Managed_DataObject
         return true;
     }
 
-    function unblock($other)
+    function unblock(Profile $other)
     {
         // Get the block record
 
-        $block = Profile_block::get($this->id, $other->id);
+        $block = Profile_block::exists($this->getProfile(), $other);
 
         if (!$block) {
             return false;
@@ -700,20 +618,17 @@ class User extends Managed_DataObject
 
     function isMember($group)
     {
-        $profile = $this->getProfile();
-        return $profile->isMember($group);
+        return $this->getProfile()->isMember($group);
     }
 
     function isAdmin($group)
     {
-        $profile = $this->getProfile();
-        return $profile->isAdmin($group);
+        return $this->getProfile()->isAdmin($group);
     }
 
     function getGroups($offset=0, $limit=null)
     {
-        $profile = $this->getProfile();
-        return $profile->getGroups($offset, $limit);
+        return $this->getProfile()->getGroups($offset, $limit);
     }
 
     /**
@@ -725,8 +640,7 @@ class User extends Managed_DataObject
      */
     function joinGroup(User_group $group)
     {
-        $profile = $this->getProfile();
-        return $profile->joinGroup($group);
+        return $this->getProfile()->joinGroup($group);
     }
 
     /**
@@ -736,76 +650,41 @@ class User extends Managed_DataObject
      */
     function leaveGroup(User_group $group)
     {
-        $profile = $this->getProfile();
-        return $profile->leaveGroup($group);
+        return $this->getProfile()->leaveGroup($group);
     }
 
-    function getSubscriptions($offset=0, $limit=null)
+    function getSubscribed($offset=0, $limit=null)
     {
-        $profile = $this->getProfile();
-        return $profile->getSubscriptions($offset, $limit);
+        return $this->getProfile()->getSubscribed($offset, $limit);
     }
 
     function getSubscribers($offset=0, $limit=null)
     {
-        $profile = $this->getProfile();
-        return $profile->getSubscribers($offset, $limit);
+        return $this->getProfile()->getSubscribers($offset, $limit);
     }
 
     function getTaggedSubscribers($tag, $offset=0, $limit=null)
     {
-        $qry =
-          'SELECT profile.* ' .
-          'FROM profile JOIN subscription ' .
-          'ON profile.id = subscription.subscriber ' .
-          'JOIN profile_tag ON (profile_tag.tagged = subscription.subscriber ' .
-          'AND profile_tag.tagger = subscription.subscribed) ' .
-          'WHERE subscription.subscribed = %d ' .
-          "AND profile_tag.tag = '%s' " .
-          'AND subscription.subscribed != subscription.subscriber ' .
-          'ORDER BY subscription.created DESC ';
-
-        if ($offset) {
-            $qry .= ' LIMIT ' . $limit . ' OFFSET ' . $offset;
-        }
-
-        $profile = new Profile();
-
-        $cnt = $profile->query(sprintf($qry, $this->id, $profile->escape($tag)));
-
-        return $profile;
+        return $this->getProfile()->getTaggedSubscribers($tag, $offset, $limit);
     }
 
     function getTaggedSubscriptions($tag, $offset=0, $limit=null)
     {
-        $qry =
-          'SELECT profile.* ' .
-          'FROM profile JOIN subscription ' .
-          'ON profile.id = subscription.subscribed ' .
-          'JOIN profile_tag on (profile_tag.tagged = subscription.subscribed ' .
-          'AND profile_tag.tagger = subscription.subscriber) ' .
-          'WHERE subscription.subscriber = %d ' .
-          "AND profile_tag.tag = '%s' " .
-          'AND subscription.subscribed != subscription.subscriber ' .
-          'ORDER BY subscription.created DESC ';
-
-        $qry .= ' LIMIT ' . $limit . ' OFFSET ' . $offset;
-
-        $profile = new Profile();
-
-        $profile->query(sprintf($qry, $this->id, $profile->escape($tag)));
-
-        return $profile;
+        return $this->getProfile()->getTaggedSubscriptions($tag, $offset, $limit);
     }
 
     function hasRight($right)
     {
-        $profile = $this->getProfile();
-        return $profile->hasRight($right);
+        return $this->getProfile()->hasRight($right);
     }
 
-    function delete()
+    function delete($useWhere=false)
     {
+        if (empty($this->id)) {
+            common_log(LOG_WARNING, "Ambiguous User->delete(); skipping related tables.");
+            return parent::delete($useWhere);
+        }
+
         try {
             $profile = $this->getProfile();
             $profile->delete();
@@ -831,7 +710,7 @@ class User extends Managed_DataObject
         $this->_deleteTags();
         $this->_deleteBlocks();
 
-        parent::delete();
+        return parent::delete($useWhere);
     }
 
     function _deleteTags()
@@ -851,32 +730,27 @@ class User extends Managed_DataObject
 
     function hasRole($name)
     {
-        $profile = $this->getProfile();
-        return $profile->hasRole($name);
+        return $this->getProfile()->hasRole($name);
     }
 
     function grantRole($name)
     {
-        $profile = $this->getProfile();
-        return $profile->grantRole($name);
+        return $this->getProfile()->grantRole($name);
     }
 
     function revokeRole($name)
     {
-        $profile = $this->getProfile();
-        return $profile->revokeRole($name);
+        return $this->getProfile()->revokeRole($name);
     }
 
     function isSandboxed()
     {
-        $profile = $this->getProfile();
-        return $profile->isSandboxed();
+        return $this->getProfile()->isSandboxed();
     }
 
     function isSilenced()
     {
-        $profile = $this->getProfile();
-        return $profile->isSilenced();
+        return $this->getProfile()->isSilenced();
     }
 
     function repeatedByMe($offset=0, $limit=20, $since_id=null, $max_id=null)
@@ -900,54 +774,31 @@ class User extends Managed_DataObject
         throw new Exception(_('Not implemented since inbox change.'));
     }
 
-    function shareLocation()
-    {
-        $cfg = common_config('location', 'share');
-
-        if ($cfg == 'always') {
-            return true;
-        } else if ($cfg == 'never') {
-            return false;
-        } else { // user
-            $share = true;
-
-            $prefs = User_location_prefs::staticGet('user_id', $this->id);
-
-            if (empty($prefs)) {
-                $share = common_config('location', 'sharedefault');
-            } else {
-                $share = $prefs->share_location;
-                $prefs->free();
-            }
-
-            return $share;
-        }
-    }
-
-    static function siteOwner()
+    public static function siteOwner()
     {
         $owner = self::cacheGet('user:site_owner');
 
         if ($owner === false) { // cache miss
 
             $pr = new Profile_role();
-
             $pr->role = Profile_role::OWNER;
-
             $pr->orderBy('created');
-
             $pr->limit(1);
 
-            if ($pr->find(true)) {
-                $owner = User::staticGet('id', $pr->profile_id);
-            } else {
-                $owner = null;
+            if (!$pr->find(true)) {
+                throw new NoResultException($pr);
             }
+
+            $owner = User::getKV('id', $pr->profile_id);
 
             self::cacheSet('user:site_owner', $owner);
         }
 
-        return $owner;
+        if ($owner instanceof User) {
+            return $owner;
+        }
+
+        throw new ServerException(_('No site owner configured.'));
     }
 
     /**
@@ -960,35 +811,23 @@ class User extends Managed_DataObject
      * @throws ServerException if no valid single user account is present
      * @throws ServerException if called when not in single-user mode
      */
-    static function singleUser()
+    public static function singleUser()
     {
-        if (common_config('singleuser', 'enabled')) {
-
-            $user = null;
-
-            $nickname = common_config('singleuser', 'nickname');
-
-            if (!empty($nickname)) {
-                $user = User::staticGet('nickname', $nickname);
-            }
-
-            // if there was no nickname or no user by that nickname,
-            // try the site owner.
-
-            if (empty($user)) {
-                $user = User::siteOwner();
-            }
-
-            if (!empty($user)) {
-                return $user;
-            } else {
-                // TRANS: Server exception.
-                throw new ServerException(_('No single user defined for single-user mode.'));
-            }
-        } else {
+        if (!common_config('singleuser', 'enabled')) {
             // TRANS: Server exception.
             throw new ServerException(_('Single-user mode code called when not enabled.'));
         }
+
+        if ($nickname = common_config('singleuser', 'nickname')) {
+            $user = User::getKV('nickname', $nickname);
+            if ($user instanceof User) {
+                return $user;
+            }
+        }
+
+        // If there was no nickname or no user by that nickname,
+        // try the site owner. Throws exception if not configured.
+        return User::siteOwner();
     }
 
     /**
@@ -1090,11 +929,11 @@ class User extends Managed_DataObject
 
     static function recoverPassword($nore)
     {
-        $user = User::staticGet('email', common_canonical_email($nore));
+        $user = User::getKV('email', common_canonical_email($nore));
 
         if (!$user) {
             try {
-                $user = User::staticGet('nickname', common_canonical_nickname($nore));
+                $user = User::getKV('nickname', common_canonical_nickname($nore));
             } catch (NicknameException $e) {
                 // invalid
             }
@@ -1111,7 +950,7 @@ class User extends Managed_DataObject
             $confirm_email->address_type = 'email';
             $confirm_email->find();
             if ($confirm_email->fetch()) {
-                $user = User::staticGet($confirm_email->user_id);
+                $user = User::getKV($confirm_email->user_id);
             } else {
                 $confirm_email = null;
             }
@@ -1121,7 +960,7 @@ class User extends Managed_DataObject
 
         if (!$user) {
             // TRANS: Information on password recovery form if no known username or e-mail address was specified.
-            throw new ClientError(_('No user with that email address or username.'));
+            throw new ClientException(_('No user with that email address or username.'));
             return;
         }
 
@@ -1184,10 +1023,10 @@ class User extends Managed_DataObject
     function streamModeOnly()
     {
         if (common_config('oldschool', 'enabled')) {
-            $osp = Old_school_prefs::staticGet('user_id', $this->id);
+            $osp = Old_school_prefs::getKV('user_id', $this->id);
             if (!empty($osp)) {
                 return $osp->stream_mode_only;
-            } 
+            }
         }
 
         return false;
@@ -1196,7 +1035,7 @@ class User extends Managed_DataObject
     function conversationTree()
     {
         if (common_config('oldschool', 'enabled')) {
-            $osp = Old_school_prefs::staticGet('user_id', $this->id);
+            $osp = Old_school_prefs::getKV('user_id', $this->id);
             if (!empty($osp)) {
                 return $osp->conversation_tree;
             }
@@ -1208,11 +1047,42 @@ class User extends Managed_DataObject
     function streamNicknames()
     {
         if (common_config('oldschool', 'enabled')) {
-            $osp = Old_school_prefs::staticGet('user_id', $this->id);
+            $osp = Old_school_prefs::getKV('user_id', $this->id);
             if (!empty($osp)) {
                 return $osp->stream_nicknames;
             }
         }
         return false;
+    }
+
+    function registrationActivity()
+    {
+        $profile = $this->getProfile();
+
+        $service = new ActivityObject();
+
+        $service->type  = ActivityObject::SERVICE;
+        $service->title = common_config('site', 'name');
+        $service->link  = common_root_url();
+        $service->id    = $service->link;
+
+        $act = new Activity();
+
+        $act->actor = ActivityObject::fromProfile($profile);
+        $act->verb = ActivityVerb::JOIN;
+
+        $act->objects[] = $service;
+
+        $act->id = TagURI::mint('user:register:%d',
+                                $this->id);
+
+        $act->time = strtotime($this->created);
+
+        $act->title = _("Register");
+
+        $act->content = sprintf(_('%1$s joined %2$s.'),
+                                $profile->getBestName(),
+                                $service->title);
+        return $act;
     }
 }

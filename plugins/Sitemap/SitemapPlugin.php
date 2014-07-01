@@ -50,37 +50,6 @@ class SitemapPlugin extends Plugin
     const NOTICES_PER_MAP = 50000;
 
     /**
-     * Load related modules when needed
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value; true means continue processing, false means stop.
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'Sitemap_user_count':
-        case 'Sitemap_notice_count':
-            require_once $dir . '/' . $cls . '.php';
-            return false;
-        case 'SitemapindexAction':
-        case 'NoticesitemapAction':
-        case 'UsersitemapAction':
-        case 'SitemapadminpanelAction':
-            require_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'SitemapAction':
-            require_once $dir . '/' . strtolower($cls) . '.php';
-            return false;
-        default:
-            return true;
-        }
-    }
-
-    /**
      * Add sitemap-related information at the end of robots.txt
      *
      * @param Action $action Action being run
@@ -180,22 +149,8 @@ class SitemapPlugin extends Plugin
     {
         $schema = Schema::get();
 
-        $schema->ensureTable('sitemap_user_count',
-                             array(new ColumnDef('registration_date', 'date', null,
-                                                 true, 'PRI'),
-                                   new ColumnDef('user_count', 'integer'),
-                                   new ColumnDef('created', 'datetime',
-                                                 null, false),
-                                   new ColumnDef('modified', 'timestamp')));
-
-        $schema->ensureTable('sitemap_notice_count',
-                             array(new ColumnDef('notice_date', 'date', null,
-                                                 true, 'PRI'),
-                                   new ColumnDef('notice_count', 'integer'),
-                                   new ColumnDef('created', 'datetime',
-                                                 null, false),
-                                   new ColumnDef('modified', 'timestamp')));
-
+        $schema->ensureTable('sitemap_user_count', Sitemap_user_count::schemaDef());
+        $schema->ensureTable('sitemap_notice_count', Sitemap_notice_count::schemaDef());
         return true;
     }
 
@@ -224,7 +179,7 @@ class SitemapPlugin extends Plugin
         $url = 'http://status.net/wiki/Plugin:Sitemap';
 
         $versions[] = array('name' => 'Sitemap',
-            'version' => STATUSNET_VERSION,
+            'version' => GNUSOCIAL_VERSION,
             'author' => 'Evan Prodromou',
             'homepage' => $url,
             'rawdescription' =>

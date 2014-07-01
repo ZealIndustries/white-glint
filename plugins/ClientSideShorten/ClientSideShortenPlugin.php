@@ -31,8 +31,6 @@ if (!defined('STATUSNET') && !defined('LACONICA')) {
     exit(1);
 }
 
-require_once(INSTALLDIR.'/plugins/ClientSideShorten/shorten.php');
-
 class ClientSideShortenPlugin extends Plugin
 {
     function __construct()
@@ -40,22 +38,12 @@ class ClientSideShortenPlugin extends Plugin
         parent::__construct();
     }
 
-    function onAutoload($cls)
-    {
-        switch ($cls)
-        {
-         case 'ShortenAction':
-            require_once(INSTALLDIR.'/plugins/ClientSideShorten/shorten.php');
-            return false;
-        }
-    }
-
     function onEndShowScripts($action){
         if (common_logged_in()) {
             $user = common_current_user();
             $action->inlineScript('var maxNoticeLength = ' . User_urlshortener_prefs::maxNoticeLength($user));
             $action->inlineScript('var maxUrlLength = ' . User_urlshortener_prefs::maxUrlLength($user));
-            $action->script('plugins/ClientSideShorten/shorten.js');
+            $action->script($this->path('shorten.js'));
         }
     }
 
@@ -69,7 +57,7 @@ class ClientSideShortenPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'Shorten',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Craig Andrews',
                             'homepage' => 'http://status.net/wiki/Plugin:ClientSideShorten',
                             'rawdescription' =>

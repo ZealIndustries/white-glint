@@ -47,13 +47,13 @@ class PushHubAction extends Action
         return parent::arg($arg, $def);
     }
 
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         StatusNet::setApi(true); // reduce exception reports to aid in debugging
         return parent::prepare($args);
     }
 
-    function handle()
+    protected function handle()
     {
         $mode = $this->trimmed('hub.mode');
         switch ($mode) {
@@ -89,19 +89,11 @@ class PushHubAction extends Action
             throw new ClientException(sprintf(_m('Unsupported hub.topic %s this hub only serves local user and group Atom feeds.'),$topic));
         }
 
-        $verify = $this->arg('hub.verify'); // @fixme may be multiple
-        if ($verify != 'sync' && $verify != 'async') {
-            // TRANS: Client exception. %s is sync or async.
-            throw new ClientException(sprintf(_m('Invalid hub.verify "%s". It must be sync or async.'),$verify));
-        }
-
         $lease = $this->arg('hub.lease_seconds', null);
         if ($mode == 'subscribe' && $lease != '' && !preg_match('/^\d+$/', $lease)) {
             // TRANS: Client exception. %s is the invalid lease value.
             throw new ClientException(sprintf(_m('Invalid hub.lease "%s". It must be empty or positive integer.'),$lease));
         }
-
-        $token = $this->arg('hub.verify_token', null);
 
         $secret = $this->arg('hub.secret', null);
         if ($secret != '' && strlen($secret) >= 200) {
@@ -109,8 +101,8 @@ class PushHubAction extends Action
             throw new ClientException(sprintf(_m('Invalid hub.secret "%s". It must be under 200 bytes.'),$secret));
         }
 
-        $sub = HubSub::staticGet($topic, $callback);
-        if (!$sub) {
+        $sub = HubSub::getByHashkey($topic, $callback);
+        if (!$sub instanceof HubSub) {
             // Creating a new one!
             $sub = new HubSub();
             $sub->topic = $topic;
@@ -125,16 +117,14 @@ class PushHubAction extends Action
             }
         }
 
-        if (!common_config('queue', 'enabled')) {
-            // Won't be able to background it.
-            $verify = 'sync';
-        }
-        if ($verify == 'async') {
-            $sub->scheduleVerify($mode, $token);
-            header('HTTP/1.1 202 Accepted');
-        } else {
+        $verify = $this->arg('hub.verify'); // TODO: deprecated
+        $token = $this->arg('hub.verify_token', null);  // TODO: deprecated
+        if ($verify == 'sync') {    // pre-0.4 PuSH
             $sub->verify($mode, $token);
             header('HTTP/1.1 204 No Content');
+        } else {    // If $verify is not "sync", we might be using PuSH 0.4
+            $sub->scheduleVerify($mode, $token);    // If we were certain it's PuSH 0.4, token could be removed
+            header('HTTP/1.1 202 Accepted');
         }
     }
 
@@ -155,7 +145,7 @@ class PushHubAction extends Action
             $groupFeed = common_local_url('ApiTimelineGroup', $params);
 
             if ($feed == $userFeed) {
-                $user = User::staticGet('id', $id);
+                $user = User::getKV('id', $id);
                 if (!$user) {
                     // TRANS: Client exception. %s is a feed URL.
                     throw new ClientException(sprintt(_m('Invalid hub.topic "%s". User does not exist.'),$feed));
@@ -164,7 +154,7 @@ class PushHubAction extends Action
                 }
             }
             if ($feed == $groupFeed) {
-                $user = User_group::staticGet('id', $id);
+                $user = User_group::getKV('id', $id);
                 if (!$user) {
                     // TRANS: Client exception. %s is a feed URL.
                     throw new ClientException(sprintf(_m('Invalid hub.topic "%s". Group does not exist.'),$feed));
@@ -179,8 +169,8 @@ class PushHubAction extends Action
             $listFeed = common_local_url('ApiTimelineList', $params);
 
             if ($feed == $listFeed) {
-                $list = Profile_list::staticGet('id', $id);
-                $user = User::staticGet('id', $user);
+                $list = Profile_list::getKV('id', $id);
+                $user = User::getKV('id', $user);
                 if (!$list || !$user || $list->tagger != $user->id) {
                     // TRANS: Client exception. %s is a feed URL.
                     throw new ClientException(sprintf(_m('Invalid hub.topic %s; list does not exist.'),$feed));
@@ -203,7 +193,8 @@ class PushHubAction extends Action
         $url = $this->arg($arg);
         $params = array('domain_check' => false, // otherwise breaks my local tests :P
                         'allowed_schemes' => array('http', 'https'));
-        if (Validate::uri($url, $params)) {
+        $validate = new Validate;
+        if ($validate->uri($url, $params)) {
             return $url;
         } else {
             // TRANS: Client exception.
@@ -221,6 +212,6 @@ class PushHubAction extends Action
      */
     protected function getSub($feed, $callback)
     {
-        return HubSub::staticGet($feed, $callback);
+        return HubSub::getByHashkey($feed, $callback);
     }
 }

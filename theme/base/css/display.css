@@ -1,5 +1,4 @@
 /** theme: base
-
  *
  * @package   StatusNet
  * @author    Samantha Doherty <sammy@status.net>
@@ -689,18 +688,22 @@ font-style:italic;
     display:none;
 }
 
+#remoteprofile .notice .entry-title, #remoteprofile .notice div.entry-content,
 #showstream .notice .entry-title, #showstream .notice div.entry-content {
     margin-left: 0;
 }
 
+#remoteprofile .notice .entry-title,
 #showstream .notice .entry-title {
     min-height: 1px;
 }
 
+#remoteprofile #content .notice .author,
 #showstream #content .notice .author {
     display: none;
 }
 
+#remoteprofile .notice,
 #showstream .notice {
     min-height: 1em; 
 }
@@ -829,33 +832,6 @@ float:left;
 clear:both;
 }
 
-#jOverlayContent,
-#jOverlayContent #content,
-#jOverlayContent #content_inner { /* TODO can remove this now? */
-width: auto !important;
-margin-bottom:0;
-}
-#jOverlayContent #content {
-padding:11px;
-min-height:auto;
-    border: 1px solid #fff;
-}
-#jOverlayContent .entry-title {
-display:block;
-margin-bottom:11px;
-}
-#jOverlayContent button {
-    position:absolute;
-    top: 5px;
-    right: 20px;
-}
-#jOverlayContent h1 {
-max-width:425px;
-}
-#jOverlayLoading {
-top:5%;
-left:40%;
-}
 #attachment_view img {
 max-width:480px;
 max-height:480px;
@@ -1488,32 +1464,6 @@ margin-bottom:0;
     padding-top: 4px;
 }
 
-.form_notice label[for=to],
-.form_notice label[for=custom_name] {
-margin-top:7px;
-}
-
-.form_notice select[id=to],
-.form_notice input[id=custom_name] {
-margin-bottom:7px;
-margin-left:18px;
-float:left;
-max-width:322px;
-}
-
-.form_notice label[for=custom_name] {
-clear:left;
-}
-
-.form_notice .error,
-.form_notice .success {
-float:left;
-clear:both;
-width:81.5%;
-margin-bottom:0;
-line-height:1.618;
-}
-
 .form_settings p {
 margin-bottom:11px;
 }
@@ -1614,41 +1564,6 @@ clear:both;
 
 #form_settings_avatar .form_actions {
 margin-bottom:0;
-}
-
-#settings_design_background-image img {
-    max-width:480px;
-    max-height:480px;
-    clear: left;
-    display: block;
-    margin-bottom: 10px;
-}
-
-#settings_design_background-image .form_guide {
-    float: left;
-    margin-top: 10px;
-}
-
-#settings_design_color .form_data,
-#color-picker {
-float:left;
-}
-#settings_design_color .form_data {
-width:400px;
-margin-right:1%;
-}
-
-#settings_design_color .form_data li {
-width:33%;
-}
-#settings_design_color .form_data label {
-float:none;
-display:block;
-}
-#settings_design_color .form_data .swatch {
-padding:11px;
-margin-left:0;
-width:auto;
 }
 
 .entity_profile {
@@ -2574,6 +2489,11 @@ display:none;
 
 #site_nav_local_views li.extended_menu a {
     display:none;
+}
+
+.profile_block_otherprofile_list li {
+    display: inline;
+    list-style-type: none;
 }
 
 /*end of @media screen, projection, tv*/

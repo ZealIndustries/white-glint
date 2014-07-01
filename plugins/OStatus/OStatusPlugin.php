@@ -18,15 +18,17 @@
  */
 
 /**
+ * OStatusPlugin implementation for GNU Social
+ *
+ * Depends on: WebFinger plugin
+ *
  * @package OStatusPlugin
  * @maintainer Brion Vibber <brion@status.net>
  */
 
-if (!defined('STATUSNET')) {
-    exit(1);
-}
+if (!defined('GNUSOCIAL')) { exit(1); }
 
-set_include_path(get_include_path() . PATH_SEPARATOR . dirname(__FILE__) . '/extlib/');
+set_include_path(get_include_path() . PATH_SEPARATOR . dirname(__FILE__) . '/extlib/phpseclib');
 
 class FeedSubException extends Exception
 {
@@ -52,8 +54,6 @@ class OStatusPlugin extends Plugin
     function onRouterInitialized($m)
     {
         // Discovery actions
-        $m->connect('main/ownerxrd',
-                    array('action' => 'ownerxrd'));
         $m->connect('main/ostatustag',
                     array('action' => 'ostatustag'));
         $m->connect('main/ostatustag?nickname=:nickname',
@@ -125,34 +125,16 @@ class OStatusPlugin extends Plugin
      */
     function onStartEnqueueNotice($notice, &$transports)
     {
-        if ($notice->isLocal()) {
-        	 if ($notice->inScope(null)) {	
-            	// put our transport first, in case there's any conflict (like OMB)
-            	array_unshift($transports, 'ostatus');
-		        $this->log(LOG_INFO, "Notice {$notice->id} queued for OStatus processing");
-        	 } else {
-		        // FIXME: we don't do privacy-controlled OStatus updates yet.
-		        // once that happens, finer grain of control here.
-		        $this->log(LOG_NOTICE, "Not queueing notice {$notice->id} for OStatus because of privacy; scope = {$notice->scope}");
-        	 }
+        if ($notice->inScope(null)) {
+            // put our transport first, in case there's any conflict (like OMB)
+            array_unshift($transports, 'ostatus');
+            $this->log(LOG_INFO, "Notice {$notice->id} queued for OStatus processing");
         } else {
-        	$this->log(LOG_NOTICE, "Not queueing notice {$notice->id} for OStatus because it's not local.");
+            // FIXME: we don't do privacy-controlled OStatus updates yet.
+            // once that happens, finer grain of control here.
+            $this->log(LOG_NOTICE, "Not queueing notice {$notice->id} for OStatus because of privacy; scope = {$notice->scope}");
         }
         return true;
-    }
-
-    /**
-     * Add a link header for LRDD Discovery
-     */
-    function onStartShowHTML($action)
-    {
-        if ($action instanceof ShowstreamAction) {
-            $acct = 'acct:'. $action->profile->nickname .'@'. common_config('site', 'server');
-            $url = common_local_url('userxrd');
-            $url.= '?uri='. $acct;
-
-            header('Link: <'.$url.'>; rel="'. Discovery::LRDD_REL.'"; type="application/xrd+xml"');
-        }
     }
 
     /**
@@ -192,43 +174,11 @@ class OStatusPlugin extends Plugin
             $salmon = common_local_url($salmonAction, array('id' => $id));
             $feed->addLink($salmon, array('rel' => Salmon::REL_SALMON));
 
-            // XXX: these are deprecated
+            // XXX: these are deprecated, but StatusNet only looks for NS_REPLIES
             $feed->addLink($salmon, array('rel' => Salmon::NS_REPLIES));
             $feed->addLink($salmon, array('rel' => Salmon::NS_MENTIONS));
         }
 
-        return true;
-    }
-
-    /**
-     * Automatically load the actions and libraries used by the plugin
-     *
-     * @param Class $cls the class
-     *
-     * @return boolean hook return
-     *
-     */
-    function onAutoload($cls)
-    {
-        $base = dirname(__FILE__);
-        $lower = strtolower($cls);
-        $map = array('activityverb' => 'activity',
-                     'activityobject' => 'activity',
-                     'activityutils' => 'activity');
-        if (isset($map[$lower])) {
-            $lower = $map[$lower];
-        }
-        $files = array("$base/classes/$cls.php",
-                       "$base/lib/$lower.php");
-        if (substr($lower, -6) == 'action') {
-            $files[] = "$base/actions/" . substr($lower, 0, -6) . ".php";
-        }
-        foreach ($files as $file) {
-            if (file_exists($file)) {
-                include_once $file;
-                return false;
-            }
-        }
         return true;
     }
 
@@ -387,7 +337,7 @@ class OStatusPlugin extends Plugin
      * @param array &$mention in/out param: set of found mentions
      * @return boolean hook return value
      */
-    function onEndFindMentions($sender, $text, &$mentions)
+    function onEndFindMentions(Profile $sender, $text, &$mentions)
     {
         $matches = array();
 
@@ -550,7 +500,7 @@ class OStatusPlugin extends Plugin
         return true;
     }
 
-    function onEndShowStatusNetStyles($action) {
+    public function onEndShowStylesheets(Action $action) {
         $action->cssLink($this->path('theme/base/css/ostatus.css'));
         return true;
     }
@@ -600,8 +550,8 @@ class OStatusPlugin extends Plugin
      */
     function onStartFeedSubReceive($feedsub, $feed)
     {
-        $oprofile = Ostatus_profile::staticGet('feeduri', $feedsub->uri);
-        if ($oprofile) {
+        $oprofile = Ostatus_profile::getKV('feeduri', $feedsub->uri);
+        if ($oprofile instanceof Ostatus_profile) {
             $oprofile->processFeed($feed, 'push');
         } else {
             common_log(LOG_DEBUG, "No ostatus profile for incoming feed $feedsub->uri");
@@ -619,7 +569,7 @@ class OStatusPlugin extends Plugin
      */
     function onFeedSubSubscriberCount($feedsub, &$count)
     {
-        $oprofile = Ostatus_profile::staticGet('feeduri', $feedsub->uri);
+        $oprofile = Ostatus_profile::getKV('feeduri', $feedsub->uri);
         if ($oprofile) {
             $count += $oprofile->subscriberCount();
         }
@@ -633,22 +583,20 @@ class OStatusPlugin extends Plugin
      * @fixme If something else aborts later, we could end up with a stray
      *        PuSH subscription. This is relatively harmless, though.
      *
-     * @param Profile $subscriber
-     * @param Profile $other
+     * @param Profile $profile  subscriber
+     * @param Profile $other    subscribee
      *
      * @return hook return code
      *
      * @throws Exception
      */
-    function onStartSubscribe($subscriber, $other)
+    function onStartSubscribe(Profile $profile, Profile $other)
     {
-        $user = User::staticGet('id', $subscriber->id);
-
-        if (empty($user)) {
+        if (!$profile->isLocal()) {
             return true;
         }
 
-        $oprofile = Ostatus_profile::staticGet('profile_id', $other->id);
+        $oprofile = Ostatus_profile::getKV('profile_id', $other->id);
 
         if (empty($oprofile)) {
             return true;
@@ -664,33 +612,31 @@ class OStatusPlugin extends Plugin
      * Having established a remote subscription, send a notification to the
      * remote OStatus profile's endpoint.
      *
-     * @param Profile $subscriber
-     * @param Profile $other
+     * @param Profile $profile  subscriber
+     * @param Profile $other    subscribee
      *
      * @return hook return code
      *
      * @throws Exception
      */
-    function onEndSubscribe($subscriber, $other)
+    function onEndSubscribe(Profile $profile, Profile $other)
     {
-        $user = User::staticGet('id', $subscriber->id);
-
-        if (empty($user)) {
+        if (!$profile->isLocal()) {
             return true;
         }
 
-        $oprofile = Ostatus_profile::staticGet('profile_id', $other->id);
+        $oprofile = Ostatus_profile::getKV('profile_id', $other->id);
 
         if (empty($oprofile)) {
             return true;
         }
 
-        $sub = Subscription::pkeyGet(array('subscriber' => $subscriber->id,
+        $sub = Subscription::pkeyGet(array('subscriber' => $profile->id,
                                            'subscribed' => $other->id));
 
         $act = $sub->asActivity();
 
-        $oprofile->notifyActivity($act, $subscriber);
+        $oprofile->notifyActivity($act, $profile);
 
         return true;
     }
@@ -703,15 +649,13 @@ class OStatusPlugin extends Plugin
      * @param Profile $other
      * @return hook return value
      */
-    function onEndUnsubscribe($profile, $other)
+    function onEndUnsubscribe(Profile $profile, Profile $other)
     {
-        $user = User::staticGet('id', $profile->id);
-
-        if (empty($user)) {
+        if (!$profile->isLocal()) {
             return true;
         }
 
-        $oprofile = Ostatus_profile::staticGet('profile_id', $other->id);
+        $oprofile = Ostatus_profile::getKV('profile_id', $other->id);
 
         if (empty($oprofile)) {
             return true;
@@ -758,7 +702,7 @@ class OStatusPlugin extends Plugin
      */
     function onStartJoinGroup($group, $profile)
     {
-        $oprofile = Ostatus_profile::staticGet('group_id', $group->id);
+        $oprofile = Ostatus_profile::getKV('group_id', $group->id);
         if ($oprofile) {
             if (!$oprofile->subscribe()) {
                 // TRANS: Exception thrown when setup of remote group membership fails.
@@ -813,7 +757,7 @@ class OStatusPlugin extends Plugin
      */
     function onEndLeaveGroup($group, $profile)
     {
-        $oprofile = Ostatus_profile::staticGet('group_id', $group->id);
+        $oprofile = Ostatus_profile::getKV('group_id', $group->id);
         if ($oprofile) {
             // Drop the PuSH subscription if there are no other subscribers.
             $oprofile->garbageCollect();
@@ -856,7 +800,7 @@ class OStatusPlugin extends Plugin
 
     function onStartSubscribePeopletag($peopletag, $user)
     {
-        $oprofile = Ostatus_profile::staticGet('peopletag_id', $peopletag->id);
+        $oprofile = Ostatus_profile::getKV('peopletag_id', $peopletag->id);
         if ($oprofile) {
             if (!$oprofile->subscribe()) {
                 // TRANS: Exception thrown when setup of remote list subscription fails.
@@ -864,7 +808,7 @@ class OStatusPlugin extends Plugin
             }
 
             $sub = $user->getProfile();
-            $tagger = Profile::staticGet($peopletag->tagger);
+            $tagger = Profile::getKV($peopletag->tagger);
 
             $act = new Activity();
             $act->id = TagURI::mint('subscribe_peopletag:%d:%d:%s',
@@ -908,13 +852,13 @@ class OStatusPlugin extends Plugin
 
     function onEndUnsubscribePeopletag($peopletag, $user)
     {
-        $oprofile = Ostatus_profile::staticGet('peopletag_id', $peopletag->id);
+        $oprofile = Ostatus_profile::getKV('peopletag_id', $peopletag->id);
         if ($oprofile) {
             // Drop the PuSH subscription if there are no other subscribers.
             $oprofile->garbageCollect();
 
-            $sub = Profile::staticGet($user->id);
-            $tagger = Profile::staticGet($peopletag->tagger);
+            $sub = Profile::getKV($user->id);
+            $tagger = Profile::getKV($peopletag->tagger);
 
             $act = new Activity();
             $act->id = TagURI::mint('unsubscribe_peopletag:%d:%d:%s',
@@ -949,13 +893,13 @@ class OStatusPlugin extends Plugin
      */
     function onEndFavorNotice(Profile $profile, Notice $notice)
     {
-        $user = User::staticGet('id', $profile->id);
+        $user = User::getKV('id', $profile->id);
 
         if (empty($user)) {
             return true;
         }
 
-        $oprofile = Ostatus_profile::staticGet('profile_id', $notice->profile_id);
+        $oprofile = Ostatus_profile::getKV('profile_id', $notice->profile_id);
 
         if (empty($oprofile)) {
             return true;
@@ -986,7 +930,7 @@ class OStatusPlugin extends Plugin
      */
     function onEndTagProfile($ptag)
     {
-        $oprofile = Ostatus_profile::staticGet('profile_id', $ptag->tagged);
+        $oprofile = Ostatus_profile::getKV('profile_id', $ptag->tagged);
 
         if (empty($oprofile)) {
             return true;
@@ -1000,7 +944,7 @@ class OStatusPlugin extends Plugin
         $act = new Activity();
 
         $tagger = $plist->getTagger();
-        $tagged = Profile::staticGet('id', $ptag->tagged);
+        $tagged = Profile::getKV('id', $ptag->tagged);
 
         $act->verb = ActivityVerb::TAG;
         $act->id   = TagURI::mint('tag_profile:%d:%d:%s',
@@ -1043,7 +987,7 @@ class OStatusPlugin extends Plugin
      */
     function onEndUntagProfile($ptag)
     {
-        $oprofile = Ostatus_profile::staticGet('profile_id', $ptag->tagged);
+        $oprofile = Ostatus_profile::getKV('profile_id', $ptag->tagged);
 
         if (empty($oprofile)) {
             return true;
@@ -1057,7 +1001,7 @@ class OStatusPlugin extends Plugin
         $act = new Activity();
 
         $tagger = $plist->getTagger();
-        $tagged = Profile::staticGet('id', $ptag->tagged);
+        $tagged = Profile::getKV('id', $ptag->tagged);
 
         $act->verb = ActivityVerb::UNTAG;
         $act->id   = TagURI::mint('untag_profile:%d:%d:%s',
@@ -1095,13 +1039,13 @@ class OStatusPlugin extends Plugin
      */
     function onEndDisfavorNotice(Profile $profile, Notice $notice)
     {
-        $user = User::staticGet('id', $profile->id);
+        $user = User::getKV('id', $profile->id);
 
         if (empty($user)) {
             return true;
         }
 
-        $oprofile = Ostatus_profile::staticGet('profile_id', $notice->profile_id);
+        $oprofile = Ostatus_profile::getKV('profile_id', $notice->profile_id);
 
         if (empty($oprofile)) {
             return true;
@@ -1133,8 +1077,8 @@ class OStatusPlugin extends Plugin
 
     function onStartGetProfileUri($profile, &$uri)
     {
-        $oprofile = Ostatus_profile::staticGet('profile_id', $profile->id);
-        if (!empty($oprofile)) {
+        $oprofile = Ostatus_profile::getKV('profile_id', $profile->id);
+        if ($oprofile instanceof Ostatus_profile) {
             $uri = $oprofile->uri;
             return false;
         }
@@ -1148,7 +1092,7 @@ class OStatusPlugin extends Plugin
 
     function onStartUserGroupPermalink($group, &$url)
     {
-        $oprofile = Ostatus_profile::staticGet('group_id', $group->id);
+        $oprofile = Ostatus_profile::getKV('group_id', $group->id);
         if ($oprofile) {
             // @fixme this should probably be in the user_group table
             // @fixme this uri not guaranteed to be a profile page
@@ -1207,7 +1151,7 @@ class OStatusPlugin extends Plugin
      */
     function onEndBroadcastProfile(Profile $profile)
     {
-        $user = User::staticGet('id', $profile->id);
+        $user = User::getKV('id', $profile->id);
 
         // Find foreign accounts I'm subscribed to that support Salmon pings.
         //
@@ -1255,7 +1199,7 @@ class OStatusPlugin extends Plugin
     {
         if (!common_logged_in()) {
 
-            $profileUser = User::staticGet('id', $item->profile->id);
+            $profileUser = User::getKV('id', $item->profile->id);
 
             if (!empty($profileUser)) {
 
@@ -1293,7 +1237,7 @@ class OStatusPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'OStatus',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Evan Prodromou, James Walker, Brion Vibber, Zach Copley',
                             'homepage' => 'http://status.net/wiki/Plugin:OStatus',
                             // TRANS: Plugin description.
@@ -1312,9 +1256,9 @@ class OStatusPlugin extends Plugin
      */
     public static function localGroupFromUrl($url)
     {
-        $group = User_group::staticGet('uri', $url);
+        $group = User_group::getKV('uri', $url);
         if ($group) {
-            $local = Local_group::staticGet('group_id', $group->id);
+            $local = Local_group::getKV('group_id', $group->id);
             if ($local) {
                 return $group->id;
             }
@@ -1334,7 +1278,7 @@ class OStatusPlugin extends Plugin
 
     public function onStartProfileGetAtomFeed($profile, &$feed)
     {
-        $oprofile = Ostatus_profile::staticGet('profile_id', $profile->id);
+        $oprofile = Ostatus_profile::getKV('profile_id', $profile->id);
 
         if (empty($oprofile)) {
             return true;
@@ -1349,7 +1293,7 @@ class OStatusPlugin extends Plugin
         // Don't want to do Web-based discovery on our own server,
         // so we check locally first.
 
-        $user = User::staticGet('uri', $uri);
+        $user = User::getKV('uri', $uri);
 
         if (!empty($user)) {
             $profile = $user->getProfile();
@@ -1358,54 +1302,56 @@ class OStatusPlugin extends Plugin
 
         // Now, check remotely
 
-        $oprofile = Ostatus_profile::ensureProfileURI($uri);
-
-        if (!empty($oprofile)) {
+        try {
+            $oprofile = Ostatus_profile::ensureProfileURI($uri);
             $profile = $oprofile->localProfile();
-            return false;
+            return !($profile instanceof Profile);  // localProfile won't throw exception but can return null
+        } catch (Exception $e) {
+            return true; // It's not an OStatus profile as far as we know, continue event handling
         }
+    }
 
-        // Still not a hit, so give up.
-
+    function onEndWebFingerNoticeLinks(XML_XRD $xrd, Notice $target)
+    {
+        $author = $target->getProfile();
+        $salmon_url = common_local_url('usersalmon', array('id' => $author->id));
+        $xrd->links[] = new XML_XRD_Element_Link(Salmon::REL_SALMON, $salmon_url);
         return true;
     }
 
-    function onEndXrdActionLinks(&$xrd, $user)
+    function onEndWebFingerProfileLinks(XML_XRD $xrd, Profile $target)
     {
-        $xrd->links[] = array('rel' => Discovery::UPDATESFROM,
-                  'href' => common_local_url('ApiTimelineUser',
-                             array('id' => $user->id,
-                                   'format' => 'atom')),
-                  'type' => 'application/atom+xml');
+        $xrd->links[] = new XML_XRD_Element_Link(Discovery::UPDATESFROM,
+                            common_local_url('ApiTimelineUser',
+                                array('id' => $target->id, 'format' => 'atom')),
+                            'application/atom+xml');
 
                 // Salmon
         $salmon_url = common_local_url('usersalmon',
-                                       array('id' => $user->id));
+                                       array('id' => $target->id));
 
-        $xrd->links[] = array('rel' => Salmon::REL_SALMON,
-                              'href' => $salmon_url);
-        // XXX : Deprecated - to be removed.
-        $xrd->links[] = array('rel' => Salmon::NS_REPLIES,
-                              'href' => $salmon_url);
+        $xrd->links[] = new XML_XRD_Element_Link(Salmon::REL_SALMON, $salmon_url);
 
-        $xrd->links[] = array('rel' => Salmon::NS_MENTIONS,
-                              'href' => $salmon_url);
+        // XXX: these are deprecated, but StatusNet only looks for NS_REPLIES
+        $xrd->links[] = new XML_XRD_Element_Link(Salmon::NS_REPLIES, $salmon_url);
+        $xrd->links[] = new XML_XRD_Element_Link(Salmon::NS_MENTIONS, $salmon_url);
 
         // Get this user's keypair
-        $magickey = Magicsig::staticGet('user_id', $user->id);
-        if (!$magickey) {
+        $magickey = Magicsig::getKV('user_id', $target->id);
+        if (!($magickey instanceof Magicsig)) {
             // No keypair yet, let's generate one.
             $magickey = new Magicsig();
-            $magickey->generate($user->id);
+            $magickey->generate($target->id);
         }
 
-        $xrd->links[] = array('rel' => Magicsig::PUBLICKEYREL,
-                              'href' => 'data:application/magic-public-key,'. $magickey->toString(false));
+        $xrd->links[] = new XML_XRD_Element_Link(Magicsig::PUBLICKEYREL,
+                            'data:application/magic-public-key,'. $magickey->toString(false));
 
         // TODO - finalize where the redirect should go on the publisher
-        $url = common_local_url('ostatussub') . '?profile={uri}';
-        $xrd->links[] = array('rel' => 'http://ostatus.org/schema/1.0/subscribe',
-                              'template' => $url );
+        $xrd->links[] = new XML_XRD_Element_Link('http://ostatus.org/schema/1.0/subscribe',
+                              common_local_url('ostatussub') . '?profile={uri}',
+                              null, // type not set
+                              true); // isTemplate
 
         return true;
     }

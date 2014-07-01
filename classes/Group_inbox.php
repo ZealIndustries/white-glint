@@ -13,10 +13,6 @@ class Group_inbox extends Managed_DataObject
     public $notice_id;                       // int(4)  primary_key not_null
     public $created;                         // datetime()   not_null
 
-    /* Static get */
-
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('Group_inbox',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -37,12 +33,8 @@ class Group_inbox extends Managed_DataObject
             'indexes' => array(
                 'group_inbox_created_idx' => array('created'),
                 'group_inbox_notice_id_idx' => array('notice_id'),
+                'group_inbox_group_id_created_notice_id_idx' => array('group_id', 'created', 'notice_id'),
             ),
         );
-    }
-
-    function pkeyGet($kv)
-    {
-        return Memcached_DataObject::pkeyGet('Group_inbox', $kv);
     }
 }

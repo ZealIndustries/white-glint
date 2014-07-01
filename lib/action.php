@@ -28,12 +28,7 @@
  * @link      http://status.net/
  */
 
-if (!defined('STATUSNET') && !defined('LACONICA')) {
-    exit(1);
-}
-
-require_once INSTALLDIR.'/lib/noticeform.php';
-require_once INSTALLDIR.'/lib/htmloutputter.php';
+if (!defined('GNUSOCIAL')) { exit(1); }
 
 /**
  * Base class for all actions
@@ -55,7 +50,23 @@ require_once INSTALLDIR.'/lib/htmloutputter.php';
  */
 class Action extends HTMLOutputter // lawsuit
 {
-    var $args;
+    // This should be protected/private in the future
+    public $args = array();
+
+    // Action properties, set per-class
+    protected $action = false;
+    protected $ajax   = false;
+    protected $menus  = true;
+    protected $needLogin = false;
+    protected $needPost = false;
+
+    // The currently scoped profile (normally Profile::current; from $this->auth_user for API)
+    protected $scoped = null;
+
+    // Related to front-end user representation
+    protected $format = null;
+    protected $error  = null;
+    protected $msg    = null;
 
     /**
      * Constructor
@@ -73,6 +84,51 @@ class Action extends HTMLOutputter // lawsuit
         parent::__construct($output, $indent);
     }
 
+    function getError()
+    {
+        return $this->error;
+    }
+
+    function getInfo()
+    {
+        return $this->msg;
+    }
+
+    static public function run(array $args=array(), $output='php://output', $indent=null) {
+        $class = get_called_class();
+        $action = new $class($output, $indent);
+        $action->execute($args);
+        return $action;
+    }
+
+    public function execute(array $args=array()) {
+        // checkMirror stuff
+        if (common_config('db', 'mirror') && $this->isReadOnly($args)) {
+            if (is_array(common_config('db', 'mirror'))) {
+                // "load balancing", ha ha
+                $arr = common_config('db', 'mirror');
+                $k = array_rand($arr);
+                $mirror = $arr[$k];
+            } else {
+                $mirror = common_config('db', 'mirror');
+            }
+
+            // everyone else uses the mirror
+            common_config_set('db', 'database', $mirror);
+        }
+
+        $status = $this->prepare($args);
+        if ($status) {
+            $this->handle($args);
+        } else {
+            common_debug('Prepare failed for Action.');
+        }
+
+        $this->flush();
+
+        Event::handle('EndActionExecute', array($status, $this));
+    }
+
     /**
      * For initializing members of the class.
      *
@@ -80,15 +136,34 @@ class Action extends HTMLOutputter // lawsuit
      *
      * @return boolean true
      */
-    function prepare($argarray)
+    protected function prepare(array $args=array())
     {
-        $this->args =& common_copy_args($argarray);
+        if ($this->needPost && !$this->isPost()) {
+            // TRANS: Client error. POST is a HTTP command. It should not be translated.
+            $this->clientError(_('This method requires a POST.'), 405);
+        }
 
-        if ($this->boolean('ajax')) {
+        $this->args = common_copy_args($args);
+
+        $this->action = $this->trimmed('action');
+
+        if ($this->ajax || $this->boolean('ajax')) {
+            // check with StatusNet::isAjax()
             StatusNet::setAjax(true);
         }
 
+        if ($this->needLogin) {
+            $this->checkLogin(); // if not logged in, this redirs/excepts
+        }
+
+        $this->updateScopedProfile();
+
         return true;
+    }
+
+    function updateScopedProfile() {
+        $this->scoped = Profile::current();
+        return $this->scoped;
     }
 
     /**
@@ -164,10 +239,10 @@ class Action extends HTMLOutputter // lawsuit
     function showTitle()
     {
         $this->element('title', null,
-            // TRANS: Page title. %1$s is the title, %2$s is the site name.
-            sprintf(_("%1\$s - %2\$s"),
-            $this->title(),
-            common_config('site', 'name')));
+                       // TRANS: Page title. %1$s is the title, %2$s is the site name.
+                       sprintf(_('%1$s - %2$s'),
+                               $this->title(),
+                               common_config('site', 'name')));
     }
 
     /**
@@ -193,20 +268,20 @@ class Action extends HTMLOutputter // lawsuit
     {
         if (is_readable(INSTALLDIR . '/theme/' . common_config('site', 'theme') . '/favicon.ico')) {
             $this->element('link', array('rel' => 'shortcut icon',
-                'href' => Theme::path('favicon.ico')));
+                                         'href' => Theme::path('favicon.ico')));
         } else {
             // favicon.ico should be HTTPS if the rest of the page is
             $this->element('link', array('rel' => 'shortcut icon',
-                'href' => common_path('favicon.ico', StatusNet::isHTTPS())));
+                                         'href' => common_path('favicon.ico', StatusNet::isHTTPS())));
         }
 
         if (common_config('site', 'mobile')) {
             if (is_readable(INSTALLDIR . '/theme/' . common_config('site', 'theme') . '/apple-touch-icon.png')) {
                 $this->element('link', array('rel' => 'apple-touch-icon',
-                    'href' => Theme::path('apple-touch-icon.png')));
+                                             'href' => Theme::path('apple-touch-icon.png')));
             } else {
                 $this->element('link', array('rel' => 'apple-touch-icon',
-                    'href' => common_path('apple-touch-icon.png')));
+                                             'href' => common_path('apple-touch-icon.png')));
             }
         }
     }
@@ -222,28 +297,26 @@ class Action extends HTMLOutputter // lawsuit
 
             // Use old name for StatusNet for compatibility on events
 
-            if (Event::handle('StartShowStatusNetStyles', array($this)) &&
-                Event::handle('StartShowLaconicaStyles', array($this))) {
-                    $this->primaryCssLink(null, 'screen, projection, tv, print');
-                    Event::handle('EndShowStatusNetStyles', array($this));
-                    Event::handle('EndShowLaconicaStyles', array($this));
-                }
+            if (Event::handle('StartShowStylesheets', array($this))) {
+                $this->primaryCssLink(null, 'screen, projection, tv, print');
+                Event::handle('EndShowStylesheets', array($this));
+            }
 
-            $this->cssLink(common_path('js/css/smoothness/jquery-ui.css'));
+            $this->cssLink('js/extlib/jquery-ui/css/smoothness/jquery-ui.css');
 
-            if (Event::handle('StartShowUAStyles', array($this))) {/*
+            if (Event::handle('StartShowUAStyles', array($this))) {
                 $this->comment('[if IE]><link rel="stylesheet" type="text/css" '.
-                    'href="'.Theme::path('css/ie.css', 'base').'?version='.STATUSNET_VERSION.'" /><![endif]');*/
+                               'href="'.Theme::path('css/ie.css', 'base').'?version='.GNUSOCIAL_VERSION.'" /><![endif]');
                 foreach (array(6,7) as $ver) {
                     if (file_exists(Theme::file('css/ie'.$ver.'.css', 'base'))) {
                         // Yes, IE people should be put in jail.
                         $this->comment('[if lte IE '.$ver.']><link rel="stylesheet" type="text/css" '.
-                            'href="'.Theme::path('css/ie'.$ver.'.css', 'base').'?version='.STATUSNET_VERSION.'" /><![endif]');
+                                       'href="'.Theme::path('css/ie'.$ver.'.css', 'base').'?version='.GNUSOCIAL_VERSION.'" /><![endif]');
                     }
                 }
                 if (file_exists(Theme::file('css/ie.css'))) {
                     $this->comment('[if IE]><link rel="stylesheet" type="text/css" '.
-                               'href="'.Theme::path('css/ie.css', null).'?version='.STATUSNET_VERSION.'" /><![endif]');
+                               'href="'.Theme::path('css/ie.css', null).'?version='.GNUSOCIAL_VERSION.'" /><![endif]');
                 }
                 Event::handle('EndShowUAStyles', array($this));
             }
@@ -298,27 +371,24 @@ class Action extends HTMLOutputter // lawsuit
         if (Event::handle('StartShowScripts', array($this))) {
             if (Event::handle('StartShowJQueryScripts', array($this))) {
                 if (common_config('site', 'minify')) {
-                    $this->script('jquery.min.js');
-                    $this->script('jquery.form.min.js');
-                    $this->script('jquery-ui.min.js');
-                    $this->script('jquery.cookie.min.js');
-                    $this->inlineScript('if (typeof window.JSON !== "object") { $.getScript("'.common_path('js/json2.min.js').'"); }');
-                    $this->script('jquery.joverlay.min.js');
-                    $this->script('jquery.infieldlabel.min.js');
+                    $this->script('extlib/jquery.min.js');
+                    $this->script('extlib/jquery.form.min.js');
+                    $this->script('extlib/jquery-ui/jquery-ui.min.js');
+                    $this->script('extlib/jquery.cookie.min.js');
+                    $this->inlineScript('if (typeof window.JSON !== "object") { $.getScript("'.common_path('js/extlib/json2.min.js', StatusNet::isHTTPS()).'"); }');
+                    $this->script('extlib/jquery.infieldlabel.min.js');
                 } else {
-                    $this->script('jquery.js');
-                    $this->script('jquery.form.js');
-                    $this->script('jquery-ui.min.js');
-                    $this->script('jquery.cookie.js');
-                    $this->inlineScript('if (typeof window.JSON !== "object") { $.getScript("'.common_path('js/json2.js').'"); }');
-                    $this->script('jquery.joverlay.js');
-                    $this->script('jquery.infieldlabel.js');
+                    $this->script('extlib/jquery.js');
+                    $this->script('extlib/jquery.form.js');
+                    $this->script('extlib/jquery-ui/jquery-ui.js');
+                    $this->script('extlib/jquery.cookie.js');
+                    $this->inlineScript('if (typeof window.JSON !== "object") { $.getScript("'.common_path('js/extlib/json2.js', StatusNet::isHTTPS()).'"); }');
+                    $this->script('extlib/jquery.infieldlabel.js');
                 }
 
                 Event::handle('EndShowJQueryScripts', array($this));
             }
-            if (Event::handle('StartShowStatusNetScripts', array($this)) &&
-                Event::handle('StartShowLaconicaScripts', array($this))) {
+            if (Event::handle('StartShowStatusNetScripts', array($this))) {
                 if (common_config('site', 'minify')) {
                     $this->script('util.min.js');
                 } else {
@@ -338,9 +408,7 @@ class Action extends HTMLOutputter // lawsuit
                 if (common_config('javascript', 'bustframes')) {
                     $this->inlineScript('if (window.top !== window.self) { document.write = ""; window.top.location = window.self.location; setTimeout(function () { document.body.innerHTML = ""; }, 1); window.self.onload = function () { document.body.innerHTML = ""; }; }');
                 }
-
                 Event::handle('EndShowStatusNetScripts', array($this));
-                Event::handle('EndShowLaconicaScripts', array($this));
             }
             Event::handle('EndShowScripts', array($this));
         }
@@ -412,12 +480,12 @@ class Action extends HTMLOutputter // lawsuit
     function showOpenSearch()
     {
         $this->element('link', array('rel' => 'search',
-            'type' => 'application/opensearchdescription+xml',
-            'href' =>  common_local_url('opensearch', array('type' => 'people')),
-            'title' => common_config('site', 'name').' People Search'));
+                                     'type' => 'application/opensearchdescription+xml',
+                                     'href' =>  common_local_url('opensearch', array('type' => 'people')),
+                                     'title' => common_config('site', 'name').' People Search'));
         $this->element('link', array('rel' => 'search', 'type' => 'application/opensearchdescription+xml',
-            'href' =>  common_local_url('opensearch', array('type' => 'notice')),
-            'title' => common_config('site', 'name').' Notice Search'));
+                                     'href' =>  common_local_url('opensearch', array('type' => 'notice')),
+                                     'title' => common_config('site', 'name').' Notice Search'));
     }
 
     /**
@@ -434,9 +502,9 @@ class Action extends HTMLOutputter // lawsuit
         if ($feeds) {
             foreach ($feeds as $feed) {
                 $this->element('link', array('rel' => $feed->rel(),
-                    'href' => $feed->url,
-                    'type' => $feed->mimeType(),
-                    'title' => $feed->title));
+                                             'href' => $feed->url,
+                                             'type' => $feed->mimeType(),
+                                             'title' => $feed->title));
             }
         }
     }
@@ -475,8 +543,8 @@ class Action extends HTMLOutputter // lawsuit
     function showBody()
     {
         $this->elementStart('body', (common_current_user()) ? array('id' => strtolower($this->trimmed('action')),
-            'class' => 'user_in')
-            : array('id' => strtolower($this->trimmed('action'))));
+                                                                    'class' => 'user_in')
+                            : array('id' => strtolower($this->trimmed('action'))));
         $this->elementStart('div', array('id' => 'wrap'));
         if (Event::handle('StartShowHeader', array($this))) {
             $this->showHeader();
@@ -506,7 +574,6 @@ class Action extends HTMLOutputter // lawsuit
     {
         $this->elementStart('div', array('id' => 'header'));
         $this->showLogo();
-		$this->showUserBox();
         $this->showPrimaryNav();
         if (Event::handle('StartShowSiteNotice', array($this))) {
             $this->showSiteNotice();
@@ -525,21 +592,21 @@ class Action extends HTMLOutputter // lawsuit
     function showLogo()
     {
         $this->elementStart('address', array('id' => 'site_contact',
-            'class' => 'vcard'));
+                                             'class' => 'vcard'));
         if (Event::handle('StartAddressData', array($this))) {
             if (common_config('singleuser', 'enabled')) {
                 $user = User::singleUser();
                 $url = common_local_url('showstream',
                                         array('nickname' => $user->nickname));
-            } else /*if (common_logged_in()) {
+            } else if (common_logged_in()) {
                 $cur = common_current_user();
                 $url = common_local_url('all', array('nickname' => $cur->nickname));
-            } else*/ {
+            } else {
                 $url = common_local_url('public');
             }
 
             $this->elementStart('a', array('class' => 'url home bookmark',
-                'href' => $url));
+                                           'href' => $url));
 
             if (StatusNet::isHTTPS()) {
                 $logoUrl = common_config('site', 'ssllogo');
@@ -547,7 +614,7 @@ class Action extends HTMLOutputter // lawsuit
                     // if logo is an uploaded file, try to fall back to HTTPS file URL
                     $httpUrl = common_config('site', 'logo');
                     if (!empty($httpUrl)) {
-                        $f = File::staticGet('url', $httpUrl);
+                        $f = File::getKV('url', $httpUrl);
                         if (!empty($f) && !empty($f->filename)) {
                             // this will handle the HTTPS case
                             $logoUrl = File::url($f->filename);
@@ -565,8 +632,8 @@ class Action extends HTMLOutputter // lawsuit
 
             if (!empty($logoUrl)) {
                 $this->element('img', array('class' => 'logo photo',
-                    'src' => $logoUrl,
-                    'alt' => common_config('site', 'name')));
+                                            'src' => $logoUrl,
+                                            'alt' => common_config('site', 'name')));
             }
 
             $this->text(' ');
@@ -577,158 +644,6 @@ class Action extends HTMLOutputter // lawsuit
         }
         $this->elementEnd('address');
     }
-	
-	function showUserBox() {
-        $user = common_current_user();
-		$this->elementStart('div', array('id' => 'user_info_card'));
-		
-		if ($user) {
-            $block = new DefaultProfileBlock($this);
-            $block->show();
-			$this->elementStart('ul');
-			
-			
-			// TRANS: Tooltip for main menu option "Personal".
-			$tooltip = _('Personal');
-			$this->elementStart('li', array('id' => 'usercard_personal'));
-			$this->elementStart('a', array(
-				'href' => common_local_url('all', array('nickname' => $user->nickname)),
-				'title' => $tooltip
-			));
-			$this->element('span', array(), _('Personal'));
-			$this->elementEnd('a');
-			$this->elementEnd('li');
-			
-			// TRANS: Tooltip for main menu option "Personal".
-			$tooltip = _('Watched');
-			$this->elementStart('li', array('id' => 'usercard_watched'));
-			$this->elementStart('a', array(
-				'onclick' => '$(\'#nav_usercard\').toggleClass(\'opened\')',
-				'title' => $tooltip
-			));
-			$this->element('span', array(), $tooltip);
-			$this->elementEnd('a');
-			
-			$nav = new UserCardNav($this);
-			$nav->show();
-			
-			$this->elementEnd('li');
-			
-			$tooltip = _('Replies');
-			$this->elementStart('li', array('id' => 'usercard_replies'));
-			$this->elementStart('a', array(
-				'href' => common_local_url('replies', array('nickname' => $user->nickname)),
-				'title' => $tooltip
-			));
-			$this->element('span', array(), _('Replies'));
-			$this->elementEnd('a');
-			$this->elementEnd('li');
-			
-			$tooltip = _('Favorites');
-			$this->elementStart('li', array('id' => 'usercard_favorites'));
-			$this->elementStart('a', array(
-				'href' => common_local_url('showfavorites', array('nickname' => $user->nickname)),
-				'title' => $tooltip
-			));
-			$this->element('span', array(), _('Favorites'));
-			$this->elementEnd('a');
-			$this->elementEnd('li');
-
-			$tooltip = _('Inbox');
-			$this->elementStart('li', array('id' => 'usercard_dmcounter'));
-			$this->elementStart('a', array(
-				'href' => common_local_url('inbox', array('nickname' => $user->nickname)),
-				'title' => $tooltip
-			));
-			$this->element('span', array(), _('Inbox'));
-			$this->element('span', array('id' => 'dmcounter'), '');
-			$this->elementEnd('a');
-			$this->elementEnd('li');
-
-			/*
-			// TRANS: Tooltip for main menu option "Services".
-			$tooltip = _m('TOOLTIP', 'Connect to services');
-			$this->menuItem(common_local_url('oauthconnectionssettings'),
-				// TRANS: Main menu option when logged in and connection are possible for access to options to connect to other services.
-				_('Connect'), $tooltip, false, 'nav_connect');
-
-			if(common_config('invite', 'enabled')) {
-				// TRANS: Tooltip for main menu option "Invite".
-				$tooltip = _m('TOOLTIP', 'Invite friends and colleagues to join you on %s');
-				$this->menuItem(common_local_url('invite'),
-					_m('MENU', 'Invite'),
-					sprintf($tooltip,
-					common_config('site', 'name')),
-					false, 'nav_invitecontact');
-			}*/
-			
-			// TRANS: Tooltip for main menu option "Account".
-			$tooltip = _('Account');
-			$this->elementStart('li', array('id' => 'usercard_account'));
-			$this->elementStart('a', array(
-				'href' => common_local_url('profilesettings'),
-				'title' => $tooltip
-			));
-			$this->element('span', array(), _('Account'));
-			$this->elementEnd('a');
-			$this->elementEnd('li');
-			
-			// TRANS: Tooltip for main menu option "Logout".
-			$tooltip = _m('TOOLTIP', 'Logout from the site');
-			$this->elementStart('li', array('id' => 'usercard_logout'));
-			$this->elementStart('a', array(
-				'href' => common_local_url('logout'),
-				'title' => $tooltip
-			));
-			$this->element('span', array(), _m('MENU', 'Logout'));
-			$this->elementEnd('a');
-			$this->elementEnd('li');
-			
-			$this->elementEnd('ul');
-		}
-		else {
-			
-			$this->elementStart('form', array('method' => 'post',
-											  'id' => 'form_login',
-											  'class' => 'form_settings',
-											  'action' => common_local_url('login')));
-			$this->elementStart('fieldset');
-			// TRANS: Form legend on login page.
-			$this->element('legend', null, _('Login to site'));
-			$this->elementStart('ul', 'form_data');
-			$this->elementStart('li');
-			// TRANS: Field label on login page.
-			$this->input('nickname', _('Username'));
-			$this->elementEnd('li');
-			$this->elementStart('li');
-			// TRANS: Field label on login page.
-			$this->password('password', _('Password'));
-			$this->elementEnd('li');
-			$this->elementStart('li');
-			// TRANS: Checkbox label label on login page.
-			$this->checkbox('rememberme', _('Remember me'), false);
-			$this->elementEnd('li');
-			$this->elementEnd('ul');
-			// TRANS: Button text for log in on login page.
-			$this->submit('submit', _m('BUTTON','Login'));
-			$this->elementEnd('fieldset');
-			$this->elementEnd('form');
-				
-			if (!common_config('site', 'closed') && !common_config('site', 'inviteonly')) {
-				// TRANS: Tooltip for main menu option "Register".
-				$tooltip = _m('TOOLTIP', 'Create an account');
-				$this->element('a', array(
-					'href'=>common_local_url('register'),
-					'title'=>$tooltip, 
-					'id'=>'usercard_register'
-					),
-					// TRANS: Main menu option when not logged in to register a new account.
-					_m('MENU', 'Register'));
-			}
-		}
-		
-		$this->elementEnd('div');
-	}
 
     /**
      * Show primary navigation.
@@ -752,32 +667,6 @@ class Action extends HTMLOutputter // lawsuit
     }
 
     /**
-     * Start a nav dropdown 
-     * 
-     * @return nothing
-     */
-    function startDropdown($name=null, $id=null)
-    {
-        $this->elementStart('li', array ('class' => 'nav_dropdown',
-            'id' => $id));
-        $this->elementStart('span');
-        $this->raw($name . ' &#9660;');
-        $this->elementEnd('span');
-        $this->elementStart('ol');
-    }
-
-    /**
-     * End a nav dropdown 
-     * 
-     * @return nothing
-     */
-    function endDropdown()
-    {
-        $this->elementEnd('ol');
-        $this->elementEnd('li');
-    }
-
-    /**
      * Show site notice.
      *
      * @return nothing
@@ -787,15 +676,9 @@ class Action extends HTMLOutputter // lawsuit
         // Revist. Should probably do an hAtom pattern here
         $text = common_config('site', 'notice');
         if ($text) {
-			$totwTitle = (common_config('site', 'notice_title') ? common_config('site', 'notice_title') : _('Topic of the Week'));
-			$totwLink = (common_config('site', 'notice_link') ? common_config('site', 'notice_link') : common_local_url('tag', array('tag' => 'totw')));
-			$totwRedirect = (common_config('site', 'notice_end') ? common_config('site', 'notice_end') : _('Click here to tell us what you think!'));
             $this->elementStart('div', array('id' => 'site_notice',
                                             'class' => 'system_notice'));
-			$this->element('span', array('id'=>'totw_title'), $totwTitle);
-            $this->raw($text . ' &ndash; ');
-			$this->element('a', array('id'=>'totw_redirect',
-						'href'=>$totwLink), $totwRedirect);
+            $this->raw($text);
             $this->elementEnd('div');
         }
     }
@@ -853,10 +736,9 @@ class Action extends HTMLOutputter // lawsuit
 
                 $form = null;
 
-				$options = $this->noticeFormOptions();
-                if (Event::handle('StartMakeEntryForm', array($tag, $this, &$form, $options))) {
+                if (Event::handle('StartMakeEntryForm', array($tag, $this, &$form))) {
                     if ($tag == 'status') {
-                        //$options = $this->noticeFormOptions();
+                        $options = $this->noticeFormOptions();
                         $form = new NoticeForm($this, $options);
                     }
                     Event::handle('EndMakeEntryForm', array($tag, $this, $form));
@@ -899,10 +781,10 @@ class Action extends HTMLOutputter // lawsuit
      */
     function showCore()
     {
-        $this->elementStart('div', array('id' => 'core'));/*
+        $this->elementStart('div', array('id' => 'core'));
         $this->elementStart('div', array('id' => 'aside_primary_wrapper'));
         $this->elementStart('div', array('id' => 'content_wrapper'));
-        $this->elementStart('div', array('id' => 'site_nav_local_views_wrapper'));*/
+        $this->elementStart('div', array('id' => 'site_nav_local_views_wrapper'));
         if (Event::handle('StartShowLocalNavBlock', array($this))) {
             $this->showLocalNavBlock();
             $this->flush();
@@ -917,10 +799,10 @@ class Action extends HTMLOutputter // lawsuit
             $this->showAside();
             $this->flush();
             Event::handle('EndShowAside', array($this));
-        }/*
+        }
         $this->elementEnd('div');
         $this->elementEnd('div');
-        $this->elementEnd('div');*/
+        $this->elementEnd('div');
         $this->elementEnd('div');
     }
 
@@ -945,11 +827,11 @@ class Action extends HTMLOutputter // lawsuit
      * @return nothing
      */
     function showProfileBlock()
-    {/*
+    {
         if (common_logged_in()) {
             $block = new DefaultProfileBlock($this);
             $block->show();
-        }*/
+        }
     }
 
     /**
@@ -1014,7 +896,6 @@ class Action extends HTMLOutputter // lawsuit
                 Event::handle('EndShowNoticeForm', array($this));
             }
         }
-        $this->showProfileBlock();
         if (Event::handle('StartShowPageTitle', array($this))) {
             $this->showPageTitle();
             Event::handle('EndShowPageTitle', array($this));
@@ -1096,6 +977,7 @@ class Action extends HTMLOutputter // lawsuit
     {
         $this->elementStart('div', array('id' => 'aside_primary',
                                          'class' => 'aside'));
+        $this->showProfileBlock();
         if (Event::handle('StartShowObjectNavBlock', array($this))) {
             $this->showObjectNavBlock();
             Event::handle('EndShowObjectNavBlock', array($this));
@@ -1171,33 +1053,33 @@ class Action extends HTMLOutputter // lawsuit
      */
     function showLicenses()
     {
-        $this->showStatusNetLicense();
+        $this->showGNUsocialLicense();
         $this->showContentLicense();
     }
 
     /**
-     * Show StatusNet license.
+     * Show GNU social license.
      *
      * @return nothing
      */
-    function showStatusNetLicense()
+    function showGNUsocialLicense()
     {
         if (common_config('site', 'broughtby')) {
-            // TRANS: First sentence of the StatusNet site license. Used if 'broughtby' is set.
+            // TRANS: First sentence of the GNU social site license. Used if 'broughtby' is set.
             // TRANS: Text between [] is a link description, text between () is the link itself.
             // TRANS: Make sure there is no whitespace between "]" and "(".
             // TRANS: "%%site.broughtby%%" is the value of the variable site.broughtby
-            $instr = _('**%%site.name%%** is a microblogging service brought to you by [%%site.broughtby%%](%%site.broughtbyurl%%).');
+            $instr = _('**%%site.name%%** is a social network, courtesy of [%%site.broughtby%%](%%site.broughtbyurl%%).');
         } else {
-            // TRANS: First sentence of the StatusNet site license. Used if 'broughtby' is not set.
-            $instr = _('**%%site.name%%** is a microblogging service.');
+            // TRANS: First sentence of the GNU social site license. Used if 'broughtby' is not set.
+            $instr = _('**%%site.name%%** is a social network.');
         }
         $instr .= ' ';
-        // TRANS: Second sentence of the StatusNet site license. Mentions the StatusNet source code license.
+        // TRANS: Second sentence of the GNU social site license. Mentions the GNU social source code license.
         // TRANS: Make sure there is no whitespace between "]" and "(".
-        // TRANS: Text between [] is a link description, text between () is the link itself.
-        // TRANS: %s is the version of StatusNet that is being used.
-        $instr .= sprintf(_('It runs the [StatusNet](http://status.net/) microblogging software, version %s, available under the [GNU Affero General Public License](http://www.fsf.org/licensing/licenses/agpl-3.0.html).'), STATUSNET_VERSION);
+        // TRANS: [%1$s](%2$s) is a link description followed by the link itself
+        // TRANS: %3$s is the version of GNU social that is being used.
+        $instr .= sprintf(_('It runs on [%1$s](%2$s), version %3$s, available under the [GNU Affero General Public License](http://www.fsf.org/licensing/licenses/agpl-3.0.html).'), GNUSOCIAL_ENGINE, GNUSOCIAL_ENGINE_URL, GNUSOCIAL_VERSION);
         $output = common_markup_to_html($instr);
         $this->raw($output);
         // do it
@@ -1216,14 +1098,14 @@ class Action extends HTMLOutputter // lawsuit
                 // TRANS: Content license displayed when license is set to 'private'.
                 // TRANS: %1$s is the site name.
                 $this->element('p', null, sprintf(_('Content and data of %1$s are private and confidential.'),
-                    common_config('site', 'name')));
+                                                  common_config('site', 'name')));
                 // fall through
             case 'allrightsreserved':
                 if (common_config('license', 'owner')) {
                     // TRANS: Content license displayed when license is set to 'allrightsreserved'.
                     // TRANS: %1$s is the copyright owner.
                     $this->element('p', null, sprintf(_('Content and data copyright by %1$s. All rights reserved.'),
-                        common_config('license', 'owner')));
+                                                      common_config('license', 'owner')));
                 } else {
                     // TRANS: Content license displayed when license is set to 'allrightsreserved' and no owner is set.
                     $this->element('p', null, _('Content and data copyright by contributors. All rights reserved.'));
@@ -1251,22 +1133,22 @@ class Action extends HTMLOutputter // lawsuit
                 }
 
                 $this->element('img', array('id' => 'license_cc',
-                    'src' => $url,
-                    'alt' => common_config('license', 'title'),
-                    'width' => '80',
-                    'height' => '15'));
+                                            'src' => $url,
+                                            'alt' => common_config('license', 'title'),
+                                            'width' => '80',
+                                            'height' => '15'));
                 $this->text(' ');
                 // TRANS: license message in footer.
                 // TRANS: %1$s is the site name, %2$s is a link to the license URL, with a licence name set in configuration.
                 $notice = _('All %1$s content and data are available under the %2$s license.');
                 $link = "<a class=\"license\" rel=\"external license\" href=\"" .
-                    htmlspecialchars(common_config('license', 'url')) .
-                    "\">" .
-                    htmlspecialchars(common_config('license', 'title')) .
-                    "</a>";
+                        htmlspecialchars(common_config('license', 'url')) .
+                        "\">" .
+                        htmlspecialchars(common_config('license', 'title')) .
+                        "</a>";
                 $this->raw(sprintf(htmlspecialchars($notice),
-                    htmlspecialchars(common_config('site', 'name')),
-                    $link));
+                                   htmlspecialchars(common_config('site', 'name')),
+                                   $link));
                 $this->elementEnd('p');
                 break;
             }
@@ -1349,11 +1231,9 @@ class Action extends HTMLOutputter // lawsuit
     /**
      * Handler method
      *
-     * @param array $argarray is ignored since it's now passed in in prepare()
-     *
      * @return boolean is read only action?
      */
-    function handle($argarray=null)
+    protected function handle()
     {
         header('Vary: Accept-Encoding,Cookie');
 
@@ -1376,7 +1256,7 @@ class Action extends HTMLOutputter // lawsuit
         $checked = false;
         if ($etag) {
             $if_none_match = (array_key_exists('HTTP_IF_NONE_MATCH', $_SERVER)) ?
-                $_SERVER['HTTP_IF_NONE_MATCH'] : null;
+              $_SERVER['HTTP_IF_NONE_MATCH'] : null;
             if ($if_none_match) {
                 // If this check fails, ignore the if-modified-since below.
                 $checked = true;
@@ -1487,26 +1367,121 @@ class Action extends HTMLOutputter // lawsuit
      *
      * @return nothing
      */
-    function serverError($msg, $code=500)
+    function serverError($msg, $code=500, $format=null)
     {
-        $action = $this->trimmed('action');
-        common_debug("Server error '$code' on '$action': $msg", __FILE__);
-        throw new ServerException($msg, $code);
+        if ($format === null) {
+            $format = $this->format;
+        }
+
+        common_debug("Server error '{$code}' on '{$this->action}': {$msg}", __FILE__);
+
+        if (!array_key_exists($code, ServerErrorAction::$status)) {
+            $code = 500;
+        }
+
+        $status_string = ServerErrorAction::$status[$code];
+
+        switch ($format) {
+        case 'xml':
+            header("HTTP/1.1 {$code} {$status_string}");
+            $this->initDocument('xml');
+            $this->elementStart('hash');
+            $this->element('error', null, $msg);
+            $this->element('request', null, $_SERVER['REQUEST_URI']);
+            $this->elementEnd('hash');
+            $this->endDocument('xml');
+            break;
+        case 'json':
+            if (!isset($this->callback)) {
+                header("HTTP/1.1 {$code} {$status_string}");
+            }
+            $this->initDocument('json');
+            $error_array = array('error' => $msg, 'request' => $_SERVER['REQUEST_URI']);
+            print(json_encode($error_array));
+            $this->endDocument('json');
+            break;
+        default:
+            throw new ServerException($msg, $code);
+        }
+
+        exit((int)$code);
     }
 
     /**
      * Client error
      *
-     * @param string  $msg  error message to display
-     * @param integer $code http error code, 400 by default
+     * @param string  $msg    error message to display
+     * @param integer $code   http error code, 400 by default
+     * @param string  $format error format (json, xml, text) for ApiAction
      *
      * @return nothing
+     * @throws ClientException always
      */
-    function clientError($msg, $code=400)
+    function clientError($msg, $code=400, $format=null)
     {
-        $action = $this->trimmed('action');
-        common_debug("User error '$code' on '$action': $msg", __FILE__);
-        throw new ClientException($msg, $code);
+        // $format is currently only relevant for an ApiAction anyway
+        if ($format === null) {
+            $format = $this->format;
+        }
+
+        common_debug("User error '{$code}' on '{$this->action}': {$msg}", __FILE__);
+
+        if (!array_key_exists($code, ClientErrorAction::$status)) {
+            $code = 400;
+        }
+        
+        $status_string = ClientErrorAction::$status[$code];
+
+        switch ($format) {
+        case 'xml':
+            header("HTTP/1.1 {$code} {$status_string}");
+            $this->initDocument('xml');
+            $this->elementStart('hash');
+            $this->element('error', null, $msg);
+            $this->element('request', null, $_SERVER['REQUEST_URI']);
+            $this->elementEnd('hash');
+            $this->endDocument('xml');
+            break;
+        case 'json':
+            if (!isset($this->callback)) {
+                header("HTTP/1.1 {$code} {$status_string}");
+            }
+            $this->initDocument('json');
+            $error_array = array('error' => $msg, 'request' => $_SERVER['REQUEST_URI']);
+            $this->text(json_encode($error_array));
+            $this->endDocument('json');
+            break;
+        case 'text':
+            header("HTTP/1.1 {$code} {$status_string}");
+            header('Content-Type: text/plain; charset=utf-8');
+            echo $msg;
+            break;
+        default:
+            throw new ClientException($msg, $code);
+        }
+        exit((int)$code);
+    }
+
+    /**
+     * If not logged in, take appropriate action (redir or exception)
+     *
+     * @param boolean $redir Redirect to login if not logged in
+     *
+     * @return boolean true if logged in (never returns if not)
+     */
+    public function checkLogin($redir=true)
+    {
+        if (common_logged_in()) {
+            return true;
+        }
+
+        if ($redir==true) {
+            common_set_returnto($_SERVER['REQUEST_URI']);
+            common_redirect(common_local_url('login'));
+        }
+
+        // TRANS: Error message displayed when trying to perform an action that requires a logged in user.
+        $this->clientError(_('Not logged in.'), 403);
     }
 
     /**
@@ -1597,35 +1572,31 @@ class Action extends HTMLOutputter // lawsuit
     // XXX: The messages in this pagination method only tailor to navigating
     //      notices. In other lists, "Previous"/"Next" type navigation is
     //      desirable, but not available.
-    function pagination($have_before, $have_after, $page, $action, $args=null, $xpargs=null)
+    function pagination($have_before, $have_after, $page, $action, $args=null)
     {
         // Does a little before-after block for next/prev page
         if ($have_before || $have_after) {
             $this->elementStart('ul', array('class' => 'nav',
                                             'id' => 'pagination'));
         }
-        $pargs = array();
-        if($xpargs) {
-            $pargs = $xpargs;
-        }
         if ($have_before) {
-            $pargs['page'] = $page-1;
+            $pargs   = array('page' => $page-1);
             $this->elementStart('li', array('class' => 'nav_prev'));
             $this->element('a', array('href' => common_local_url($action, $args, $pargs),
-                'rel' => 'prev'),
-            // TRANS: Pagination message to go to a page displaying information more in the
-            // TRANS: present than the currently displayed information.
-            _('After'));
+                                      'rel' => 'prev'),
+                           // TRANS: Pagination message to go to a page displaying information more in the
+                           // TRANS: present than the currently displayed information.
+                           _('After'));
             $this->elementEnd('li');
         }
         if ($have_after) {
-            $pargs['page'] = $page+1;
+            $pargs   = array('page' => $page+1);
             $this->elementStart('li', array('class' => 'nav_next'));
             $this->element('a', array('href' => common_local_url($action, $args, $pargs),
-                'rel' => 'next'),
-            // TRANS: Pagination message to go to a page displaying information more in the
-            // TRANS: past than the currently displayed information.
-            _('Before'));
+                                      'rel' => 'next'),
+                           // TRANS: Pagination message to go to a page displaying information more in the
+                           // TRANS: past than the currently displayed information.
+                           _('Before'));
             $this->elementEnd('li');
         }
         if ($have_before || $have_after) {
@@ -1676,4 +1647,3 @@ class Action extends HTMLOutputter // lawsuit
         return ($_SERVER['REQUEST_METHOD'] == 'POST');
     }
 }
-

@@ -146,20 +146,6 @@ class Atom10Feed extends XMLStringer
         }
     }
 
-    /**
-     * Deprecated <activity:subject>; ignored
-     *
-     * @param string $xmlSubject An XML string representation of the subject
-     *
-     * @return void
-     */
-
-    function setActivitySubject($xmlSubject)
-    {
-        // TRANS: Server exception thrown when using the method setActivitySubject() in the class Atom10Feed.
-        throw new ServerException(_('Do not use this method!'));
-    }
-
     function getNamespaces()
     {
         return $this->namespaces;
@@ -167,7 +153,7 @@ class Atom10Feed extends XMLStringer
 
     function initFeed()
     {
-        $this->xw->startDocument('1.0', 'UTF-8');
+        $this->startXML();
         $commonAttrs = array('xml:lang' => 'en-US');
         foreach ($this->namespaces as $prefix => $uri) {
             if ($prefix == '') {
@@ -182,7 +168,7 @@ class Atom10Feed extends XMLStringer
         $this->element(
             'generator', array(
                 'uri'     => 'http://status.net',
-                'version' => STATUSNET_VERSION
+                'version' => GNUSOCIAL_VERSION
             ),
             'StatusNet'
         );

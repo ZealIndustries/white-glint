@@ -16,10 +16,6 @@ class Consumer extends Managed_DataObject
     public $created;                         // datetime   not_null
     public $modified;                        // timestamp   not_null default_CURRENT_TIMESTAMP
 
-    /* Static get */
-    function staticGet($k,$v=null)
-    { return Memcached_DataObject::staticGet('Consumer',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -42,7 +38,7 @@ class Consumer extends Managed_DataObject
     static function generateNew()
     {
         $cons = new Consumer();
-        $rand = common_good_rand(16);
+        $rand = common_random_hexstr(16);
 
         $cons->seed            = $rand;
         $cons->consumer_key    = md5(time() + $rand);
@@ -58,14 +54,14 @@ class Consumer extends Managed_DataObject
      * XXX: Should this happen in an OAuthDataStore instead?
      *
      */
-    function delete()
+    function delete($useWhere=false)
     {
         // XXX: Is there any reason NOT to do this kind of cleanup?
 
         $this->_deleteTokens();
         $this->_deleteNonces();
 
-        parent::delete();
+        return parent::delete($useWhere);
     }
 
     function _deleteTokens()

@@ -77,7 +77,7 @@ abstract class BaseMirrorAction extends Action
     protected function validateProfile($id)
     {
         $id = intval($id);
-        $profile = Profile::staticGet('id', $id);
+        $profile = Profile::getKV('id', $id);
         if ($profile && $profile->id != $this->user->id) {
             return $profile;
         }
@@ -167,7 +167,7 @@ abstract class BaseMirrorAction extends Action
             $unsubscribe = new EditMirrorForm($this, $this->profile);
             $unsubscribe->show();
             $this->elementEnd('body');
-            $this->elementEnd('html');
+            $this->endHTML();
         } else {
             $url = common_local_url('mirrorsettings');
             common_redirect($url, 303);

@@ -118,7 +118,7 @@ class HTMLOutputter extends XMLOutputter
         $this->extraHeaders();
         if (preg_match("/.*\/.*xml/", $type)) {
             // Required for XML documents
-            $this->xw->startDocument('1.0', 'UTF-8');
+            $this->startXML();
         }
         $this->xw->writeDTD('html',
                             '-//W3C//DTD XHTML 1.0 Strict//EN',
@@ -302,7 +302,7 @@ class HTMLOutputter extends XMLOutputter
 
     function hidden($id, $value, $name=null)
     {
-        $this->element('input', array('name' => ($name) ? $name : $id,
+        $this->element('input', array('name' => $name ?: $id,
                                       'type' => 'hidden',
                                       'id' => $id,
                                       'value' => $value));
@@ -351,7 +351,7 @@ class HTMLOutputter extends XMLOutputter
     {
         $this->element('input', array('type' => 'submit',
                                       'id' => $id,
-                                      'name' => ($name) ? $name : $id,
+                                      'name'  => $name ?: $id,
                                       'class' => $cls,
                                       'value' => $label,
                                       'title' => $title));
@@ -377,7 +377,7 @@ class HTMLOutputter extends XMLOutputter
 
                 if (strpos($src, 'plugins/') === 0 || strpos($src, 'local/') === 0) {
 
-                    $src = common_path($src, StatusNet::isHTTPS()) . '?version=' . STATUSNET_VERSION;
+                    $src = common_path($src, StatusNet::isHTTPS()) . '?version=' . GNUSOCIAL_VERSION;
 
                 } else {
 
@@ -428,7 +428,7 @@ class HTMLOutputter extends XMLOutputter
                         $path = '/'.$path;
                     }
 
-                    $src = $protocol.'://'.$server.$path.$src . '?version=' . STATUSNET_VERSION;
+                    $src = $protocol.'://'.$server.$path.$src . '?version=' . GNUSOCIAL_VERSION;
                 }
             }
 
@@ -486,7 +486,7 @@ class HTMLOutputter extends XMLOutputter
                 }else{
                     $src = common_path($src, StatusNet::isHTTPS());
                 }
-                $src.= '?version=' . STATUSNET_VERSION;
+                $src.= '?version=' . GNUSOCIAL_VERSION;
             }
             $this->element('link', array('rel' => 'stylesheet',
                                     'type' => 'text/css',

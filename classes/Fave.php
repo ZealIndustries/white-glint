@@ -15,10 +15,6 @@ class Fave extends Managed_DataObject
     public $uri;                             // varchar(255)
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
 
-    /* Static get */
-    function staticGet($k,$v=null)
-    { return Memcached_DataObject::staticGet('Fave',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -74,6 +70,7 @@ class Fave extends Managed_DataObject
                 return false;
             }
             self::blow('fave:list-ids:notice_id:%d', $fave->notice_id);
+            self::blow('popular');
 
             Event::handle('EndFavorNotice', array($profile, $notice));
         }
@@ -81,17 +78,18 @@ class Fave extends Managed_DataObject
         return $fave;
     }
 
-    function delete()
+    function delete($useWhere=false)
     {
-        $profile = Profile::staticGet('id', $this->user_id);
-        $notice  = Notice::staticGet('id', $this->notice_id);
+        $profile = Profile::getKV('id', $this->user_id);
+        $notice  = Notice::getKV('id', $this->notice_id);
 
         $result = null;
 
         if (Event::handle('StartDisfavorNotice', array($profile, $notice, &$result))) {
 
-            $result = parent::delete();
+            $result = parent::delete($useWhere);
             self::blow('fave:list-ids:notice_id:%d', $this->notice_id);
+            self::blow('popular');
 
             if ($result) {
                 Event::handle('EndDisfavorNotice', array($profile, $notice));
@@ -99,11 +97,6 @@ class Fave extends Managed_DataObject
         }
 
         return $result;
-    }
-
-    function pkeyGet($kv)
-    {
-        return Memcached_DataObject::pkeyGet('Fave', $kv);
     }
 
     function stream($user_id, $offset=0, $limit=NOTICES_PER_PAGE, $own=false, $since_id=0, $max_id=0)
@@ -122,8 +115,17 @@ class Fave extends Managed_DataObject
 
     function asActivity()
     {
-        $notice  = Notice::staticGet('id', $this->notice_id);
-        $profile = Profile::staticGet('id', $this->user_id);
+        $notice = Notice::getKV('id', $this->notice_id);
+
+        if (!$notice) {
+            throw new Exception("Fave for non-existent notice: " . $this->notice_id);
+        }
+
+        $profile = Profile::getKV('id', $this->user_id);
+
+        if (!$profile) {
+            throw new Exception("Fave by non-existent profile: " . $this->user_id);
+        }
 
         $act = new Activity();
 

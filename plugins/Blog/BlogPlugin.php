@@ -68,35 +68,6 @@ class BlogPlugin extends MicroAppPlugin
     }
 
     /**
-     * Load related modules when needed
-     *
-     * @param string $cls Name of the class to be loaded
-     *
-     * @return boolean hook value; true means continue processing, false means stop.
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'NewblogentryAction':
-        case 'ShowblogentryAction':
-            include_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'BlogEntryForm':
-        case 'BlogEntryListItem':
-            include_once $dir . '/'.strtolower($cls).'.php';
-            return false;
-        case 'Blog_entry':
-            include_once $dir . '/'.$cls.'.php';
-            return false;
-        default:
-            return true;
-        }
-    }
-
-    /**
      * Map URLs to actions
      *
      * @param Net_URL_Mapper $m path-to-action mapper
@@ -116,7 +87,7 @@ class BlogPlugin extends MicroAppPlugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'Blog',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Evan Prodromou',
                             'homepage' => 'http://status.net/wiki/Plugin:Blog',
                             'rawdescription' =>

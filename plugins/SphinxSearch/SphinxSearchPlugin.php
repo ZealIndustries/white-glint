@@ -66,9 +66,9 @@ class SphinxSearchPlugin extends Plugin
             include_once INSTALLDIR . '/plugins/SphinxSearch/' .
               strtolower($cls) . '.php';
             return false;
-        default:
-            return true;
         }
+
+        return parent::onAutoload($cls);
     }
 
     /**
@@ -110,7 +110,7 @@ class SphinxSearchPlugin extends Plugin
         $url = 'http://status.net/wiki/Plugin:SphinxSearch';
 
         $versions[] = array('name' => 'SphinxSearch',
-            'version' => STATUSNET_VERSION,
+            'version' => GNUSOCIAL_VERSION,
             'author' => 'Brion Vibber',
             'homepage' => $url,
             'rawdescription' =>

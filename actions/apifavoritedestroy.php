@@ -34,8 +34,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-
 /**
  * Un-favorites the status specified in the ID parameter as the authenticating user.
  * Returns the un-favorited status in the requested format when successful.
@@ -64,7 +62,13 @@ class ApiFavoriteDestroyAction extends ApiAuthAction
         parent::prepare($args);
 
         $this->user   = $this->auth_user;
-        $this->notice = Notice::staticGet($this->arg('id'));
+        $this->notice = Notice::getKV($this->arg('id'));
+        if ($this->notice->repeat_of != '' ) {
+                common_log(LOG_DEBUG, 'Trying to unFave '.$this->notice->id);
+                common_log(LOG_DEBUG, 'Will unFave '.$this->notice->repeat_of.' instead');
+                $real_notice_id = $this->notice->repeat_of;
+                $this->notice = Notice::getKV($real_notice_id);
+        }
 
         return true;
     }

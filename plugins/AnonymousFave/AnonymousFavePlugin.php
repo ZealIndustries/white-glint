@@ -80,22 +80,7 @@ class AnonymousFavePlugin extends Plugin
         $schema = Schema::get();
 
         // For storing total number of times a notice has been faved
-
-        $schema->ensureTable('fave_tally',
-            array(
-                new ColumnDef('notice_id', 'integer', null,  false, 'PRI'),
-                new ColumnDef('count', 'integer', null, false),
-                new ColumnDef(
-                    'modified',
-                    'timestamp',
-                    null,
-                    false,
-                    null,
-                    'CURRENT_TIMESTAMP',
-                    'on update CURRENT_TIMESTAMP'
-                )
-            )
-        );
+        $schema->ensureTable('fave_tally', Fave_tally::schemaDef());
 
         return true;
     }
@@ -113,31 +98,6 @@ class AnonymousFavePlugin extends Plugin
         // Setup ajax calls for favoriting. Usually this is only done when
         // a user is logged in.
         $action->inlineScript('SN.U.NoticeFavor();');
-    }
-
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls) {
-            case 'Fave_tally':
-                include_once $dir . '/' . $cls . '.php';
-                return false;
-            case 'AnonFavorAction':
-                include_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-                return false;
-            case 'AnonDisFavorAction':
-                include_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-                return false;
-            case 'AnonFavorForm':
-                include_once $dir . '/anonfavorform.php';
-                return false;
-            case 'AnonDisFavorForm':
-                include_once $dir . '/anondisfavorform.php';
-                return false;
-            default:
-                return true;
-        }
     }
 
     function onStartInitializeRouter($m)
@@ -227,7 +187,7 @@ class AnonymousFavePlugin extends Plugin
         list($proxy, $ip) = common_client_ip();
 
         // IP + time + random number should help to avoid collisions
-        $baseNickname = $ip . '-' . time() . '-' . common_good_rand(5);
+        $baseNickname = $ip . '-' . time() . '-' . common_random_hexstr(5);
 
         $profile = new Profile();
         $profile->nickname = $baseNickname;
@@ -272,7 +232,7 @@ class AnonymousFavePlugin extends Plugin
             $parts = explode('-', $anon);
             $id = $parts[1];
             // Do Profile lookup by ID instead of nickname for safety/performance
-            $profile = Profile::staticGet('id', $id);
+            $profile = Profile::getKV('id', $id);
         } else {
             $profile = AnonymousFavePlugin::createAnonProfile();
             // Obfuscate so it's hard to figure out the Profile ID
@@ -294,7 +254,7 @@ class AnonymousFavePlugin extends Plugin
      */
     function hasAnonFaving($item)
     {
-        $profile = Profile::staticGet('id', $item->notice->profile_id);
+        $profile = Profile::getKV('id', $item->notice->profile_id);
         if (in_array($profile->nickname, $this->restricted)) {
             return false;
         }

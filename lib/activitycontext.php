@@ -37,24 +37,25 @@ class ActivityContext
     public $replyToID;
     public $replyToUrl;
     public $location;
-    public $attention = array();
+    public $attention = array();    // 'uri' => 'type'
     public $conversation;
-    public $forwardID; // deprecated, use ActivityVerb::SHARE instead
-    public $forwardUrl; // deprecated, use ActivityVerb::SHARE instead
+    public $scope;
 
     const THR     = 'http://purl.org/syndication/thread/1.0';
     const GEORSS  = 'http://www.georss.org/georss';
     const OSTATUS = 'http://ostatus.org/schema/1.0';
 
-    const INREPLYTO = 'in-reply-to';
-    const REF       = 'ref';
-    const HREF      = 'href';
+    const INREPLYTO  = 'in-reply-to';
+    const REF        = 'ref';
+    const HREF       = 'href';
+    const OBJECTTYPE = 'ostatus:object-type';   // FIXME: Undocumented!
 
     const POINT     = 'point';
 
-    const ATTENTION    = 'ostatus:attention';
     const MENTIONED    = 'mentioned';
     const CONVERSATION = 'ostatus:conversation';
+
+    const ATTN_PUBLIC  = 'http://activityschema.org/collection/public';
 
     function __construct($element = null)
     {
@@ -77,21 +78,15 @@ class ActivityContext
 
         $links = $element->getElementsByTagNameNS(ActivityUtils::ATOM, ActivityUtils::LINK);
 
-        $attention = array();
         for ($i = 0; $i < $links->length; $i++) {
             $link = $links->item($i);
 
-            $linkRel = $link->getAttribute(ActivityUtils::REL);
-
-            // XXX: Deprecate this in favour of "mentioned" from Salmon spec
-            // http://salmon-protocol.googlecode.com/svn/trunk/draft-panzer-salmon-00.html#SALR
-            if ($linkRel == self::ATTENTION) {
-                $attention[] = $link->getAttribute(self::HREF);
-            } elseif ($linkRel == self::MENTIONED) {
-                $attention[] = $link->getAttribute(self::HREF);
+            $linkRel  = $link->getAttribute(ActivityUtils::REL);
+            $linkHref = $link->getAttribute(self::HREF);
+            if ($linkRel == self::MENTIONED && $linkHref !== '') {
+                $this->attention[$linkHref] = $link->getAttribute(ActivityContext::OBJECTTYPE);
             }
         }
-        $this->attention = array_unique($attention);
     }
 
     /**
@@ -144,8 +139,6 @@ class ActivityContext
 
         $context['inReplyTo']    = $this->getInReplyToArray();
         $context['conversation'] = $this->conversation;
-        $context['forwardId']    = $this->forwardID;
-        $context['forwardUrl']   = $this->forwardUrl;
 
         return array_filter($context);
     }
@@ -166,11 +159,10 @@ class ActivityContext
     {
         $tos = array();
 
-        foreach ($this->attention as $attnUrl) {
+        foreach ($this->attention as $attnUrl => $attnType) {
             $to = array(
-                'objectType' => 'person',
+                'objectType' => $attnType,  // can be empty
                 'id'         => $attnUrl,
-                'url'        => $attnUrl
             );
             $tos[] = $to;
         }

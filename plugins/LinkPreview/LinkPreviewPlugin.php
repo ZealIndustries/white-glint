@@ -32,7 +32,7 @@ class LinkPreviewPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'LinkPreview',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Brion Vibber',
                             'homepage' => 'http://status.net/wiki/Plugin:LinkPreview',
                             'rawdescription' =>
@@ -66,28 +66,6 @@ class LinkPreviewPlugin extends Plugin
             $action->inlineScript('$(function() {SN.Init.LinkPreview && SN.Init.LinkPreview('.$data.');})');
         }
         return true;
-    }
-
-    /**
-     * Autoloader
-     *
-     * Loads our classes if they're requested.
-     *
-     * @param string $cls Class requested
-     *
-     * @return boolean hook return
-     */
-    function onAutoload($cls)
-    {
-        $lower = strtolower($cls);
-        switch ($lower)
-        {
-        case 'oembedproxyaction':
-            require_once dirname(__FILE__) . '/' . $lower . '.php';
-            return false;
-        default:
-            return true;
-        }
     }
 
     /**

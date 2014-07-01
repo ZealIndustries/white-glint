@@ -259,7 +259,7 @@ class Safe_DataObject extends DB_DataObject
      * @param array of .ini file names $schemas
      * @return array
      */
-    protected function parseIniFiles($schemas)
+    protected function parseIniFiles(array $schemas)
     {
         $key = implode("|", $schemas);
         if (!isset(Safe_DataObject::$iniCache[$key])) {

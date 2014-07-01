@@ -85,14 +85,16 @@ function oid_get_last()
 
 function oid_link_user($id, $canonical, $display)
 {
+    global $_PEAR;
+
     $oid = new User_openid();
     $oid->user_id = $id;
     $oid->canonical = $canonical;
     $oid->display = $display;
-    $oid->created = DB_DataObject_Cast::dateTime();
+    $oid->created = common_sql_now();
 
     if (!$oid->insert()) {
-        $err = PEAR::getStaticProperty('DB_DataObject','lastError');
+        $err = &$_PEAR->getStaticProperty('DB_DataObject','lastError');
         return false;
     }
 
@@ -102,9 +104,9 @@ function oid_link_user($id, $canonical, $display)
 function oid_get_user($openid_url)
 {
     $user = null;
-    $oid = User_openid::staticGet('canonical', $openid_url);
+    $oid = User_openid::getKV('canonical', $openid_url);
     if ($oid) {
-        $user = User::staticGet('id', $oid->user_id);
+        $user = User::getKV('id', $oid->user_id);
     }
     return $user;
 }

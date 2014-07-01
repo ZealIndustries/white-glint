@@ -49,24 +49,6 @@ class EmailRegistrationPlugin extends Plugin
 {
     const CONFIRMTYPE = 'register';
 
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls)
-        {
-        case 'EmailregisterAction':
-            include_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'EmailRegistrationForm':
-        case 'ConfirmRegistrationForm':
-            include_once $dir . '/' . strtolower($cls) . '.php';
-            return false;
-        default:
-            return true;
-        }
-    }
-
     function onArgsInitialize(&$args)
     {
         if (array_key_exists('action', $args) && $args['action'] == 'register') {
@@ -102,7 +84,7 @@ class EmailRegistrationPlugin extends Plugin
 
     static function registerEmail($email)
     {
-        $old = User::staticGet('email', $email);
+        $old = User::getKV('email', $email);
 
         if (!empty($old)) {
             // TRANS: Error text when trying to register with an already registered e-mail address.
@@ -147,7 +129,7 @@ class EmailRegistrationPlugin extends Plugin
 
         $n = 0;
 
-        while (User::staticGet('nickname', $nickname)) {
+        while (User::getKV('nickname', $nickname)) {
             $n++;
             $nickname = $original . $n;
         }
@@ -193,7 +175,7 @@ class EmailRegistrationPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'EmailRegistration',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Evan Prodromou',
                             'homepage' => 'http://status.net/wiki/Plugin:EmailRegistration',
                             'rawdescription' =>

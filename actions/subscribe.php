@@ -35,8 +35,7 @@ if (!defined('STATUSNET')) {
 /**
  * Subscription action
  *
- * Subscribing to a profile. Does not work for OMB 0.1 remote subscriptions,
- * but may work for other remote subscription protocols, like OStatus.
+ * Subscribing to a profile. Likely to work for OStatus profiles.
  *
  * Takes parameters:
  *
@@ -103,7 +102,7 @@ class SubscribeAction extends Action
 
         $other_id = $this->arg('subscribeto');
 
-        $this->other = Profile::staticGet('id', $other_id);
+        $this->other = Profile::getKV('id', $other_id);
 
         if (empty($this->other)) {
             // TRANS: Client error displayed trying to subscribe to a non-existing profile.
@@ -144,7 +143,7 @@ class SubscribeAction extends Action
             }
             $form->show();
             $this->elementEnd('body');
-            $this->elementEnd('html');
+            $this->endHTML();
         } else {
             $url = common_local_url('subscriptions',
                                     array('nickname' => $this->user->nickname));

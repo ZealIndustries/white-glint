@@ -120,24 +120,13 @@ class IrcPlugin extends ImPlugin {
      * @return boolean hook value; true means continue processing, false means stop.
      */
     public function onAutoload($cls) {
-        $dir = dirname(__FILE__);
-
-        switch ($cls) {
-            case 'IrcManager':
-                include_once $dir . '/'.strtolower($cls).'.php';
-                return false;
-            case 'Fake_Irc':
-            case 'Irc_waiting_message':
-            case 'ChannelResponseChannel':
-                include_once $dir . '/'. $cls .'.php';
-                return false;
-            default:
-                if (substr($cls, 0, 7) == 'Phergie') {
-                    include_once str_replace('_', DIRECTORY_SEPARATOR, $cls) . '.php';
-                    return false;
-                }
-                return true;
+        // in the beginning of this file, we have added an include path
+        if (substr($cls, 0, 7) == 'Phergie') {
+            include_once str_replace('_', DIRECTORY_SEPARATOR, $cls) . '.php';
+            return false;
         }
+
+        return parent::onAutoload($cls);
     }
 
     /*
@@ -147,7 +136,7 @@ class IrcPlugin extends ImPlugin {
      * @return boolean
      */
     public function onStartImDaemonIoManagers(&$classes) {
-        parent::onStartImDaemonIoManagers(&$classes);
+        parent::onStartImDaemonIoManagers($classes);
         $classes[] = new IrcManager($this); // handles sending/receiving
         return true;
     }
@@ -160,15 +149,7 @@ class IrcPlugin extends ImPlugin {
         $schema = Schema::get();
 
         // For storing messages while sessions become ready
-        $schema->ensureTable('irc_waiting_message',
-                             array(new ColumnDef('id', 'integer', null,
-                                                 false, 'PRI', null, null, true),
-                                   new ColumnDef('data', 'blob', null, false),
-                                   new ColumnDef('prioritise', 'tinyint', 1, false),
-                                   new ColumnDef('attempts', 'integer', null, false),
-                                   new ColumnDef('created', 'datetime', null, false),
-                                   new ColumnDef('claimed', 'datetime')));
-
+        $schema->ensureTable('irc_waiting_message', Irc_waiting_message::schemaDef());
         return true;
     }
 
@@ -375,7 +356,7 @@ class IrcPlugin extends ImPlugin {
             $this->regcheck = true;
         }
 
-        $this->fake_irc = new Fake_Irc;
+        $this->fake_irc = new FakeIrc;
 
         /*
          * Commands allowed to return output to a channel
@@ -393,7 +374,7 @@ class IrcPlugin extends ImPlugin {
      */
     public function onPluginVersion(&$versions) {
         $versions[] = array('name' => 'IRC',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Luke Fitzgerald',
                             'homepage' => 'http://status.net/wiki/Plugin:IRC',
                             'rawdescription' =>

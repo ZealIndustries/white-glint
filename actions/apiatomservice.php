@@ -27,7 +27,9 @@
  * @link      http://status.net/
  */
 
-require_once INSTALLDIR.'/lib/apibareauth.php';
+if (!defined('STATUSNET')) {
+    exit(1);
+}
 
 /**
  * Shows an AtomPub service document for a user
@@ -56,8 +58,7 @@ class ApiAtomServiceAction extends ApiBareAuthAction
 
         if (empty($this->user)) {
             // TRANS: Client error displayed when making an Atom API request for an unknown user.
-            $this->clientError(_('No such user.'), 404, $this->format);
-            return;
+            $this->clientError(_('No such user.'), 404);
         }
 
         return true;

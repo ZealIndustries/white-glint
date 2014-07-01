@@ -117,10 +117,6 @@ RealtimeUpdate = {
       */
      receive: function(data)
      {
-          if (data.notice_delete) {
-              RealtimeUpdate.deleteNotice(data.notice_delete);
-              return;
-          }
           if (RealtimeUpdate.isNoticeVisible(data.id)) {
               // Probably posted by the user in this window, and so already
               // shown by the AJAX form handler. Ignore it.
@@ -165,11 +161,12 @@ RealtimeUpdate = {
             if (RealtimeUpdate.isNoticeVisible(data.id)) {
                 return;
             }
+            var noticeItemID = $(noticeItem).attr('id');
 
-            var list = $("#notices_primary .notices").filter(':first');
+            var list = $("#notices_primary .notices:first")
             var prepend = true;
 
-            var threaded = list.hasClass('threaded-notices') || $('body').attr('id') == 'conversation';
+            var threaded = list.hasClass('threaded-notices');
             if (threaded && data.in_reply_to_status_id) {
                 // aho!
                 var parent = $('#notice-' + data.in_reply_to_status_id);
@@ -182,23 +179,17 @@ RealtimeUpdate = {
                     if (parentList.hasClass('threaded-replies')) {
                         parent = parentList.closest('.notice');
                     }
-                    list = parent.find('.notices');
+                    list = parent.find('.threaded-replies');
                     if (list.length == 0) {
-                        list = $('<ol class="notices threaded-replies"></ol>');
-						if($('.notices.old-school, .notices.oldschool_stream').length)
-							list.removeClass('threaded-replies');
+                        list = $('<ul class="notices threaded-replies xoxo"></ul>');
                         parent.append(list);
-                        //SN.U.NoticeInlineReplyPlaceholder(parent);
+                        SN.U.NoticeInlineReplyPlaceholder(parent);
                     }
                     prepend = false;
                 }
             }
 
             var newNotice = $(noticeItem);
-            newNotice.find('.avatar.photo')
-                .height(48)
-                .width(48);
-
             if (prepend) {
                 list.prepend(newNotice);
             } else {
@@ -209,10 +200,10 @@ RealtimeUpdate = {
                     newNotice.appendTo(list);
                 }
             }
-            newNotice.css({display:"none"}).fadeIn(500);
+            newNotice.css({display:"none"}).fadeIn(1000);
 
-            SN.U.NoticeReplyTo($('#notice-'+data.id));
-            SN.U.NoticeWithAttachment($('#notice-'+data.id));
+            SN.U.NoticeReplyTo($('#'+noticeItemID));
+            SN.U.NoticeWithAttachment($('#'+noticeItemID));
         });
      },
 
@@ -282,7 +273,7 @@ RealtimeUpdate = {
      {
          var url = RealtimeUpdate._showurl.replace('0000000000', data.id);
          $.get(url, {ajax: 1}, function(data, textStatus, xhr) {
-             var notice = $(data);
+             var notice = $('li.notice:first', data);
              if (notice.length) {
                  var node = document._importNode(notice[0], true);
                  callback(node);
@@ -310,7 +301,7 @@ RealtimeUpdate = {
           ff = "<form id=\"favor-"+id+"\" class=\"form_favor\" method=\"post\" action=\""+RealtimeUpdate._favorurl+"\">"+
                 "<fieldset>"+
                "<legend>Favor this notice</legend>"+
-               "<input name=\"token-"+id+"\" type=\"hidden\" id=\"token-"+id+"\" value=\""+session_key+"\"/>"+
+               "<input name=\"token\" type=\"hidden\" id=\"token-"+id+"\" value=\""+session_key+"\"/>"+
                "<input name=\"notice\" type=\"hidden\" id=\"notice-n"+id+"\" value=\""+id+"\"/>"+
                "<input type=\"submit\" id=\"favor-submit-"+id+"\" name=\"favor-submit-"+id+"\" class=\"submit\" value=\"Favor\" title=\"Favor this notice\"/>"+
                 "</fieldset>"+
@@ -357,26 +348,13 @@ RealtimeUpdate = {
           rf = "<form id=\"repeat-"+id+"\" class=\"form_repeat\" method=\"post\" action=\""+RealtimeUpdate._repeaturl+"\">"+
                "<fieldset>"+
                "<legend>Repeat this notice?</legend>"+
-               "<input name=\"token-"+id+"\" type=\"hidden\" id=\"token-"+id+"\" value=\""+session_key+"\"/>"+
+               "<input name=\"token\" type=\"hidden\" id=\"token-"+id+"\" value=\""+session_key+"\"/>"+
                "<input name=\"notice\" type=\"hidden\" id=\"notice-"+id+"\" value=\""+id+"\"/>"+
                "<input type=\"submit\" id=\"repeat-submit-"+id+"\" name=\"repeat-submit-"+id+"\" class=\"submit\" value=\"Yes\" title=\"Repeat this notice\"/>"+
                "</fieldset>"+
                "</form>";
 
           return rf;
-     },
-
-     /**
-      * Deletes a post.
-      *
-      * @param {number} id: notice ID to remove from the timeline
-      * @return {undefined}
-      *
-      * @access private
-      */
-     deleteNotice: function(id)
-     {
-         $('#notice-' + id).remove();
      },
 
      /**

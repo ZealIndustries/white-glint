@@ -17,7 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-if (!defined('STATUSNET') && !defined('LACONICA')) { exit(1); }
+if (!defined('GNUSOCIAL')) { exit(1); }
 
 class Memcached_DataObject extends Safe_DataObject
 {
@@ -30,24 +30,20 @@ class Memcached_DataObject extends Safe_DataObject
      * @param mixed $v key field value, or leave out for primary key lookup
      * @return mixed Memcached_DataObject subtype or false
      */
-    function &staticGet($cls, $k, $v=null)
+    static function getClassKV($cls, $k, $v=null)
     {
         if (is_null($v)) {
             $v = $k;
             $keys = self::pkeyCols($cls);
             if (count($keys) > 1) {
-                // FIXME: maybe call pkeyGet() ourselves?
-                throw new Exception('Use pkeyGet() for compound primary keys');
+                // FIXME: maybe call pkeyGetClass() ourselves?
+                throw new Exception('Use pkeyGetClass() for compound primary keys');
             }
             $k = $keys[0];
         }
-        $i = Memcached_DataObject::getcached($cls, $k, $v);
+        $i = self::getcached($cls, $k, $v);
         if ($i === false) { // false == cache miss
-            $i = DB_DataObject::factory($cls);
-            if (empty($i)) {
-                $i = false;
-                return $i;
-            }
+            $i = new $cls;
             $result = $i->get($k, $v);
             if ($result) {
                 // Hit!
@@ -75,9 +71,9 @@ class Memcached_DataObject extends Safe_DataObject
      *
      * @return array Array of objects, in order
      */
-    function multiGet($cls, $keyCol, $keyVals, $skipNulls=true)
+    static function multiGetClass($cls, $keyCol, array $keyVals, $skipNulls=true)
     {
-        $result = self::pivotGet($cls, $keyCol, $keyVals);
+        $result = self::pivotGetClass($cls, $keyCol, $keyVals);
 
         $values = array_values($result);
 
@@ -104,7 +100,7 @@ class Memcached_DataObject extends Safe_DataObject
      *
      * @return array Array mapping $keyVals to objects, or null if not found
      */
-    static function pivotGet($cls, $keyCol, $keyVals, $otherCols = array())
+    static function pivotGetClass($cls, $keyCol, array $keyVals, array $otherCols = array())
     {
         if (is_array($keyCol)) {
             foreach ($keyVals as $keyVal) {
@@ -140,11 +136,7 @@ class Memcached_DataObject extends Safe_DataObject
         }
 
         if (count($toFetch) > 0) {
-            $i = DB_DataObject::factory($cls);
-            if (empty($i)) {
-                // TRANS: Exception thrown when a program code class (%s) cannot be instantiated.
-                throw new Exception(sprintf(_('Cannot instantiate class %s.'),$cls));
-            }
+            $i = new $cls;
             foreach ($otherCols as $otherKeyCol => $otherKeyVal) {
                 $i->$otherKeyCol = $otherKeyVal;
             }
@@ -248,11 +240,7 @@ class Memcached_DataObject extends Safe_DataObject
 
     static function pkeyCols($cls)
     {
-        $i = DB_DataObject::factory($cls);
-        if (empty($i)) {
-            // TRANS: Exception thrown when a program code class (%s) cannot be instantiated.
-            throw new Exception(sprintf(_('Cannot instantiate class %s.'),$cls));
-        }
+        $i = new $cls;
         $types = $i->keyTypes();
         ksort($types);
 
@@ -267,7 +255,18 @@ class Memcached_DataObject extends Safe_DataObject
         return $pkey;
     }
 
-    function listGet($cls, $keyCol, $keyVals)
+    static function listFindClass($cls, $keyCol, array $keyVals)
+    {
+        $i = new $cls;
+        $i->whereAddIn($keyCol, $keyVals, $i->columnType($keyCol));
+        if (!$i->find()) {
+            throw new NoResultException($i);
+        }
+
+        return $i;
+    }
+
+    static function listGetClass($cls, $keyCol, array $keyVals)
     {
         $pkeyMap = array_fill_keys($keyVals, array());
         $result = array_fill_keys($keyVals, array());
@@ -292,7 +291,7 @@ class Memcached_DataObject extends Safe_DataObject
         }
 
         if (count($allPkeys) > 0) {
-            $keyResults = self::pivotGet($cls, $pkeyCols, $allPkeys);
+            $keyResults = self::pivotGetClass($cls, $pkeyCols, $allPkeys);
 
             foreach ($pkeyMap as $keyVal => $pkeyList) {
                 foreach ($pkeyList as $pkeyVal) {
@@ -305,14 +304,9 @@ class Memcached_DataObject extends Safe_DataObject
         }
 
         if (count($toFetch) > 0) {
-            $i = DB_DataObject::factory($cls);
-            if (empty($i)) {
-                // TRANS: Exception thrown when a program code class (%s) cannot be instantiated.
-                throw new Exception(sprintf(_('Cannot instantiate class %s.'),$cls));
-            }
-            $i->whereAddIn($keyCol, $toFetch, $i->columnType($keyCol));
-            if ($i->find()) {
-                sprintf("listGet() got {$i->N} results for class $cls key $keyCol");
+            try {
+                $i = self::listFindClass($cls, $keyCol, $toFetch);
+
                 while ($i->fetch()) {
                     $copy = clone($i);
                     $copy->encache();
@@ -323,6 +317,8 @@ class Memcached_DataObject extends Safe_DataObject
                     }
                     $pkeyMap[$i->$keyCol][] = $pkeyVal;
                 }
+            } catch (NoResultException $e) {
+                // no results found for our keyVals, so we leave them as empty arrays
             }
             foreach ($toFetch as $keyVal) {
                 self::cacheSet(sprintf("%s:list-ids:%s:%s", strtolower($cls), $keyCol, $keyVal),
@@ -350,18 +346,15 @@ class Memcached_DataObject extends Safe_DataObject
     }
 
     /**
-     * @todo FIXME: Should this return false on lookup fail to match staticGet?
+     * @todo FIXME: Should this return false on lookup fail to match getKV?
      */
-    function pkeyGet($cls, $kv)
+    static function pkeyGetClass($cls, array $kv)
     {
-        $i = Memcached_DataObject::multicache($cls, $kv);
+        $i = self::multicache($cls, $kv);
         if ($i !== false) { // false == cache miss
             return $i;
         } else {
-            $i = DB_DataObject::factory($cls);
-            if (empty($i) || PEAR::isError($i)) {
-                return false;
-            }
+            $i = new $cls;
             foreach ($kv as $k => $v) {
                 if (is_null($v)) {
                     // XXX: possible SQL injection...? Don't
@@ -395,23 +388,23 @@ class Memcached_DataObject extends Safe_DataObject
         return $result;
     }
 
-    function update($orig=null)
+    function update($dataObject=false)
     {
-        if (is_object($orig) && $orig instanceof Memcached_DataObject) {
-            $orig->decache(); # might be different keys
+        if (is_object($dataObject) && $dataObject instanceof Memcached_DataObject) {
+            $dataObject->decache(); # might be different keys
         }
-        $result = parent::update($orig);
-        if ($result) {
+        $result = parent::update($dataObject);
+        if ($result !== false) {
             $this->fixupTimestamps();
             $this->encache();
         }
         return $result;
     }
 
-    function delete()
+    function delete($useWhere=false)
     {
         $this->decache(); # while we still have the values!
-        return parent::delete();
+        return parent::delete($useWhere);
     }
 
     static function memcache() {
@@ -429,16 +422,16 @@ class Memcached_DataObject extends Safe_DataObject
     }
 
     static function getcached($cls, $k, $v) {
-        $c = Memcached_DataObject::memcache();
+        $c = self::memcache();
         if (!$c) {
             return false;
         } else {
-            $obj = $c->get(Memcached_DataObject::cacheKey($cls, $k, $v));
+            $obj = $c->get(self::cacheKey($cls, $k, $v));
             if (0 == strcasecmp($cls, 'User')) {
                 // Special case for User
                 if (is_object($obj) && is_object($obj->id)) {
                     common_log(LOG_ERR, "User " . $obj->nickname . " was cached with User as ID; deleting");
-                    $c->delete(Memcached_DataObject::cacheKey($cls, $k, $v));
+                    $c->delete(self::cacheKey($cls, $k, $v));
                     return false;
                 }
             }
@@ -469,7 +462,7 @@ class Memcached_DataObject extends Safe_DataObject
 
     function encache()
     {
-        $c = $this->memcache();
+        $c = self::memcache();
 
         if (!$c) {
             return false;
@@ -490,7 +483,7 @@ class Memcached_DataObject extends Safe_DataObject
 
     function decache()
     {
-        $c = $this->memcache();
+        $c = self::memcache();
 
         if (!$c) {
             return false;
@@ -521,7 +514,7 @@ class Memcached_DataObject extends Safe_DataObject
                 if (empty($this->$key)) {
                     continue;
                 }
-                $ckeys[] = $this->cacheKey($this->tableName(), $key, self::valueString($this->$key));
+                $ckeys[] = self::cacheKey($this->tableName(), $key, self::valueString($this->$key));
             } else if ($type == 'K' || $type == 'N') {
                 $pkey[] = $key;
                 $pval[] = self::valueString($this->$key);
@@ -537,12 +530,12 @@ class Memcached_DataObject extends Safe_DataObject
         $pvals = implode(',', $pval);
         $pkeys = implode(',', $pkey);
 
-        $ckeys[] = $this->cacheKey($this->tableName(), $pkeys, $pvals);
+        $ckeys[] = self::cacheKey($this->tableName(), $pkeys, $pvals);
 
         return $ckeys;
     }
 
-    function multicache($cls, $kv)
+    static function multicache($cls, $kv)
     {
         ksort($kv);
         $c = self::memcache();
@@ -586,7 +579,7 @@ class Memcached_DataObject extends Safe_DataObject
 
     static function cachedQuery($cls, $qry, $expiry=3600)
     {
-        $c = Memcached_DataObject::memcache();
+        $c = self::memcache();
         if (!$c) {
             $inst = new $cls();
             $inst->query($qry);
@@ -680,8 +673,10 @@ class Memcached_DataObject extends Safe_DataObject
                         'delete',
                         'update',
                         'find');
-        $ignoreStatic = array('staticGet',
+        $ignoreStatic = array('getKV',
+                              'getClassKV',
                               'pkeyGet',
+                              'pkeyGetClass',
                               'cachedQuery');
         $here = get_class($this); // if we get confused
         $bt = debug_backtrace();
@@ -736,12 +731,12 @@ class Memcached_DataObject extends Safe_DataObject
 
     function _connect()
     {
-        global $_DB_DATAOBJECT;
+        global $_DB_DATAOBJECT, $_PEAR;
 
         $sum = $this->_getDbDsnMD5();
 
         if (!empty($_DB_DATAOBJECT['CONNECTIONS'][$sum]) &&
-            !PEAR::isError($_DB_DATAOBJECT['CONNECTIONS'][$sum])) {
+            !$_PEAR->isError($_DB_DATAOBJECT['CONNECTIONS'][$sum])) {
             $exists = true;
         } else {
             $exists = false;
@@ -763,7 +758,9 @@ class Memcached_DataObject extends Safe_DataObject
         // we'll need some fancier logic here.
         if (!$exists && !empty($_DB_DATAOBJECT['CONNECTIONS']) && php_sapi_name() == 'cli') {
             foreach ($_DB_DATAOBJECT['CONNECTIONS'] as $index => $conn) {
-                if (!empty($conn)) {
+                if ($_PEAR->isError($conn)) {
+                    common_log(LOG_WARNING, __METHOD__ . " cannot disconnect failed DB connection: '".$conn->getMessage()."'.");
+                } elseif (!empty($conn)) {
                     $conn->disconnect();
                 }
                 unset($_DB_DATAOBJECT['CONNECTIONS'][$index]);
@@ -778,9 +775,9 @@ class Memcached_DataObject extends Safe_DataObject
                 common_config('db', 'utf8')) {
                 $conn = $DB->connection;
                 if (!empty($conn)) {
-                    if ($DB instanceof DB_mysqli) {
+                    if ($DB instanceof DB_mysqli || $DB instanceof MDB2_Driver_mysqli) {
                         mysqli_set_charset($conn, 'utf8');
-                    } else if ($DB instanceof DB_mysql) {
+                    } else if ($DB instanceof DB_mysql || $DB instanceof MDB2_Driver_mysql) {
                         mysql_set_charset('utf8', $conn);
                     }
                 }

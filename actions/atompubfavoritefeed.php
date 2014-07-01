@@ -34,8 +34,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-
 /**
  * Feed of ActivityStreams 'favorite' actions
  *
@@ -62,7 +60,7 @@ class AtompubfavoritefeedAction extends ApiAuthAction
     {
         parent::prepare($argarray);
 
-        $this->_profile = Profile::staticGet('id', $this->trimmed('profile'));
+        $this->_profile = Profile::getKV('id', $this->trimmed('profile'));
 
         if (empty($this->_profile)) {
             // TRANS: Client exception thrown when requesting a favorite feed for a non-existing profile.
@@ -251,7 +249,7 @@ class AtompubfavoritefeedAction extends ApiAuthAction
                 return;
             }
 
-            $notice = Notice::staticGet('uri', $note->id);
+            $notice = Notice::getKV('uri', $note->id);
 
             if (empty($notice)) {
                 // XXX: import from listed URL or something
@@ -362,7 +360,7 @@ class AtompubfavoritefeedAction extends ApiAuthAction
      */
     function notify($fave, $notice, $user)
     {
-        $other = User::staticGet('id', $notice->profile_id);
+        $other = User::getKV('id', $notice->profile_id);
         if ($other && $other->id != $user->id) {
             if ($other->email && $other->emailnotifyfav) {
                 mail_notify_fave($other, $user, $notice);

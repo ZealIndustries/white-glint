@@ -25,10 +25,6 @@ class Oauth_application extends Managed_DataObject
     public $created;                         // datetime   not_null
     public $modified;                        // timestamp   not_null default_CURRENT_TIMESTAMP
 
-    /* Static get */
-    function staticGet($k,$v=NULL) {
-    return Memcached_DataObject::staticGet('Oauth_application',$k,$v);
-    }
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -41,7 +37,7 @@ class Oauth_application extends Managed_DataObject
 
     function getConsumer()
     {
-        return Consumer::staticGet('consumer_key', $this->consumer_key);
+        return Consumer::getKV('consumer_key', $this->consumer_key);
     }
 
     static function maxDesc()
@@ -143,14 +139,14 @@ class Oauth_application extends Managed_DataObject
         }
     }
 
-    function delete()
+    function delete($useWhere=false)
     {
         $this->_deleteAppUsers();
 
         $consumer = $this->getConsumer();
         $consumer->delete();
 
-        parent::delete();
+        return parent::delete($useWhere);
     }
 
     function _deleteAppUsers()

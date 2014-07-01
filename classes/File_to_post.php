@@ -35,9 +35,6 @@ class File_to_post extends Managed_DataObject
     public $post_id;                         // int(4)  primary_key not_null
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
 
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('File_to_post',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -72,7 +69,7 @@ class File_to_post extends Managed_DataObject
                 $f2p->post_id = $notice_id;
                 $f2p->insert();
                 
-                $f = File::staticGet($file_id);
+                $f = File::getKV($file_id);
 
                 if (!empty($f)) {
                     $f->blowCache();
@@ -87,17 +84,12 @@ class File_to_post extends Managed_DataObject
         }
     }
 
-    function pkeyGet($kv)
+    function delete($useWhere=false)
     {
-        return Memcached_DataObject::pkeyGet('File_to_post', $kv);
-    }
-
-    function delete()
-    {
-        $f = File::staticGet('id', $this->file_id);
+        $f = File::getKV('id', $this->file_id);
         if (!empty($f)) {
             $f->blowCache();
         }
-        return parent::delete();
+        return parent::delete($useWhere);
     }
 }

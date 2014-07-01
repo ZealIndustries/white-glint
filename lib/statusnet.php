@@ -44,9 +44,17 @@ class StatusNet
      *
      * @throws ServerException if plugin can't be found
      */
-    public static function addPlugin($name, $attrs = null)
+    public static function addPlugin($name, array $attrs=array())
     {
         $name = ucfirst($name);
+
+        if (isset(self::$plugins[$name])) {
+            // We have already loaded this plugin. Don't try to
+            // do it again with (possibly) different values.
+            // Försten till kvarn får mala.
+            return true;
+        }
+
         $pluginclass = "{$name}Plugin";
 
         if (!class_exists($pluginclass)) {
@@ -70,15 +78,15 @@ class StatusNet
             }
         }
 
+        // Doesn't this $inst risk being garbage collected or something?
+        // TODO: put into a static array that makes sure $inst isn't lost.
         $inst = new $pluginclass();
-        if (!empty($attrs)) {
-            foreach ($attrs as $aname => $avalue) {
-                $inst->$aname = $avalue;
-            }
+        foreach ($attrs as $aname => $avalue) {
+            $inst->$aname = $avalue;
         }
 
         // Record activated plugins for later display/config dump
-        self::$plugins[] = array($name, $attrs);
+        self::$plugins[$name] = $attrs;
 
         return true;
     }
@@ -110,12 +118,12 @@ class StatusNet
     {
         Router::clear();
 
-        StatusNet::initDefaults($server, $path);
-        StatusNet::loadConfigFile($conffile);
+        self::initDefaults($server, $path);
+        self::loadConfigFile($conffile);
 
         $sprofile = common_config('site', 'profile');
         if (!empty($sprofile)) {
-            StatusNet::loadSiteProfile($sprofile);
+            self::loadSiteProfile($sprofile);
         }
         // Load settings from database; note we need autoload for this
         Config::loadSettings();
@@ -148,7 +156,7 @@ class StatusNet
             return true;
         }
 
-        $sn = Status_network::staticGet('nickname', $nickname);
+        $sn = Status_network::getKV('nickname', $nickname);
         if (empty($sn)) {
             return false;
             throw new Exception("No such site nickname '$nickname'");
@@ -181,6 +189,15 @@ class StatusNet
      */
     protected static function initPlugins()
     {
+        // User config may have already added some of these plugins, with
+        // maybe configured parameters. The self::addPlugin function will
+        // ignore the new call if it has already been instantiated.
+
+        // Load core plugins
+        foreach (common_config('plugins', 'core') as $name => $params) {
+            call_user_func('self::addPlugin', $name, $params);
+        }
+
         // Load default plugins
         foreach (common_config('plugins', 'default') as $name => $params) {
             $key = 'disable-' . $name;
@@ -188,18 +205,20 @@ class StatusNet
                 continue;
             }
 
+            // TODO: We should be able to avoid this is_null and assume $params
+            // is an array, since that's how it is typed in addPlugin
             if (is_null($params)) {
-                addPlugin($name);
+                self::addPlugin($name);
             } else if (is_array($params)) {
                 if (count($params) == 0) {
-                    addPlugin($name);
+                    self::addPlugin($name);
                 } else {
                     $keys = array_keys($params);
                     if (is_string($keys[0])) {
-                        addPlugin($name, $params);
+                        self::addPlugin($name, $params);
                     } else {
                         foreach ($params as $paramset) {
-                            addPlugin($name, $paramset);
+                            self::addPlugin($name, $paramset);
                         }
                     }
                 }
@@ -222,27 +241,27 @@ class StatusNet
      *
      * @return bool
      */
-    public function haveConfig()
+    public static function haveConfig()
     {
         return self::$have_config;
     }
 
-    public function isApi()
+    public static function isApi()
     {
         return self::$is_api;
     }
 
-    public function setApi($mode)
+    public static function setApi($mode)
     {
         self::$is_api = $mode;
     }
 
-    public function isAjax()
+    public static function isAjax()
     {
         return self::$is_ajax;
     }
 
-    public function setAjax($mode)
+    public static function setAjax($mode)
     {
         self::$is_ajax = $mode;
     }
@@ -264,7 +283,7 @@ class StatusNet
      */
     public static function initDefaults($server, $path)
     {
-        global $_server, $_path, $config;
+        global $_server, $_path, $config, $_PEAR;
 
         Event::clearHandlers();
         self::$plugins = array();
@@ -296,7 +315,7 @@ class StatusNet
         // default configuration, overwritten in config.php
         // Keep DB_DataObject's db config synced to ours...
 
-        $config['db'] = &PEAR::getStaticProperty('DB_DataObject','options');
+        $config['db'] = &$_PEAR->getStaticProperty('DB_DataObject','options');
 
         $config['db'] = $default['db'];
 
@@ -313,7 +332,7 @@ class StatusNet
         $config = array_merge($config, $settings);
     }
 
-    protected function _sn_to_path($sn)
+    protected static function _sn_to_path($sn)
     {
         $past_root = substr($sn, 1);
         $last_slash = strrpos($past_root, '/');
@@ -331,7 +350,7 @@ class StatusNet
      *
      * @throws NoConfigException
      */
-    protected function loadConfigFile($conffile=null)
+    protected static function loadConfigFile($conffile=null)
     {
         global $_server, $_path, $config;
 
@@ -362,6 +381,7 @@ class StatusNet
             if (@file_exists($_config_file)) {
                 // Ignore 0-byte config files
                 if (filesize($_config_file) > 0) {
+                    common_log(LOG_INFO, "Including config file: " . $_config_file);
                     include($_config_file);
                     self::$have_config = true;
                 }
@@ -373,30 +393,10 @@ class StatusNet
                                         $config_files);
         }
 
-        // Backwards compatibility
-        if (array_key_exists('memcached', $config)) {
-            if ($config['memcached']['enabled']) {
-                addPlugin('Memcache', array('servers' => $config['memcached']['server']));
-            }
+        // Check for database server; must exist!
 
-            if (!empty($config['memcached']['base'])) {
-                $config['cache']['base'] = $config['memcached']['base'];
-            }
-        }
-        if (array_key_exists('xmpp', $config)) {
-            if ($config['xmpp']['enabled']) {
-                addPlugin('xmpp', array(
-                    'server' => $config['xmpp']['server'],
-                    'port' => $config['xmpp']['port'],
-                    'user' => $config['xmpp']['user'],
-                    'resource' => $config['xmpp']['resource'],
-                    'encryption' => $config['xmpp']['encryption'],
-                    'password' => $config['xmpp']['password'],
-                    'host' => $config['xmpp']['host'],
-                    'debug' => $config['xmpp']['debug'],
-                    'public' => $config['xmpp']['public']
-                ));
-            }
+        if (empty($config['db']['database'])) {
+            throw new ServerException("No database server for this site.");
         }
     }
 

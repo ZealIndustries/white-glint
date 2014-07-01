@@ -89,11 +89,11 @@ class EditgroupAction extends GroupAction
         $groupid = $this->trimmed('groupid');
 
         if ($groupid) {
-            $this->group = User_group::staticGet('id', $groupid);
+            $this->group = User_group::getKV('id', $groupid);
         } else {
-            $local = Local_group::staticGet('nickname', $nickname);
+            $local = Local_group::getKV('nickname', $nickname);
             if ($local) {
-                $this->group = User_group::staticGet('id', $local->group_id);
+                $this->group = User_group::getKV('id', $local->group_id);
             }
         }
 
@@ -168,12 +168,25 @@ class EditgroupAction extends GroupAction
         if (!$cur->isAdmin($this->group)) {
             // TRANS: Client error displayed trying to edit a group while not being a group admin.
             $this->clientError(_('You must be an admin to edit the group.'), 403);
-            return;
         }
 
         if (Event::handle('StartGroupSaveForm', array($this))) {
 
-            $nickname    = Nickname::normalize($this->trimmed('newnickname'));
+            $nickname = $this->trimmed('newnickname');
+            try {
+                $nickname = Nickname::normalize($nickname, true);
+            } catch (NicknameTakenException $e) {
+                // Abort only if the nickname is occupied by _another_ group
+                if ($e->profile->id != $this->group->id) {
+                    $this->showForm($e->getMessage());
+                    return;
+                }
+                $nickname = Nickname::normalize($nickname); // without in-use check this time
+            } catch (NicknameException $e) {
+                $this->showForm($e->getMessage());
+                return;
+            }
+
             $fullname    = $this->trimmed('fullname');
             $homepage    = $this->trimmed('homepage');
             $description = $this->trimmed('description');
@@ -189,18 +202,8 @@ class EditgroupAction extends GroupAction
                 $join_policy = User_group::JOIN_POLICY_OPEN;
             }
 
-            if ($this->nicknameExists($nickname)) {
-                // TRANS: Group edit form validation error.
-                $this->showForm(_('Nickname already in use. Try another one.'));
-                return;
-            } else if (!User_group::allowedNickname($nickname)) {
-                // TRANS: Group edit form validation error.
-                $this->showForm(_('Not a valid nickname.'));
-                return;
-            } else if (!is_null($homepage) && (strlen($homepage) > 0) &&
-                       !Validate::uri($homepage,
-                                      array('allowed_schemes' =>
-                                            array('http', 'https')))) {
+            if (!is_null($homepage) && (strlen($homepage) > 0) &&
+                       !common_valid_http_url($homepage)) {
                 // TRANS: Group edit form validation error.
                 $this->showForm(_('Homepage is not a valid URL.'));
                 return;
@@ -223,7 +226,8 @@ class EditgroupAction extends GroupAction
             }
 
             if (!empty($aliasstring)) {
-                $aliases = array_map('common_canonical_nickname', array_unique(preg_split('/[\s,]+/', $aliasstring)));
+                $aliases = array_map(array('Nickname', 'normalize'),
+                                     array_unique(preg_split('/[\s,]+/', $aliasstring)));
             } else {
                 $aliases = array();
             }
@@ -238,26 +242,6 @@ class EditgroupAction extends GroupAction
                 return;
             }
 
-            foreach ($aliases as $alias) {
-                if (!Nickname::isValid($alias)) {
-                    // TRANS: Group edit form validation error.
-                    $this->showForm(sprintf(_('Invalid alias: "%s"'), $alias));
-                    return;
-                }
-                if ($this->nicknameExists($alias)) {
-                    // TRANS: Group edit form validation error.
-                    $this->showForm(sprintf(_('Alias "%s" already in use. Try another one.'),
-                                            $alias));
-                    return;
-                }
-                // XXX assumes alphanum nicknames
-                if (strcmp($alias, $nickname) == 0) {
-                    // TRANS: Group edit form validation error.
-                    $this->showForm(_('Alias can\'t be the same as nickname.'));
-                    return;
-                }
-            }
-
             $this->group->query('BEGIN');
 
             $orig = clone($this->group);
@@ -270,13 +254,10 @@ class EditgroupAction extends GroupAction
             $this->group->mainpage    = common_local_url('showgroup', array('nickname' => $nickname));
             $this->group->join_policy = $join_policy;
             $this->group->force_scope = $force_scope;
-			
-			if($this->group->homepage == $orig->homepage)
-				$this->group->homepage .= ' '; // @fixme HACK HACK HACK HACK
 
             $result = $this->group->update($orig);
 
-            if (!$result) {
+            if ($result === false) {
                 common_log_db_error($this->group, 'UPDATE', __FILE__);
                 // TRANS: Server error displayed when editing a group fails.
                 $this->serverError(_('Could not update group.'));
@@ -287,12 +268,6 @@ class EditgroupAction extends GroupAction
             if (!$result) {
                 // TRANS: Server error displayed when group aliases could not be added.
                 $this->serverError(_('Could not create aliases.'));
-            }
-
-            if ($nickname != $orig->nickname) {
-                common_log(LOG_INFO, "Saving local group info.");
-                $local = Local_group::staticGet('group_id', $this->group->id);
-                $local->setNickname($nickname);
             }
 
             $this->group->query('COMMIT');
@@ -308,24 +283,5 @@ class EditgroupAction extends GroupAction
             // TRANS: Group edit form success message.
             $this->showForm(_('Options saved.'));
         }
-    }
-
-    function nicknameExists($nickname)
-    {
-        $group = Local_group::staticGet('nickname', $nickname);
-
-        if (!empty($group) &&
-            $group->group_id != $this->group->id) {
-            return true;
-        }
-
-        $alias = Group_alias::staticGet('alias', $nickname);
-
-        if (!empty($alias) &&
-            $alias->group_id != $this->group->id) {
-            return true;
-        }
-
-        return false;
     }
 }

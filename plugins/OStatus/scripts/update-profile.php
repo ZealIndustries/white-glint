@@ -40,7 +40,7 @@ if (empty($args[0]) || !Validate::uri($args[0])) {
 $uri = $args[0];
 
 
-$oprofile = Ostatus_profile::staticGet('uri', $uri);
+$oprofile = Ostatus_profile::getKV('uri', $uri);
 
 if (!$oprofile) {
     print "No OStatus remote profile known for URI $uri\n";
@@ -56,7 +56,8 @@ print "Re-running feed discovery for profile URL $oprofile->uri\n";
 $discover = new FeedDiscovery();
 $feedurl = $discover->discoverFromURL($oprofile->uri);
 $huburi = $discover->getHubLink();
-$salmonuri = $discover->getAtomLink(Salmon::NS_REPLIES);
+$salmonuri = $discover->getAtomLink(Salmon::REL_SALMON)
+                ?: $discover->getAtomLink(Salmon::NS_REPLIES);
 
 print "  Feed URL: $feedurl\n";
 print "  Hub URL: $huburi\n";
@@ -114,7 +115,7 @@ if ($ok) {
     print "Could not confirm.\n";
 }
 
-$o2 = Ostatus_profile::staticGet('uri', $uri);
+$o2 = Ostatus_profile::getKV('uri', $uri);
 
 print "\n";
 print "New profile state:\n";

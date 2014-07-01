@@ -173,10 +173,6 @@ class Router
 
             $m->connect('main/xrds',
                         array('action' => 'publicxrds'));
-            $m->connect('.well-known/host-meta',
-                        array('action' => 'hostmeta'));
-            $m->connect('main/xrd',
-                        array('action' => 'userxrd'));
 
             // settings
 
@@ -464,6 +460,49 @@ class Router
                               'id' => '[0-9]+',
                               'format' => '(xml|json)'));
 
+            // START qvitter API additions
+
+            $m->connect('api/statuses/favs/:id.:format',
+                        array('action' => 'ApiStatusesFavs',
+                              'id' => '[0-9]+',
+                              'format' => '(xml|json)'));
+            
+            $m->connect('api/attachment/:id.:format',
+                        array('action' => 'ApiAttachment',
+                              'id' => '[0-9]+',
+                              'format' => '(xml|json)'));
+            
+            $m->connect('api/checkhub.:format',
+                        array('action' => 'ApiCheckHub',
+                              'format' => '(xml|json)'));
+            
+            $m->connect('api/externalprofile/show.:format',
+                        array('action' => 'ApiExternalProfileShow',
+                              'format' => '(xml|json)'));
+
+            $m->connect('api/statusnet/groups/admins/:id.:format',
+                        array('action' => 'ApiGroupAdmins',
+                              'id' => Nickname::INPUT_FMT,
+                              'format' => '(xml|json)'));
+            
+            $m->connect('api/account/update_link_color.:format',
+                        array('action' => 'ApiAccountUpdateLinkColor',
+                              'format' => '(xml|json)'));
+                
+            $m->connect('api/account/update_background_color.:format',
+                        array('action' => 'ApiAccountUpdateBackgroundColor',
+                              'format' => '(xml|json)'));
+
+            $m->connect('api/account/register.:format',
+                        array('action' => 'ApiAccountRegister',
+                              'format' => '(xml|json)'));
+            
+            $m->connect('api/check_nickname.:format',
+                        array('action' => 'ApiCheckNickname',
+                              'format' => '(xml|json)'));
+
+            // END qvitter API additions
+
             // users
 
             $m->connect('api/users/show/:id.:format',
@@ -612,21 +651,21 @@ class Router
             // statusnet
 
             $m->connect('api/statusnet/version.:format',
-                        array('action' => 'ApiStatusnetVersion',
+                        array('action' => 'ApiGNUsocialVersion',
                               'format' => '(xml|json)'));
 
             $m->connect('api/statusnet/config.:format',
-                        array('action' => 'ApiStatusnetConfig',
+                        array('action' => 'ApiGNUsocialConfig',
                               'format' => '(xml|json)'));
 
-            // For older methods, we provide "laconica" base action
+            // For our current software name, we provide "gnusocial" base action
 
-            $m->connect('api/laconica/version.:format',
-                        array('action' => 'ApiStatusnetVersion',
+            $m->connect('api/gnusocial/version.:format',
+                        array('action' => 'ApiGNUsocialVersion',
                               'format' => '(xml|json)'));
 
-            $m->connect('api/laconica/config.:format',
-                        array('action' => 'ApiStatusnetConfig',
+            $m->connect('api/gnusocial/config.:format',
+                        array('action' => 'ApiGNUsocialConfig',
                               'format' => '(xml|json)'));
 
             // Groups and tags are newer than 0.8.1 so no backward-compatibility
@@ -777,6 +816,7 @@ class Router
             // Tags
             $m->connect('api/statusnet/tags/timeline/:tag.:format',
                         array('action' => 'ApiTimelineTag',
+                              'tag'    => self::REGEX_TAG,
                               'format' => '(xml|json|rss|atom|as)'));
 
             // media related
@@ -791,20 +831,19 @@ class Router
             $m->connect('api/trends.json', array('action' => 'ApiTrends'));
 
             $m->connect('api/oauth/request_token',
-                        array('action' => 'ApiOauthRequestToken'));
+                        array('action' => 'ApiOAuthRequestToken'));
 
             $m->connect('api/oauth/access_token',
-                        array('action' => 'ApiOauthAccessToken'));
+                        array('action' => 'ApiOAuthAccessToken'));
 
             $m->connect('api/oauth/authorize',
-                        array('action' => 'ApiOauthAuthorize'));
+                        array('action' => 'ApiOAuthAuthorize'));
 
             // Admin
 
             $m->connect('panel/site', array('action' => 'siteadminpanel'));
             $m->connect('panel/user', array('action' => 'useradminpanel'));
 	        $m->connect('panel/access', array('action' => 'accessadminpanel'));
-            $m->connect('panel/design', array('action' => 'designadminpanel'));
             $m->connect('panel/paths', array('action' => 'pathsadminpanel'));
             $m->connect('panel/sessions', array('action' => 'sessionsadminpanel'));
             $m->connect('panel/sitenotice', array('action' => 'sitenoticeadminpanel'));
@@ -880,10 +919,13 @@ class Router
                             array('action' => 'showfavorites',
                                   'nickname' => $nickname));
 
+                $m->connect('avatar',
+                            array('action' => 'avatarbynickname',
+                                  'nickname' => $nickname));
                 $m->connect('avatar/:size',
                             array('action' => 'avatarbynickname',
                                   'nickname' => $nickname),
-                            array('size' => '(original|96|48|24)'));
+                            array('size' => '(|original|\d+)'));
 
                 $m->connect('tag/:tag/rss',
                             array('action' => 'userrss',
@@ -1052,9 +1094,12 @@ class Router
                             array('action' => 'showfavorites'),
                             array('nickname' => Nickname::DISPLAY_FMT));
 
+                $m->connect(':nickname/avatar',
+                            array('action' => 'avatarbynickname'),
+                            array('nickname' => Nickname::DISPLAY_FMT));
                 $m->connect(':nickname/avatar/:size',
                             array('action' => 'avatarbynickname'),
-                            array('size' => '(original|96|48|24)',
+                            array('size' => '(|original|\d+)',
                                   'nickname' => Nickname::DISPLAY_FMT));
 
                 $m->connect(':nickname/tag/:tag/rss',

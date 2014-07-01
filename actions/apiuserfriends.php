@@ -29,11 +29,7 @@
  * @link      http://status.net/
  */
 
-if (!defined('STATUSNET')) {
-    exit(1);
-}
-
-require_once INSTALLDIR . '/lib/apibareauth.php';
+if (!defined('GNUSOCIAL')) { exit(1); }
 
 /**
  * Ouputs the authenticating user's friends (subscriptions), each with
@@ -55,7 +51,7 @@ class ApiUserFriendsAction extends ApiSubscriptionsAction
      *
      * @return array Profiles
      */
-    function getProfiles()
+    protected function getProfiles()
     {
         $offset = ($this->page - 1) * $this->count;
         $limit =  $this->count + 1;
@@ -63,11 +59,11 @@ class ApiUserFriendsAction extends ApiSubscriptionsAction
         $subs = null;
 
         if (isset($this->tag)) {
-            $subs = $this->user->getTaggedSubscriptions(
+            $subs = $this->target->getTaggedSubscriptions(
                 $this->tag, $offset, $limit
             );
         } else {
-            $subs = $this->user->getSubscriptions(
+            $subs = $this->target->getSubscribed(
                 $offset,
                 $limit
             );
@@ -75,10 +71,8 @@ class ApiUserFriendsAction extends ApiSubscriptionsAction
 
         $profiles = array();
 
-        if (!empty($subs)) {
-            while ($subs->fetch()) {
-                $profiles[] = clone($subs);
-            }
+        while ($subs->fetch()) {
+            $profiles[] = clone($subs);
         }
 
         return $profiles;

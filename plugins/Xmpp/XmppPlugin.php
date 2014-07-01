@@ -49,7 +49,7 @@ class XmppPlugin extends ImPlugin
     public $server = null;
     public $port = 5222;
     public $user =  'update';
-    public $resource = null;
+    public $resource = 'gnusocial';
     public $encryption = true;
     public $password = null;
     public $host = null;  // only set if != server
@@ -59,7 +59,7 @@ class XmppPlugin extends ImPlugin
 
     function getDisplayName(){
         // TRANS: Plugin display name.
-        return _m('XMPP/Jabber/GTalk');
+        return _m('XMPP/Jabber');
     }
 
     /**
@@ -296,21 +296,14 @@ class XmppPlugin extends ImPlugin
         case 'XMPPHP_XMPP':
             require_once $dir . '/extlib/XMPPHP/XMPP.php';
             return false;
-        case 'Sharing_XMPP':
-        case 'Queued_XMPP':
-            require_once $dir . '/'.$cls.'.php';
-            return false;
-        case 'XmppManager':
-            require_once $dir . '/'.strtolower($cls).'.php';
-            return false;
-        default:
-            return true;
         }
+
+        return parent::onAutoload($cls);
     }
 
     function onStartImDaemonIoManagers(&$classes)
     {
-        parent::onStartImDaemonIoManagers(&$classes);
+        parent::onStartImDaemonIoManagers($classes);
         $classes[] = new XmppManager($this); // handles pings/reconnects
         return true;
     }
@@ -325,7 +318,7 @@ class XmppPlugin extends ImPlugin
         $this->queuedConnection()->message($screenname, $body, 'chat');
     }
 
-    function sendNotice($screenname, $notice)
+    function sendNotice($screenname, Notice $notice)
     {
         $msg   = $this->formatNotice($notice);
         $entry = $this->format_entry($notice);
@@ -342,7 +335,7 @@ class XmppPlugin extends ImPlugin
      *
      * @return string Extra information (Atom, HTML, addresses) in string format
      */
-    function format_entry($notice)
+    protected function format_entry(Notice $notice)
     {
         $profile = $notice->getProfile();
 
@@ -351,10 +344,21 @@ class XmppPlugin extends ImPlugin
         $xs = new XMLStringer();
         $xs->elementStart('html', array('xmlns' => 'http://jabber.org/protocol/xhtml-im'));
         $xs->elementStart('body', array('xmlns' => 'http://www.w3.org/1999/xhtml'));
-        $xs->element('a', array('href' => $profile->profileurl),
-                     $profile->nickname);
-        $xs->text(": ");
+        $xs->element('a', array('href' => $profile->profileurl), $profile->nickname);
+        try {
+            $parent = $notice->getParent();
+            $orig_profile = $parent->getProfile();
+            $orig_profurl = $orig_profile->getUrl();
+            $xs->text(" => ");
+            $xs->element('a', array('href' => $orig_profurl), $orig_profile->nickname);
+            $xs->text(": ");
+        } catch (InvalidUrlException $e) {
+            $xs->text(sprintf(' => %s', $orig_profile->nickname));
+        } catch (Exception $e) {
+            $xs->text(": ");
+        }
         if (!empty($notice->rendered)) {
+            $notice->rendered = str_replace("\t", "", $notice->rendered);
             $xs->raw($notice->rendered);
         } else {
             $xs->raw(common_render_content($notice->content, $notice));
@@ -365,7 +369,7 @@ class XmppPlugin extends ImPlugin
                 array('id' => $notice->conversation)).'#notice-'.$notice->id),
              // TRANS: Link description to notice in conversation.
              // TRANS: %s is a notice ID.
-             sprintf(_m('[%s]'),$notice->id));
+             sprintf(_m('[%u]'),$notice->id));
         $xs->elementEnd('body');
         $xs->elementEnd('html');
 
@@ -380,12 +384,12 @@ class XmppPlugin extends ImPlugin
 
         if ($pl['type'] != 'chat') {
             $this->log(LOG_WARNING, "Ignoring message of type ".$pl['type']." from $from: " . $pl['xml']->toString());
-            return;
+            return true;
         }
 
         if (mb_strlen($pl['body']) == 0) {
             $this->log(LOG_WARNING, "Ignoring message with empty body from $from: "  . $pl['xml']->toString());
-            return;
+            return true;
         }
 
         $this->handleIncoming($from, $pl['body']);
@@ -397,7 +401,7 @@ class XmppPlugin extends ImPlugin
      * Build a queue-proxied XMPP interface object. Any outgoing messages
      * will be run back through us for enqueing rather than sent directly.
      *
-     * @return Queued_XMPP
+     * @return QueuedXMPP
      * @throws Exception if server settings are invalid.
      */
     function queuedConnection(){
@@ -418,7 +422,7 @@ class XmppPlugin extends ImPlugin
             throw new Exception(_m('You must specify a password in the configuration.'));
         }
 
-        return new Queued_XMPP($this, $this->host ?
+        return new QueuedXMPP($this, $this->host ?
                                     $this->host :
                                     $this->server,
                                     $this->port,
@@ -433,10 +437,35 @@ class XmppPlugin extends ImPlugin
                                     );
     }
 
+    /**
+     * Add XMPP plugin daemon to the list of daemon to start
+     *
+     * @param array $daemons the list of daemons to run
+     *
+     * @return boolean hook return
+     */
+    function onGetValidDaemons(&$daemons)
+    {
+        if( isset($this->server) &&
+            isset($this->port)   &&
+            isset($this->user)   &&
+            isset($this->password) ){
+
+            array_push(
+                $daemons,
+                INSTALLDIR
+                . '/scripts/imdaemon.php'
+            );
+        }
+
+        return true;
+    }
+
+
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'XMPP',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Craig Andrews, Evan Prodromou',
                             'homepage' => 'http://status.net/wiki/Plugin:XMPP',
                             'rawdescription' =>

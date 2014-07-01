@@ -38,8 +38,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apibareauth.php';
-
 /**
  * Returns the most recent (default 20) mentions (status containing @nickname)
  *
@@ -66,16 +64,15 @@ class ApiTimelineMentionsAction extends ApiBareAuthAction
      *
      * @return boolean success flag
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
-        $this->user = $this->getTargetUser($this->arg('id'));
+        $this->target = $this->getTargetProfile($this->arg('id'));
 
-        if (empty($this->user)) {
+        if (!($this->target instanceof Profile)) {
             // TRANS: Client error displayed when requesting most recent mentions for a non-existing user.
-            $this->clientError(_('No such user.'), 404, $this->format);
-            return;
+            $this->clientError(_('No such user.'), 404);
         }
 
         $this->notices = $this->getNotices();
@@ -88,13 +85,11 @@ class ApiTimelineMentionsAction extends ApiBareAuthAction
      *
      * Just show the notices
      *
-     * @param array $args $_REQUEST data (unused)
-     *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
+        parent::handle();
         $this->showTimeline();
     }
 
@@ -105,33 +100,28 @@ class ApiTimelineMentionsAction extends ApiBareAuthAction
      */
     function showTimeline()
     {
-        $profile = $this->user->getProfile();
-        $avatar     = $profile->getAvatar(AVATAR_PROFILE_SIZE);
-
         $sitename   = common_config('site', 'name');
         $title      = sprintf(
             // TRANS: Title for timeline of most recent mentions of a user.
             // TRANS: %1$s is the StatusNet sitename, %2$s is a user nickname.
             _('%1$s / Updates mentioning %2$s'),
-            $sitename, $this->user->nickname
+            $sitename, $this->target->nickname
         );
         $taguribase = TagURI::base();
-        $id         = "tag:$taguribase:Mentions:" . $this->user->id;
-        $link       = common_local_url(
-            'replies',
-            array('nickname' => $this->user->nickname)
-        );
+        $id         = "tag:$taguribase:Mentions:" . $this->target->id;
 
+        $logo = $this->target->avatarUrl(AVATAR_PROFILE_SIZE);
+        $link = common_local_url('replies',
+                    array('nickname' => $this->target->nickname));
         $self = $this->getSelfUri();
 
         $subtitle   = sprintf(
             // TRANS: Subtitle for timeline of most recent mentions of a user.
             // TRANS: %1$s is the StatusNet sitename, %2$s is a user nickname,
             // TRANS: %3$s is a user's full name.
-            _('%1$s updates that reply to updates from %2$s / %3$s.'),
-            $sitename, $this->user->nickname, $profile->getBestName()
+            _('%1$s updates that reply to updates from %3$s / %2$s.'),
+            $sitename, $this->target->nickname, $this->target->getBestName()
         );
-        $logo = ($avatar) ? $avatar->displayUrl() : Avatar::defaultImage(AVATAR_PROFILE_SIZE);
 
         switch($this->format) {
         case 'xml':
@@ -193,13 +183,7 @@ class ApiTimelineMentionsAction extends ApiBareAuthAction
     {
         $notices = array();
 
-        if (empty($this->auth_user)) {
-            $profile = null; 
-        } else {
-            $profile = $this->auth_user->getProfile();
-        }
-
-        $stream = new ReplyNoticeStream($this->user->id, $profile);
+        $stream = new ReplyNoticeStream($this->target->id, $this->scoped);
 
         $notice = $stream->getNotices(($this->page - 1) * $this->count,
                                       $this->count,
@@ -258,7 +242,7 @@ class ApiTimelineMentionsAction extends ApiBareAuthAction
                 array($this->arg('action'),
                       common_user_cache_hash($this->auth_user),
                       common_language(),
-                      $this->user->id,
+                      $this->target->id,
                       strtotime($this->notices[0]->created),
                       strtotime($this->notices[$last]->created))
             )

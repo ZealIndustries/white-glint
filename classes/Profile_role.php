@@ -37,9 +37,6 @@ class Profile_role extends Managed_DataObject
     public $role;                            // varchar(32)  primary_key not_null
     public $created;                         // datetime   not_null default_0000-00-00%2000%3A00%3A00
 
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('Profile_role',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -55,18 +52,13 @@ class Profile_role extends Managed_DataObject
             'foreign keys' => array(
                 'profile_role_profile_id_fkey' => array('profile', array('profile_id' => 'id')),
             ),
+            'indexes' => array('profile_role_role_created_profile_id_idx' => array('role', 'created', 'profile_id')),
         );
-    }
-
-    function pkeyGet($kv)
-    {
-        return Memcached_DataObject::pkeyGet('Profile_role', $kv);
     }
 
     const OWNER         = 'owner';
     const MODERATOR     = 'moderator';
     const ADMINISTRATOR = 'administrator';
-    const DEVELOPER     = 'developer';
     const SANDBOXED     = 'sandboxed';
     const SILENCED      = 'silenced';
     const DELETED       = 'deleted'; // Pending final deletion of notices...
@@ -77,7 +69,6 @@ class Profile_role extends Managed_DataObject
         $known = array(self::OWNER,
                        self::MODERATOR,
                        self::ADMINISTRATOR,
-                       self::DEVELOPER,
                        self::SANDBOXED,
                        self::SILENCED);
         return in_array($role, $known);
@@ -85,7 +76,7 @@ class Profile_role extends Managed_DataObject
 
     public static function isSettable($role)
     {
-        $allowedRoles = array('administrator', 'moderator', 'developer');
+        $allowedRoles = array('administrator', 'moderator');
         return self::isValid($role) && in_array($role, $allowedRoles);
     }
 }

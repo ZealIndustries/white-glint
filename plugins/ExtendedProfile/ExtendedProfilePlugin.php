@@ -33,7 +33,7 @@ class ExtendedProfilePlugin extends Plugin
     {
         $versions[] = array(
             'name' => 'ExtendedProfile',
-            'version' => STATUSNET_VERSION,
+            'version' => GNUSOCIAL_VERSION,
             'author' => 'Brion Vibber, Samantha Doherty, Zach Copley',
             'homepage' => 'http://status.net/wiki/Plugin:ExtendedProfile',
             // TRANS: Plugin description.
@@ -41,42 +41,6 @@ class ExtendedProfilePlugin extends Plugin
         );
 
         return true;
-    }
-
-    /**
-     * Autoloader
-     *
-     * Loads our classes if they're requested.
-     *
-     * @param string $cls Class requested
-     *
-     * @return boolean hook return
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch (strtolower($cls))
-        {
-        case 'profiledetailaction':
-        case 'profiledetailsettingsaction':
-        case 'userautocompleteaction':
-            include_once $dir . '/actions/'
-                . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-            break; // Safety first!
-        case 'extendedprofile':
-        case 'extendedprofilewidget':
-            include_once $dir . '/lib/' . strtolower($cls) . '.php';
-            return false;
-            break;
-        case 'profile_detail':
-            include_once $dir . '/classes/' . ucfirst($cls) . '.php';
-            return false;
-            break;
-        default:
-            return true;
-        }
     }
 
     /**
@@ -116,7 +80,7 @@ class ExtendedProfilePlugin extends Plugin
     }
 
     function onEndShowAccountProfileBlock(HTMLOutputter $out, Profile $profile) {
-        $user = User::staticGet('id', $profile->id);
+        $user = User::getKV('id', $profile->id);
         if ($user) {
             $url = common_local_url('profiledetail', array('nickname' => $user->nickname));
             // TRANS: Link text on user profile page leading to extended profile page.

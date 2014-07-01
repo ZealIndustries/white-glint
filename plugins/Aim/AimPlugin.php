@@ -96,20 +96,14 @@ class AimPlugin extends ImPlugin
         case 'Aim':
             require_once(INSTALLDIR.'/plugins/Aim/extlib/phptoclib/aimclassw.php');
             return false;
-        case 'AimManager':
-            include_once $dir . '/'.strtolower($cls).'.php';
-            return false;
-        case 'Fake_Aim':
-            include_once $dir . '/'. $cls .'.php';
-            return false;
-        default:
-            return true;
         }
+
+        return parent::onAutoload($cls);
     }
 
     function onStartImDaemonIoManagers(&$classes)
     {
-        parent::onStartImDaemonIoManagers(&$classes);
+        parent::onStartImDaemonIoManagers($classes);
         $classes[] = new AimManager($this); // handles sending/receiving
         return true;
     }
@@ -160,7 +154,7 @@ class AimPlugin extends ImPlugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'AIM',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Craig Andrews',
                             'homepage' => 'http://status.net/wiki/Plugin:AIM',
                             'rawdescription' =>

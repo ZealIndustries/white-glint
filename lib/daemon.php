@@ -48,6 +48,16 @@ class Daemon
 
     function background()
     {
+        /*
+         * This prefers to Starting PHP 5.4 (dotdeb), maybe earlier for some version/distrib
+         * seems MySQL connection using mysqli driver get lost when fork.
+         * Need to unset it so that child process recreate it.
+         *
+         * @todo FIXME cleaner way to do it ?
+         */
+        global $_DB_DATAOBJECT;
+        unset($_DB_DATAOBJECT['CONNECTIONS']);
+
         $pid = pcntl_fork();
         if ($pid < 0) { // error
             common_log(LOG_ERR, "Could not fork.");

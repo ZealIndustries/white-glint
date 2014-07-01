@@ -99,11 +99,9 @@ EOT
      * @param array $options
      * @return boolean hook return
      */
-/*  
-  function onStartSaveNewNoticeWeb($action, $user, &$content, &$options)
+    function onStartSaveNewNoticeWeb($action, $user, &$content, &$options)
     {
         $content = htmlspecialchars($content);
         $options['rendered'] = preg_replace("/(^|\s|-)((?:awesome|awesomeness)[\?!\.\,]?)(\s|$)/i", " <b>$2</b> ", $content);
     }
-*/
 }

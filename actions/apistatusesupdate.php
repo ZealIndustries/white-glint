@@ -129,9 +129,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-require_once INSTALLDIR . '/lib/mediafile.php';
-
 /**
  * Updates the authenticating user's status (posts a notice).
  *
@@ -149,6 +146,8 @@ require_once INSTALLDIR . '/lib/mediafile.php';
  */
 class ApiStatusesUpdateAction extends ApiAuthAction
 {
+    protected $needPost = true;
+
     var $status                = null;
     var $in_reply_to_status_id = null;
     var $lat                   = null;
@@ -161,7 +160,7 @@ class ApiStatusesUpdateAction extends ApiAuthAction
      *
      * @return boolean success flag
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
@@ -180,23 +179,11 @@ class ApiStatusesUpdateAction extends ApiAuthAction
      *
      * Make a new notice for the update, save it, and show it
      *
-     * @param array $args $_REQUEST data (unused)
-     *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
-
-        if ($_SERVER['REQUEST_METHOD'] != 'POST') {
-            $this->clientError(
-                // TRANS: Client error. POST is a HTTP command. It should not be translated.
-                _('This method requires a POST.'),
-                400,
-                $this->format
-            );
-            return;
-        }
+        parent::handle();
 
         // Workaround for PHP returning empty $_POST and $_FILES when POST
         // length > post_max_size in php.ini
@@ -212,51 +199,24 @@ class ApiStatusesUpdateAction extends ApiAuthAction
                       intval($_SERVER['CONTENT_LENGTH']));
 
             $this->clientError(sprintf($msg, $_SERVER['CONTENT_LENGTH']));
-            return;
         }
 
         if (empty($this->status)) {
-            $this->clientError(
-                // TRANS: Client error displayed when the parameter "status" is missing.
-                _('Client must provide a \'status\' parameter with a value.'),
-                400,
-                $this->format
-            );
-            return;
+            // TRANS: Client error displayed when the parameter "status" is missing.
+            $this->clientError(_('Client must provide a \'status\' parameter with a value.'));
         }
 
-        if (empty($this->auth_user)) {
+        if (is_null($this->scoped)) {
             // TRANS: Client error displayed when updating a status for a non-existing user.
-            $this->clientError(_('No such user.'), 404, $this->format);
-            return;
+            $this->clientError(_('No such user.'), 404);
         }
 
-        $status_shortened = $this->auth_user->shortenlinks($this->status);
-
-        if (Notice::contentTooLong($status_shortened)) {
-            // Note: Twitter truncates anything over 140, flags the status
-            // as "truncated."
-
-            $this->clientError(
-                sprintf(
-                    // TRANS: Client error displayed exceeding the maximum notice length.
-                    // TRANS: %d is the maximum length for a notice.
-                    _m('That\'s too long. Maximum notice size is %d character.',
-                      'That\'s too long. Maximum notice size is %d characters.',
-                      Notice::maxContent()),
-                    Notice::maxContent()
-                ),
-                406,
-                $this->format
-            );
-
-            return;
-        }
+        /* Do not call shortenlinks until the whole notice has been build */
 
         // Check for commands
 
         $inter = new CommandInterpreter();
-        $cmd = $inter->handle_command($this->auth_user, $status_shortened);
+        $cmd = $inter->handle_command($this->auth_user, $this->status);
 
         if ($cmd) {
             if ($this->supported($cmd)) {
@@ -274,77 +234,73 @@ class ApiStatusesUpdateAction extends ApiAuthAction
             if (!empty($this->in_reply_to_status_id)) {
                 // Check whether notice actually exists
 
-                $reply = Notice::staticGet($this->in_reply_to_status_id);
+                $reply = Notice::getKV($this->in_reply_to_status_id);
 
                 if ($reply) {
                     $reply_to = $this->in_reply_to_status_id;
                 } else {
-                    $this->clientError(
-                        // TRANS: Client error displayed when replying to a non-existing notice.
-                        _('Parent notice not found.'),
-                        $code = 404,
-                        $this->format
-                    );
-                    return;
+                    // TRANS: Client error displayed when replying to a non-existing notice.
+                    $this->clientError(_('Parent notice not found.'), 404);
                 }
             }
 
             $upload = null;
 
             try {
-                $upload = MediaFile::fromUpload('media', $this->auth_user);
+                $upload = MediaFile::fromUpload('media', $this->scoped);
             } catch (Exception $e) {
-                $this->clientError($e->getMessage(), $e->getCode(), $this->format);
-                return;
+                $this->clientError($e->getMessage(), $e->getCode());
             }
 
             if (isset($upload)) {
-                $status_shortened .= ' ' . $upload->shortUrl();
+                $this->status .= ' ' . $upload->shortUrl();
 
-                if (Notice::contentTooLong($status_shortened)) {
-                    $upload->delete();
-                    // TRANS: Client error displayed exceeding the maximum notice length.
-                    // TRANS: %d is the maximum lenth for a notice.
-                    $msg = _m('Maximum notice size is %d character, including attachment URL.',
-                             'Maximum notice size is %d characters, including attachment URL.',
-                             Notice::maxContent());
-                    $this->clientError(
-                        sprintf($msg, Notice::maxContent()),
-                        400,
-                        $this->format
-                    );
-                }
+                /* Do not call shortenlinks until the whole notice has been build */
             }
+
+            /* Do call shortenlinks here & check notice length since notice is about to be saved & sent */
+            $status_shortened = $this->auth_user->shortenlinks($this->status);
+
+            if (Notice::contentTooLong($status_shortened)) {
+                if (isset($upload)) {
+                    $upload->delete();
+                }
+                // TRANS: Client error displayed exceeding the maximum notice length.
+                // TRANS: %d is the maximum lenth for a notice.
+                $msg = _m('Maximum notice size is %d character, including attachment URL.',
+                          'Maximum notice size is %d characters, including attachment URL.',
+                          Notice::maxContent());
+                /* Use HTTP 413 error code (Request Entity Too Large)
+                 * instead of basic 400 for better understanding
+                 */
+                $this->clientError(sprintf($msg, Notice::maxContent()), 413);
+            }
+
 
             $content = html_entity_decode($status_shortened, ENT_NOQUOTES, 'UTF-8');
 
             $options = array('reply_to' => $reply_to);
 
-            if ($this->auth_user->shareLocation()) {
+            if ($this->scoped->shareLocation()) {
 
                 $locOptions = Notice::locationOptions($this->lat,
                                                       $this->lon,
                                                       null,
                                                       null,
-                                                      $this->auth_user->getProfile());
+                                                      $this->scoped);
 
                 $options = array_merge($options, $locOptions);
             }
 
             try {
-                if(function_exists('fastcgi_finish_request')) {
-                    $options = array_merge($options, array('finish' => $this));
-                }
-
                 $this->notice = Notice::saveNew(
-                    $this->auth_user->id,
+                    $this->scoped->id,
                     $content,
                     $this->source,
                     $options
                 );
             } catch (Exception $e) {
-                $this->clientError($e->getMessage(), $e->getCode(), $this->format);
-                return;
+                $this->clientError($e->getMessage(), $e->getCode());
             }
 
             if (isset($upload)) {
@@ -352,13 +308,6 @@ class ApiStatusesUpdateAction extends ApiAuthAction
             }
         }
 
-        if(!function_exists('fastcgi_finish_request')) {
-            $this->showNotice();
-        }
-    }
-
-    function finishSave($notice) {
-        $this->notice = $notice;
         $this->showNotice();
     }
 

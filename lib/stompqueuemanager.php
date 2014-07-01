@@ -498,8 +498,9 @@ class StompQueueManager extends QueueManager
         // @fixme detect failing site switches
         $this->switchSite($site);
 
-        $item = $this->decode($message['payload']);
-        if (empty($item)) {
+        try {
+            $item = $this->decode($message['payload']);
+        } catch (Exception $e) {
             $this->_log(LOG_ERR, "Skipping empty or deleted item in queue $queue from $host");
             $this->stats('baditem', $queue);
             return false;
@@ -656,7 +657,7 @@ class StompQueueManager extends QueueManager
      */
     protected function updateSiteConfig($nickname)
     {
-        $sn = Status_network::staticGet('nickname', $nickname);
+        $sn = Status_network::getKV('nickname', $nickname);
         if ($sn) {
             $this->switchSite($nickname);
             if (!in_array($nickname, $this->sites)) {

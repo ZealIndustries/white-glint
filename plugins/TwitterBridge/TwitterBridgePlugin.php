@@ -47,7 +47,7 @@ require_once INSTALLDIR . '/plugins/TwitterBridge/twitter.php';
  */
 class TwitterBridgePlugin extends Plugin
 {
-    const VERSION = STATUSNET_VERSION;
+    const VERSION = GNUSOCIAL_VERSION;
     public $adminImportControl = false; // Should the 'import' checkbox be exposed in the admin panel?
 
     /**
@@ -184,45 +184,6 @@ class TwitterBridgePlugin extends Plugin
     }
 
     /**
-     * Automatically load the actions and libraries used by the Twitter bridge
-     *
-     * @param Class $cls the class
-     *
-     * @return boolean hook return
-     *
-     */
-    function onAutoload($cls)
-    {
-        $dir = dirname(__FILE__);
-
-        switch ($cls) {
-        case 'TwittersettingsAction':
-        case 'TwitterauthorizationAction':
-        case 'TwitterloginAction':
-        case 'TwitteradminpanelAction':
-            include_once $dir . '/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'TwitterOAuthClient':
-        case 'TwitterQueueHandler':
-        case 'TwitterImport':
-        case 'JsonStreamReader':
-        case 'TwitterStreamReader':
-            include_once $dir . '/' . strtolower($cls) . '.php';
-            return false;
-        case 'TwitterSiteStream':
-        case 'TwitterUserStream':
-            include_once $dir . '/twitterstreamreader.php';
-            return false;
-        case 'Notice_to_status':
-        case 'Twitter_synch_status':
-            include_once $dir . '/' . $cls . '.php';
-            return false;
-        default:
-            return true;
-        }
-    }
-
-    /**
      * Add a Twitter queue item for each notice
      *
      * @param Notice $notice      the notice
@@ -248,7 +209,7 @@ class TwitterBridgePlugin extends Plugin
      *
      * @return boolean hook return
      */
-    function onGetValidDaemons($daemons)
+    function onGetValidDaemons(&$daemons)
     {
         if (self::hasKeys()) {
             array_push(
@@ -339,7 +300,7 @@ class TwitterBridgePlugin extends Plugin
         $versions[] = array(
             'name' => 'TwitterBridge',
             'version' => self::VERSION,
-            'author' => 'Zach Copley, Julien C',
+            'author' => 'Zach Copley, Julien C, Jean Baptiste Favre',
             'homepage' => 'http://status.net/wiki/Plugin:TwitterBridge',
             // TRANS: Plugin description.
             'rawdescription' => _m('The Twitter "bridge" plugin allows integration ' .
@@ -403,28 +364,10 @@ class TwitterBridgePlugin extends Plugin
 
         // For saving the last-synched status of various timelines
         // home_timeline, messages (in), messages (out), ...
-
-        $schema->ensureTable('twitter_synch_status',
-                             array(new ColumnDef('foreign_id', 'bigint', null,
-                                                 false, 'PRI'),
-                                   new ColumnDef('timeline', 'varchar', 255,
-                                                 false, 'PRI'),
-                                   new ColumnDef('last_id', 'bigint', null, // XXX: check for PostgreSQL
-                                                 false),
-                                   new ColumnDef('created', 'datetime', null,
-                                                 false),
-                                   new ColumnDef('modified', 'datetime', null,
-                                                 false)));
+        $schema->ensureTable('twitter_synch_status', Twitter_synch_status::schemaDef());
 
         // For storing user-submitted flags on profiles
-
-        $schema->ensureTable('notice_to_status',
-                             array(new ColumnDef('notice_id', 'integer', null,
-                                                 false, 'PRI'),
-                                   new ColumnDef('status_id', 'bigint', null, // XXX: check for PostgreSQL
-                                                 false, 'UNI'),
-                                   new ColumnDef('created', 'datetime', null,
-                                                 false)));
+        $schema->ensureTable('notice_to_status', Notice_to_status::schemaDef());
 
         return true;
     }
@@ -440,7 +383,7 @@ class TwitterBridgePlugin extends Plugin
      */
     function onStartDeleteOwnNotice(User $user, Notice $notice)
     {
-        $n2s = Notice_to_status::staticGet('notice_id', $notice->id);
+        $n2s = Notice_to_status::getKV('notice_id', $notice->id);
 
         if (!empty($n2s)) {
 
@@ -555,6 +498,87 @@ class TwitterBridgePlugin extends Plugin
             $uri = $profile->profileurl;
             return false;
         }
+        return true;
+    }
+
+    /**
+     * Add links in the user's profile block to their Twitter profile URL.
+     *
+     * @param Profile $profile The profile being shown
+     * @param Array   &$links  Writeable array of arrays (href, text, image).
+     *
+     * @return boolean hook value (true)
+     */
+
+    function onOtherAccountProfiles($profile, &$links)
+    {
+        $fuser = null;
+
+        $flink = Foreign_link::getByUserID($profile->id, TWITTER_SERVICE);
+
+        if (!empty($flink)) {
+            $fuser = $flink->getForeignUser();
+
+            if (!empty($fuser)) {
+                $links[] = array("href" => $fuser->uri,
+                                 "text" => sprintf(_("@%s on Twitter"), $fuser->nickname),
+                                 "image" => $this->path("icons/twitter-bird-white-on-blue.png"));
+            }
+        }
+
+        return true;
+    }
+
+    public function onEndShowHeadElements(Action $action)
+    {
+        if (!($action instanceof AttachmentAction)) {
+            return true;
+        }
+
+        /* Twitter card support. See https://dev.twitter.com/docs/cards */
+        /* @fixme: should we display twitter cards only for attachments posted
+         *         by local users ? Seems mandatory to display twitter:creator
+         *
+         * Author: jbfavre
+         */
+        switch ($action->attachment->mimetype) {
+            case 'image/pjpeg':
+            case 'image/jpeg':
+            case 'image/jpg':
+            case 'image/png':
+            case 'image/gif':
+                $action->element('meta', array('name'    => 'twitter:card',
+                                             'content' => 'photo'),
+                                       null);
+                $action->element('meta', array('name'    => 'twitter:url',
+                                             'content' => common_local_url('attachment',
+                                                              array('attachment' => $action->attachment->id))),
+                                       null );
+                $action->element('meta', array('name'    => 'twitter:image',
+                                             'content' => $action->attachment->url));
+                $action->element('meta', array('name'    => 'twitter:title',
+                                             'content' => $action->attachment->title));
+
+                $ns = new AttachmentNoticeSection($this);
+                $notices = $ns->getNotices();
+                $noticeArray = $notices->fetchAll();
+
+                // Should not have more than 1 notice for this attachment.
+                if( count($noticeArray) != 1 ) { break; }
+                $post = $noticeArray[0];
+
+                $flink = Foreign_link::getByUserID($post->profile_id, TWITTER_SERVICE);
+                if( $flink ) { // Our local user has registered Twitter Gateway
+                    $fuser = Foreign_user::getForeignUser($flink->foreign_id, TWITTER_SERVICE);
+                    if( $fuser ) { // Got nickname for local user's Twitter account
+                        $action->element('meta', array('name'    => 'twitter:creator',
+                                                     'content' => '@'.$fuser->nickname));
+                    }
+                }
+                break;
+            default: break;
+        }
+
         return true;
     }
 }

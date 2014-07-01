@@ -94,7 +94,7 @@ class ProfilecompletionAction extends Action
         }
 
         $id = $this->arg('peopletag_id');
-        $this->peopletag = Profile_list::staticGet('id', $id);
+        $this->peopletag = Profile_list::getKV('id', $id);
 
         if (empty($this->peopletag)) {
             // TRANS: Client error displayed trying to reference a non-existing list.
@@ -151,7 +151,7 @@ class ProfilecompletionAction extends Action
             }
         }
         $this->elementEnd('body');
-        $this->elementEnd('html');
+        $this->endHTML();
     }
 
     function getResults()
@@ -179,8 +179,7 @@ class ProfilecompletionAction extends Action
             else {
                 $cnt = $profile->find();
             }
-            // @todo FIXME: Call-time pass-by-reference has been deprecated.
-            Event::handle('EndProfileCompletionSearch', $this, &$profile, $search_engine);
+            Event::handle('EndProfileCompletionSearch', array($this, &$profile, $search_engine));
         }
 
         while ($profile->fetch()) {

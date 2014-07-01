@@ -48,9 +48,6 @@ class Profile_list extends Managed_DataObject
     public $tagged_count;                    // smallint
     public $subscriber_count;                // smallint
 
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('Profile_list',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -90,19 +87,6 @@ class Profile_list extends Managed_DataObject
     }
 
     /**
-     * return a profile_list record, given its tag and tagger.
-     *
-     * @param array $kv ideally array('tag' => $tag, 'tagger' => $tagger)
-     *
-     * @return Profile_list a Profile_list object with the given tag and tagger.
-     */
-
-    function pkeyGet($kv)
-    {
-        return Memcached_DataObject::pkeyGet('Profile_list', $kv);
-    }
-
-    /**
      * get the tagger of this profile_list object
      *
      * @return Profile the tagger
@@ -110,7 +94,7 @@ class Profile_list extends Managed_DataObject
 
     function getTagger()
     {
-        return Profile::staticGet('id', $this->tagger);
+        return Profile::getKV('id', $this->tagger);
     }
 
     /**
@@ -350,7 +334,7 @@ class Profile_list extends Managed_DataObject
      * @return boolean success
      */
 
-    function delete()
+    function delete($useWhere=false)
     {
         // force delete one item at a time.
         if (empty($this->id)) {
@@ -365,30 +349,30 @@ class Profile_list extends Managed_DataObject
 
         self::blow('profile:lists:%d', $this->tagger);
 
-        return parent::delete();
+        return parent::delete($useWhere);
     }
 
     /**
      * Update a people tag gracefully
      * also change "tag" fields in profile_tag table
      *
-     * @param Profile_list $orig    Object's original form
+     * @param Profile_list $dataObject    Object's original form
      *
      * @return boolean success
      */
 
-    function update($orig=null)
+    function update($dataObject=false)
     {
-        $result = true;
-
-        if (!is_object($orig) && !$orig instanceof Profile_list) {
-            parent::update($orig);
+        if (!is_object($dataObject) && !$dataObject instanceof Profile_list) {
+            return parent::update($dataObject);
         }
+
+        $result = true;
 
         // if original tag was different
         // check to see if the new tag already exists
         // if not, rename the tag correctly
-        if($orig->tag != $this->tag || $orig->tagger != $this->tagger) {
+        if($dataObject->tag != $this->tag || $dataObject->tagger != $this->tagger) {
             $existing = Profile_list::getByTaggerAndTag($this->tagger, $this->tag);
             if(!empty($existing)) {
                 // TRANS: Server exception.
@@ -397,10 +381,9 @@ class Profile_list extends Managed_DataObject
             }
             // move the tag
             // XXX: allow OStatus plugin to send out profile tag
-            $result = Profile_tag::moveTag($orig, $this);
+            $result = Profile_tag::moveTag($dataObject, $this);
         }
-        parent::update($orig);
-        return $result;
+        return parent::update($dataObject);
     }
 
     /**
@@ -421,18 +404,6 @@ class Profile_list extends Managed_DataObject
         $xs->elementEnd('author');
 
         return $xs->getString();
-    }
-
-    /**
-     * return an xml string to represent this people tag
-     * as the subject of an activitystreams feed.
-     *
-     * @return string activitystreams subject
-     */
-
-    function asActivitySubject()
-    {
-        return $this->asActivityNoun('subject');
     }
 
     /**
@@ -618,7 +589,7 @@ class Profile_list extends Managed_DataObject
      *
      * @return mixed Profile_list on success, false on fail
      */
-    static function saveNew($fields) {
+    static function saveNew(array $fields) {
         extract($fields);
 
         $ptag = new Profile_list();
@@ -686,7 +657,7 @@ class Profile_list extends Managed_DataObject
 
         if (!isset($mainpage) || empty($mainpage)) {
             $orig = clone($ptag);
-            $user = User::staticGet('id', $ptag->tagger);
+            $user = User::getKV('id', $ptag->tagger);
             if(!empty($user)) {
                 $ptag->mainpage = common_local_url('showprofiletag', array('tag' => $ptag->tag, 'tagger' => $user->nickname));
             } else {
@@ -729,7 +700,7 @@ class Profile_list extends Managed_DataObject
 
      // XXX: This should be in Memcached_DataObject... eventually.
 
-    static function getAtCursor($fn, $args, $cursor, $count=20)
+    static function getAtCursor($fn, array $args, $cursor, $count=20)
     {
         $items = array();
 
@@ -902,7 +873,7 @@ class Profile_list extends Managed_DataObject
      * @return Profile_list results
      */
 
-    static function getByKeys($keys) {
+    static function getByKeys(array $keys) {
         $cache = Cache::instance();
 
         if (!empty($cache)) {

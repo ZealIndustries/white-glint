@@ -84,7 +84,7 @@ abstract class ImPlugin extends Plugin
      *
      * @return boolean success value
      */
-    function sendNotice($screenname, $notice)
+    function sendNotice($screenname, Notice $notice)
     {
         return $this->sendMessage($screenname, $this->formatNotice($notice));
     }
@@ -170,7 +170,7 @@ abstract class ImPlugin extends Plugin
     {
         $user_im_prefs = $this->getUserImPrefsFromScreenname($screenname);
         if($user_im_prefs){
-            $user = User::staticGet('id', $user_im_prefs->user_id);
+            $user = User::getKV('id', $user_im_prefs->user_id);
             $user_im_prefs->free();
             return $user;
         }else{
@@ -321,7 +321,7 @@ abstract class ImPlugin extends Plugin
         $ni = $notice->whoGets();
 
         foreach ($ni as $user_id => $reason) {
-            $user = User::staticGet($user_id);
+            $user = User::getKV($user_id);
             if (empty($user)) {
                 // either not a local user, or just not found
                 continue;
@@ -370,10 +370,19 @@ abstract class ImPlugin extends Plugin
      * @return string plain-text version of the notice, with user nickname prefixed
      */
 
-    function formatNotice($notice)
+    protected function formatNotice(Notice $notice)
     {
         $profile = $notice->getProfile();
-        return $profile->nickname . ': ' . $notice->content . ' [' . $notice->id . ']';
+
+        try {
+            $parent = $notice->getParent();
+            $orig_profile = $parent->getProfile();
+            $nicknames = sprintf('%1$s => %2$s', $profile->nickname, $orig_profile->nickname);
+        } catch (Exception $e) {
+            $nicknames = $profile->nickname;
+        }
+
+        return sprintf('%1$s: %2$s [%3$u]', $nicknames, $notice->content, $notice->id);
     }
     //========================UTILITY FUNCTIONS USEFUL TO IMPLEMENTATIONS - RECEIVING ========================\
 
@@ -535,7 +544,7 @@ abstract class ImPlugin extends Plugin
 
     function onStartEnqueueNotice($notice, &$transports)
     {
-        $profile = Profile::staticGet($notice->profile_id);
+        $profile = Profile::getKV($notice->profile_id);
 
         if (!$profile) {
             common_log(LOG_WARNING, 'Refusing to broadcast notice with ' .

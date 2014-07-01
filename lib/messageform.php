@@ -123,34 +123,13 @@ class MessageForm extends Form
     {
         $user = common_current_user();
 
+        $mutual_users = $user->mutuallySubscribedUsers();
+
         $mutual = array();
-
-        if($this->to) {
-            $mutual[$this->to->id] = $this->to->nickname;
-        }
-
         // TRANS: Label entry in drop-down selection box in direct-message inbox/outbox.
         // TRANS: This is the default entry in the drop-down box, doubling as instructions
         // TRANS: and a brake against accidental submissions with the first user in the list.
         $mutual[0] = _('Select recipient:');
-
-        if($user->hasRole(Profile_role::MODERATOR) || $user->hasRole(Profile_role::ADMINISTRATOR)) {
-            $mutual['any'] = 'DM any user';
-        }
-
-        $admin_users = User::adminUsers();
-
-        if(!empty($admin_users)) {
-            $mutual['allstaff'] = '------------- Staff -------------';
-            while ($admin_users->fetch()) {
-                if ($admin_users->id != $user->id) {
-                    $mutual[$admin_users->id] = $admin_users->nickname;
-                }
-            }
-            $mutual[-100] = '---------------------------';
-        }
-
-        $mutual_users = $user->mutuallySubscribedUsers();
 
         while ($mutual_users->fetch()) {
             if ($mutual_users->id != $user->id) {
@@ -167,14 +146,8 @@ class MessageForm extends Form
         }
 
         // TRANS: Dropdown label in direct notice form.
-		$this->out->elementStart('div', 'message_to_selector');
         $this->out->dropdown('to', _('To'), $mutual, null, false,
                              ($this->to) ? $this->to->id : null);
-
-        if($user->hasRole(Profile_role::MODERATOR) || $user->hasRole(Profile_role::ADMINISTRATOR)) {
-            $this->out->input('custom_name', _('Nickname'));
-        }
-		$this->out->elementEnd('div');
 
         $this->out->element('textarea', array('class' => 'notice_data-text',
                                               'cols' => 35,
@@ -183,8 +156,6 @@ class MessageForm extends Form
                             ($this->content) ? $this->content : '');
 
         $contentLimit = Message::maxContent();
-		
-		Event::handle('EndShowDirectMessageForm', array(&$this->out));
 
         if ($contentLimit > 0) {
             $this->out->element('span',

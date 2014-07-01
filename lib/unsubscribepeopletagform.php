@@ -103,6 +103,6 @@ class UnsubscribePeopletagForm extends Form
     function formActions()
     {
         // TRANS: Button text for unsubscribing from a list.
-        $this->out->element('button', array('type' => 'submit', 'class' => 'submit', 'id' => 'submit'), _m('BUTTON','Unsubscribe'));
+        $this->out->submit('submit', _m('BUTTON','Unsubscribe'));
     }
 }

@@ -34,8 +34,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-
 /**
  * Subscription feed class for AtomPub
  *
@@ -66,7 +64,7 @@ class AtompubsubscriptionfeedAction extends ApiAuthAction
 
         $subscriber = $this->trimmed('subscriber');
 
-        $this->_profile = Profile::staticGet('id', $subscriber);
+        $this->_profile = Profile::getKV('id', $subscriber);
 
         if (empty($this->_profile)) {
             // TRANS: Client exception thrown when trying to display a subscription for a non-existing profile ID.

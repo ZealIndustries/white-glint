@@ -71,8 +71,8 @@ class ShowApplicationAction extends Action
 
         $id = (int)$this->arg('id');
 
-        $this->application  = Oauth_application::staticGet($id);
-        $this->owner        = User::staticGet($this->application->owner);
+        $this->application  = Oauth_application::getKV($id);
+        $this->owner        = User::getKV($this->application->owner);
 
         if (!common_logged_in()) {
             // TRANS: Client error displayed trying to display an OAuth application while not logged in.
@@ -174,7 +174,7 @@ class ShowApplicationAction extends Action
         $this->elementStart('div', 'entity_statistics');
         $defaultAccess = ($this->application->access_type & Oauth_application::$writeAccess)
             ? 'read-write' : 'read-only';
-        $profile = Profile::staticGet($this->application->owner);
+        $profile = Profile::getKV($this->application->owner);
 
         $appUsers = new Oauth_application_user();
         $appUsers->application_id = $this->application->id;
@@ -261,13 +261,13 @@ class ShowApplicationAction extends Action
         $this->element('dd', null, $consumer->consumer_secret);
         // TRANS: Field label on application page.
         $this->element('dt', null, _('Request token URL'));
-        $this->element('dd', null, common_local_url('ApiOauthRequestToken'));
+        $this->element('dd', null, common_local_url('ApiOAuthRequestToken'));
         // TRANS: Field label on application page.
         $this->element('dt', null, _('Access token URL'));
-        $this->element('dd', null, common_local_url('ApiOauthAccessToken'));
+        $this->element('dd', null, common_local_url('ApiOAuthAccessToken'));
         // TRANS: Field label on application page.
         $this->element('dt', null, _('Authorize URL'));
-        $this->element('dd', null, common_local_url('ApiOauthAuthorize'));
+        $this->element('dd', null, common_local_url('ApiOAuthAuthorize'));
         $this->elementEnd('dl');
 
         $this->element('p', 'note',

@@ -54,7 +54,7 @@ var SN = { // StatusNet
             NoticeDataGeo: 'notice_data-geo',
             NoticeDataGeoCookie: 'NoticeDataGeo',
             NoticeDataGeoSelected: 'notice_data-geo_selected',
-            StatusNetInstance:'StatusNetInstance'
+            StatusNetInstance: 'StatusNetInstance'
         }
     },
 
@@ -77,62 +77,14 @@ var SN = { // StatusNet
      * @param {String} key: string key name to pull from message index
      * @return matching localized message string
      */
-    msg: function(key) {
-        if (typeof SN.messages[key] == "undefined") {
+    msg: function (key) {
+        if (SN.messages[key] === undefined) {
             return '[' + key + ']';
-        } else {
-            return SN.messages[key];
         }
+        return SN.messages[key];
     },
 
     U: { // Utils
-        /**
-         * Prevent propagation of unneeded HTML5 drop events.
-         *
-         * @param {event} e: Event object
-         * @access private
-         */
-        DropNoop: function(e) {
-            e.stopPropagation();
-            e.preventDefault();
-        },
-
-        /**
-         * Handle drop.
-         *
-         * @param {event} e: Event object
-         * @access private
-         */
-        HandleDrop: function(e) {
-            var files = e.originalEvent.dataTransfer.files;
-            var count = files.length;
-
-            if(count) {
-                e.stopPropagation();
-                e.preventDefault();
-
-                if(typeof files[0].name != 'undefined') {
-                    var filename = files[0].name;
-                }
-                else if(typeof files[0].fileName != 'undefined') {
-                    var filename = files[0].fileName;
-                }
-                else {
-                    var filename = 'dropfile';
-                }
-
-                if (!filename) {
-                    // No file -- we've been tricked!
-                    $('#'+SN.C.S.NoticeDataAttachSelected).remove();
-                    return false;
-                }
-
-                $('#'+SN.C.S.NoticeDataAttach).val('');
-                SN.U.NoticeDataAttachSelected(filename);
-                SN.U.PreviewAttach(files[0]);
-            }
-        },
-
         /**
          * Setup function -- DOES NOT trigger actions immediately.
          *
@@ -141,75 +93,37 @@ var SN = { // StatusNet
          * @param {jQuery} form: jQuery object whose first matching element is the form
          * @access private
          */
-        FormNoticeEnhancements: function(form) {
+        FormNoticeEnhancements: function (form) {
             if (jQuery.data(form[0], 'ElementData') === undefined) {
-                MaxLength = form.find('.count').text();
-                if (typeof(MaxLength) == 'undefined') {
-                     MaxLength = SN.C.I.MaxLength;
+                var MaxLength = form.find('.count').text();
+                if (MaxLength === undefined) {
+                    MaxLength = SN.C.I.MaxLength;
                 }
-                jQuery.data(form[0], 'ElementData', {MaxLength:MaxLength});
+                jQuery.data(form[0], 'ElementData', {MaxLength: MaxLength});
 
                 SN.U.Counter(form);
-				
-				toSelector = form.find('#notice_to');
-				
-				toSelector.bind('change', function(e) {
-					q = $(this).val();
-					if(q == 'public:everyone')
-						$(this).next().removeClass('visible');
-					else
-						$(this).next().addClass('visible');
-				});
 
-                NDT = form.find('.notice_data-text:first');
+                var NDT = form.find('.notice_data-text:first');
 
-                NDT.bind('keyup', function(e) {
+                NDT.on('keyup', function (e) {
                     SN.U.Counter(form);
                 });
 
-                var delayedUpdate= function(e) {
+                var delayedUpdate = function (e) {
                     // Cut and paste events fire *before* the operation,
                     // so we need to trigger an update in a little bit.
                     // This would be so much easier if the 'change' event
                     // actually fired every time the value changed. :P
-                    window.setTimeout(function() {
+                    window.setTimeout(function () {
                         SN.U.Counter(form);
                     }, 50);
                 };
                 // Note there's still no event for mouse-triggered 'delete'.
-                NDT.bind('cut', delayedUpdate)
-                   .bind('paste', delayedUpdate);
-
-                NDT.bind('keydown', function(e) {
-                    SN.U.SubmitOnReturn(e, form);
-                });
-            }
-            else {
+                NDT.on('cut', delayedUpdate)
+                    .on('paste', delayedUpdate);
+            } else {
                 form.find('.count').text(jQuery.data(form[0], 'ElementData').MaxLength);
             }
-        },
-
-        /**
-         * To be called from keydown event handler on the notice import form.
-         * Checks if return or enter key was pressed, and if so attempts to
-         * submit the form and cancel standard processing of the enter key.
-         *
-         * @param {Event} event
-         * @param {jQuery} el: jQuery object whose first element is the notice posting form
-         *
-         * @return {boolean} whether to cancel the event? Does this actually pass through?
-         * @access private
-         */
-        SubmitOnReturn: function(event, el) {
-            if ((event.keyCode == 13 || event.keyCode == 10) && !event.shiftKey) {
-                el.submit();
-                event.preventDefault();
-                event.stopPropagation();
-                $('#'+el[0].id+' #'+SN.C.S.NoticeDataText).blur();
-                $('body').focus();
-                return false;
-            }
-            return true;
         },
 
         /**
@@ -226,7 +140,7 @@ var SN = { // StatusNet
          * @param {jQuery} form: jQuery object whose first element is the notice posting form
          * @access private
          */
-        Counter: function(form) {
+        Counter: function (form) {
             SN.C.I.FormNoticeCurrent = form;
 
             var MaxLength = jQuery.data(form[0], 'ElementData').MaxLength;
@@ -266,7 +180,7 @@ var SN = { // StatusNet
          * @param {jQuery} form: jQuery object whose first element is the notice posting form
          * @return number of chars
          */
-        CharacterCount: function(form) {
+        CharacterCount: function (form) {
             return form.find('.notice_data-text:first').val().length;
         },
 
@@ -277,7 +191,7 @@ var SN = { // StatusNet
          * @param {jQuery} form: jQuery object whose first element is the notice posting form
          * @access private
          */
-        ClearCounterBlackout: function(form) {
+        ClearCounterBlackout: function (form) {
             // Allow keyup events to poke the counter again
             SN.C.I.CounterBlackout = false;
             // Check if the string changed since we last looked
@@ -295,13 +209,12 @@ var SN = { // StatusNet
          * @param {String} url
          * @return string
          */
-        RewriteAjaxAction: function(url) {
+        RewriteAjaxAction: function (url) {
             // Quick hack: rewrite AJAX submits to HTTPS if they'd fail otherwise.
-            if (document.location.protocol == 'https:' && url.substr(0, 5) == 'http:') {
+            if (document.location.protocol === 'https:' && url.substr(0, 5) === 'http:') {
                 return url.replace(/^http:\/\/[^:\/]+/, 'https://' + document.location.host);
-            } else {
-                return url;
             }
+            return url;
         },
 
         /**
@@ -324,18 +237,18 @@ var SN = { // StatusNet
          *
          * @access public
          */
-        FormXHR: function(form, onSuccess) {
+        FormXHR: function (form, onSuccess) {
             $.ajax({
                 type: 'POST',
                 dataType: 'xml',
                 url: SN.U.RewriteAjaxAction(form.attr('action')),
                 data: form.serialize() + '&ajax=1',
-                beforeSend: function(xhr) {
+                beforeSend: function (xhr) {
                     form
                         .addClass(SN.C.S.Processing)
                         .find('.submit')
                             .addClass(SN.C.S.Disabled)
-                            .attr(SN.C.S.Disabled, SN.C.S.Disabled);
+                            .prop(SN.C.S.Disabled, true);
                 },
                 error: function (xhr, textStatus, errorThrown) {
                     // If the server end reported an error from StatusNet,
@@ -345,7 +258,7 @@ var SN = { // StatusNet
                     if (xhr.responseXML) {
                         errorReported = $('#error', xhr.responseXML).text();
                     }
-                    alert(errorReported || errorThrown || textStatus);
+                    window.alert(errorReported || errorThrown || textStatus);
 
                     // Restore the form to original state.
                     // Hopefully. :D
@@ -353,24 +266,22 @@ var SN = { // StatusNet
                         .removeClass(SN.C.S.Processing)
                         .find('.submit')
                             .removeClass(SN.C.S.Disabled)
-                            .removeAttr(SN.C.S.Disabled);
+                            .prop(SN.C.S.Disabled, false);
                 },
-                success: function(data, textStatus) {
-                    if (typeof($('form', data)[0]) != 'undefined') {
-                        form_new = document._importNode($('form', data)[0], true);
+                success: function (data, textStatus) {
+                    if ($('form', data)[0] !== undefined) {
+                        var form_new = document._importNode($('form', data)[0], true);
                         form.replaceWith(form_new);
                         if (onSuccess) {
                             onSuccess();
                         }
-                    }
-                    else if (typeof($('p', data)[0]) != 'undefined') {
+                    } else if ($('p', data)[0] !== undefined) {
                         form.replaceWith(document._importNode($('p', data)[0], true));
                         if (onSuccess) {
                             onSuccess();
                         }
-                    }
-                    else {
-                        alert('Unknown error.');
+                    } else {
+                        window.alert('Unknown error.');
                     }
                 }
             });
@@ -403,7 +314,7 @@ var SN = { // StatusNet
          *
          * @access public
          */
-        FormNoticeXHR: function(form) {
+        FormNoticeXHR: function (form) {
             SN.C.I.NoticeDataGeo = {};
             form.append('<input type="hidden" name="ajax" value="1"/>');
 
@@ -417,7 +328,7 @@ var SN = { // StatusNet
              * @param {String} text
              * @access private
              */
-            var showFeedback = function(cls, text) {
+            var showFeedback = function (cls, text) {
                 form.append(
                     $('<p class="form_response"></p>')
                         .addClass(cls)
@@ -428,27 +339,14 @@ var SN = { // StatusNet
             /**
              * Hide the previous response feedback, if any.
              */
-            var removeFeedback = function() {
+            var removeFeedback = function () {
                 form.find('.form_response').remove();
             };
-
-            form.bind('dragenter', SN.U.DropNoop);
-            form.bind('dragexit', SN.U.DropNoop);
-            form.bind('dragover', SN.U.DropNoop);
-            form.bind('drop', SN.U.HandleDrop);
-
-            var attach = form.find('#'+SN.C.S.NoticeDataAttach);
 
             form.ajaxForm({
                 dataType: 'xml',
                 timeout: '60000',
-                beforeSend: function(formData, settings) {
-                    if(!form.find('.notice_data-attach').val()) {
-                        var file = form.find('.attach-status img');
-                        if(file.length) {
-                            settings.data += (settings.data ? '&' : '') + 'ajaxfile=' + encodeURIComponent(file.attr('src'));
-                        }
-                    }
+                beforeSend: function (formData) {
                     if (form.find('.notice_data-text:first').val() == '') {
                         form.addClass(SN.C.S.Warning);
                         return false;
@@ -457,7 +355,7 @@ var SN = { // StatusNet
                         .addClass(SN.C.S.Processing)
                         .find('.submit')
                             .addClass(SN.C.S.Disabled)
-                            .attr(SN.C.S.Disabled, SN.C.S.Disabled);
+                            .prop(SN.C.S.Disabled, true);
 
                     SN.U.normalizeGeoData(form);
 
@@ -468,90 +366,79 @@ var SN = { // StatusNet
                         .removeClass(SN.C.S.Processing)
                         .find('.submit')
                             .removeClass(SN.C.S.Disabled)
-                            .removeAttr(SN.C.S.Disabled, SN.C.S.Disabled);
+                            .prop(SN.C.S.Disabled, false);
                     removeFeedback();
                     if (textStatus == 'timeout') {
                         // @fixme i18n
                         showFeedback('error', 'Sorry! We had trouble sending your notice. The servers are overloaded. Please try again, and contact the site administrator if this problem persists.');
-                    }
-                    else {
+                    } else {
                         var response = SN.U.GetResponseXML(xhr);
-                        if ($('.'+SN.C.S.Error, response).length > 0) {
-                            form.append(document._importNode($('.'+SN.C.S.Error, response)[0], true));
-                        }
-                        else {
+                        if ($('.' + SN.C.S.Error, response).length > 0) {
+                            form.append(document._importNode($('.' + SN.C.S.Error, response)[0], true));
+                        } else {
                             if (parseInt(xhr.status) === 0 || jQuery.inArray(parseInt(xhr.status), SN.C.I.HTTP20x30x) >= 0) {
                                 form
                                     .resetForm()
                                     .find('.attach-status').remove();
                                 SN.U.FormNoticeEnhancements(form);
-                            }
-                            else {
+                            } else {
                                 // @fixme i18n
-                                showFeedback('error', '(Sorry! We had trouble sending your notice ('+xhr.status+' '+xhr.statusText+'). Please report the problem to the site administrator if this happens again.');
+                                showFeedback('error', '(Sorry! We had trouble sending your notice (' + xhr.status + ' ' + xhr.statusText + '). Please report the problem to the site administrator if this happens again.');
                             }
                         }
                     }
                 },
-                success: function(data, textStatus) {
+                success: function (data, textStatus) {
                     removeFeedback();
-                    var errorResult = $('#'+SN.C.S.Error, data);
+                    var errorResult = $('#' + SN.C.S.Error, data);
                     if (errorResult.length > 0) {
                         showFeedback('error', errorResult.text());
-                    }
-                    else {
-                        if($('body')[0].id == 'bookmarklet') {
+                    } else {
+                        if ($('body')[0].id == 'bookmarklet') {
                             // @fixme self is not referenced anywhere?
                             self.close();
                         }
 
-                        var commandResult = $('#'+SN.C.S.CommandResult, data);
+                        var commandResult = $('#' + SN.C.S.CommandResult, data);
                         if (commandResult.length > 0) {
                             showFeedback('success', commandResult.text());
-                        }
-                        else {
+                        } else {
                             // New notice post was successful. If on our timeline, show it!
                             var notice = document._importNode($('li', data)[0], true);
                             var notices = $('#notices_primary .notices:first');
                             var replyItem = form.closest('li.notice-reply');
 
-                            if (replyItem.length > 0 && !$('.oldschool_stream').length) {
+                            if (replyItem.length > 0) {
                                 // If this is an inline reply, remove the form...
                                 var list = form.closest('.threaded-replies');
-								if($('.old-school').length) list.removeClass('threaded-replies').removeClass('xoxo');
-                                //var placeholder = list.find('.notice-reply-placeholder');
+                                var placeholder = list.find('.notice-reply-placeholder');
                                 replyItem.remove();
 
                                 var id = $(notice).attr('id');
-                                if ($("#"+id).length == 0) {
-                                    //$(notice).insertBefore(placeholder);
-									$(list).append(notice);
-                                } else {
-                                    // Realtime came through before us...
-                                }
+                                if ($('#' + id).length == 0) {
+                                    $(notice).insertBefore(placeholder);
+                                } // else Realtime came through before us...
 
                                 // ...and show the placeholder form.
-                                //placeholder.show();
+                                placeholder.show();
                             } else if (notices.length > 0 && SN.U.belongsOnTimeline(notice)) {
                                 // Not a reply. If on our timeline, show it at the top!
-								if(replyItem.length > 0) replyItem.remove();
 
-                                if ($('#'+notice.id).length === 0) {
+                                if ($('#' + notice.id).length === 0) {
                                     var notice_irt_value = form.find('[name=inreplyto]').val();
-                                    var notice_irt = '#notices_primary #notice-'+notice_irt_value;
-                                    if($('body')[0].id == 'conversation') {
-                                        if(notice_irt_value.length > 0 && $(notice_irt+' .notices').length < 1) {
+                                    var notice_irt = '#notices_primary #notice-' + notice_irt_value;
+                                    if ($('body')[0].id == 'conversation') {
+                                        if (notice_irt_value.length > 0 && $(notice_irt + ' .notices').length < 1) {
                                             $(notice_irt).append('<ul class="notices"></ul>');
                                         }
-                                        $($(notice_irt+' .notices')[0]).append(notice);
-                                    }
-                                    else {
+                                        $($(notice_irt + ' .notices')[0]).append(notice);
+                                    } else {
                                         notices.prepend(notice);
                                     }
-                                    $('#'+notice.id)
-                                        .css({display:'none'})
+                                    $('#' + notice.id)
+                                        .css({display: 'none'})
                                         .fadeIn(2500);
-                                    SN.U.NoticeWithAttachment($('#'+notice.id));
+                                    SN.U.NoticeWithAttachment($('#' + notice.id));
                                     SN.U.switchInputFormTab("placeholder");
                                 }
                             } else {
@@ -567,45 +454,44 @@ var SN = { // StatusNet
                         SN.U.FormNoticeEnhancements(form);
                     }
                 },
-                complete: function(xhr, textStatus) {
+                complete: function (xhr, textStatus) {
                     form
                         .removeClass(SN.C.S.Processing)
                         .find('.submit')
-                            .removeAttr(SN.C.S.Disabled)
+                            .prop(SN.C.S.Disabled, false)
                             .removeClass(SN.C.S.Disabled);
 
                     form.find('[name=lat]').val(SN.C.I.NoticeDataGeo.NLat);
                     form.find('[name=lon]').val(SN.C.I.NoticeDataGeo.NLon);
                     form.find('[name=location_ns]').val(SN.C.I.NoticeDataGeo.NLNS);
                     form.find('[name=location_id]').val(SN.C.I.NoticeDataGeo.NLID);
-                    form.find('[name=notice_data-geo]').attr('checked', SN.C.I.NoticeDataGeo.NDG);
+                    form.find('[name=notice_data-geo]').prop('checked', SN.C.I.NoticeDataGeo.NDG);
                 }
             });
         },
 
-        FormProfileSearchXHR: function(form) {
+        FormProfileSearchXHR: function (form) {
             $.ajax({
                 type: 'POST',
                 dataType: 'xml',
                 url: form.attr('action'),
                 data: form.serialize() + '&ajax=1',
-                beforeSend: function(xhr) {
+                beforeSend: function (xhr) {
                     form
                         .addClass(SN.C.S.Processing)
                         .find('.submit')
                             .addClass(SN.C.S.Disabled)
-                            .attr(SN.C.S.Disabled, SN.C.S.Disabled);
+                            .prop(SN.C.S.Disabled, true);
                 },
                 error: function (xhr, textStatus, errorThrown) {
-                    alert(errorThrown || textStatus);
+                    window.alert(errorThrown || textStatus);
                 },
-                success: function(data, textStatus) {
+                success: function (data, textStatus) {
                     var results_placeholder = $('#profile_search_results');
-                    if (typeof($('ul', data)[0]) != 'undefined') {
+                    if ($('ul', data)[0] !== undefined) {
                         var list = document._importNode($('ul', data)[0], true);
                         results_placeholder.replaceWith(list);
-                    }
-                    else {
+                    } else {
                         var _error = $('<li/>').append(document._importNode($('p', data)[0], true));
                         results_placeholder.html(_error);
                     }
@@ -613,29 +499,29 @@ var SN = { // StatusNet
                         .removeClass(SN.C.S.Processing)
                         .find('.submit')
                             .removeClass(SN.C.S.Disabled)
-                            .attr(SN.C.S.Disabled, false);
+                            .prop(SN.C.S.Disabled, false);
                 }
             });
         },
 
-        FormPeopletagsXHR: function(form) {
+        FormPeopletagsXHR: function (form) {
             $.ajax({
                 type: 'POST',
                 dataType: 'xml',
                 url: form.attr('action'),
                 data: form.serialize() + '&ajax=1',
-                beforeSend: function(xhr) {
+                beforeSend: function (xhr) {
                     form.find('.submit')
                             .addClass(SN.C.S.Processing)
                             .addClass(SN.C.S.Disabled)
-                            .attr(SN.C.S.Disabled, SN.C.S.Disabled);
+                            .prop(SN.C.S.Disabled, true);
                 },
                 error: function (xhr, textStatus, errorThrown) {
-                    alert(errorThrown || textStatus);
+                    window.alert(errorThrown || textStatus);
                 },
-                success: function(data, textStatus) {
+                success: function (data, textStatus) {
                     var results_placeholder = form.parents('.entity_tags');
-                    if (typeof($('.entity_tags', data)[0]) != 'undefined') {
+                    if ($('.entity_tags', data)[0] !== undefined) {
                         var tags = document._importNode($('.entity_tags', data)[0], true);
                         $(tags).find('.editable').append($('<button class="peopletags_edit_button"/>'));
                         results_placeholder.replaceWith(tags);
@@ -645,22 +531,22 @@ var SN = { // StatusNet
                         form.removeClass(SN.C.S.Processing)
                             .find('.submit')
                                 .removeClass(SN.C.S.Disabled)
-                                .attr(SN.C.S.Disabled, false);
+                                .prop(SN.C.S.Disabled, false);
                     }
                 }
             });
         },
 
-        normalizeGeoData: function(form) {
+        normalizeGeoData: function (form) {
             SN.C.I.NoticeDataGeo.NLat = form.find('[name=lat]').val();
             SN.C.I.NoticeDataGeo.NLon = form.find('[name=lon]').val();
             SN.C.I.NoticeDataGeo.NLNS = form.find('[name=location_ns]').val();
             SN.C.I.NoticeDataGeo.NLID = form.find('[name=location_id]').val();
-            SN.C.I.NoticeDataGeo.NDG = form.find('[name=notice_data-geo]').attr('checked'); // @fixme
+            SN.C.I.NoticeDataGeo.NDG = form.find('[name=notice_data-geo]').prop('checked'); // @fixme (does this still need to be fixed somehow?)
 
             var cookieValue = $.cookie(SN.C.S.NoticeDataGeoCookie);
 
-            if (cookieValue !== null && cookieValue != 'disabled') {
+            if (cookieValue !== undefined && cookieValue != 'disabled') {
                 cookieValue = JSON.parse(cookieValue);
                 SN.C.I.NoticeDataGeo.NLat = form.find('[name=lat]').val(cookieValue.NLat).val();
                 SN.C.I.NoticeDataGeo.NLon = form.find('[name=lon]').val(cookieValue.NLon).val();
@@ -673,10 +559,9 @@ var SN = { // StatusNet
                 }
             }
             if (cookieValue == 'disabled') {
-                SN.C.I.NoticeDataGeo.NDG = form.find('[name=notice_data-geo]').attr('checked', false).attr('checked');
-            }
-            else {
-                SN.C.I.NoticeDataGeo.NDG = form.find('[name=notice_data-geo]').attr('checked', true).attr('checked');
+                SN.C.I.NoticeDataGeo.NDG = form.find('[name=notice_data-geo]').prop('checked', false).prop('checked');
+            } else {
+                SN.C.I.NoticeDataGeo.NDG = form.find('[name=notice_data-geo]').prop('checked', true).prop('checked');
             }
 
         },
@@ -691,7 +576,7 @@ var SN = { // StatusNet
          * @param {XMLHTTPRequest} xhr
          * @return DOMDocument
          */
-        GetResponseXML: function(xhr) {
+        GetResponseXML: function (xhr) {
             try {
                 return xhr.responseXML;
             } catch (e) {
@@ -712,8 +597,8 @@ var SN = { // StatusNet
          *
          * @access private
          */
-        NoticeReply: function() {
-            $('#content .notice_reply').live('click', function(e) {
+        NoticeReply: function () {
+            $(document).on('click', '#content .notice_reply', function (e) {
                 e.preventDefault();
                 var notice = $(this).closest('li.notice');
                 SN.U.NoticeInlineReplyTrigger(notice);
@@ -725,47 +610,7 @@ var SN = { // StatusNet
          * Stub -- kept for compat with plugins for now.
          * @access private
          */
-        NoticeReplyTo: function(notice) {
-            /*
-            notice.find('.notice_reply').bind('click', function() {
-                var nickname = ($('.author .nickname', notice).length > 0) ? $($('.author .nickname', notice)[0]) : $('.author .nickname.uid');
-                SN.U.NoticeReplySet(nickname.text(), $($('.notice_id', notice)[0]).text());
-                return false;
-            });
-            */
-        },
-
-        /**
-         * Setup function -- DOES NOT trigger actions immediately.
-         *
-         * Sets up event handlers on the given notice's context link to
-         * show the original notice that this is a reply to /if/ it
-         * exists on-screen.
-         *
-         * @param {jQuery} notice: jQuery object containing one or more notices
-         * @access private
-         */
-        NoticeContextRollover: function() {
-            $('a.response').live('mouseover', function() {
-                if($('body').attr('id') == 'conversation') return false;
-
-                var contextNoticeId = $(this).closest('.notice').attr('class').match(/inreplyto-([0-9]+)/);
-                if(!contextNoticeId) return false;
-                contextNoticeId = contextNoticeId[1];
-
-                var contextNotice = $('#notice-'+contextNoticeId);
-                if(contextNotice.length === 0) return false;
-                contextNotice = contextNotice.clone();
-                contextNotice.children('ol, ul').remove();
-                contextNotice = $('<ol class="notices context"></ol>').append(contextNotice);
-                $(this).closest('li').append(contextNotice);
-
-                return false;
-            });
-            $('a.response').live('mouseout', function() {
-                $(this).closest('li').find('ol.notices.context').remove();
-                return false;
-            });
+        NoticeReplyTo: function (notice) {
         },
 
         /**
@@ -774,57 +619,56 @@ var SN = { // StatusNet
          * @param {jQuery} notice: jQuery object containing one notice
          * @param {String} initialText
          */
-        NoticeInlineReplyTrigger: function(notice, initialText) {
-            if(typeof initialText === 'undefined') initialText = '@' + $('.author .url', notice).attr('href').split('/').pop()
-
+        NoticeInlineReplyTrigger: function (notice, initialText) {
             // Find the notice we're replying to...
             var id = $($('.notice_id', notice)[0]).text();
+            var replyForm, placeholder;
             var parentNotice = notice;
             var stripForm = true; // strip a couple things out of reply forms that are inline
 
             // Find the threaded replies view we'll be adding to...
-            var list = notice.closest('.notices');/*
+            var list = notice.closest('.notices');
             if (list.closest('.old-school').length) {
-            	// We're replying to an old-school conversation thread;
-            	// use the old-style ping into the top form.
-            	SN.U.switchInputFormTab("status")
-            	replyForm = $('#input_form_status').find('form');
-            	stripForm = false;
-            } else*/ if (list.hasClass('threaded-replies') && !list.closest('.old-school').length) {
+                // We're replying to an old-school conversation thread;
+                // use the old-style ping into the top form.
+                SN.U.switchInputFormTab("status");
+                replyForm = $('#input_form_status').find('form');
+                stripForm = false;
+            } else if (list.hasClass('threaded-replies')) {
                 // We're replying to a reply; use reply form on the end of this list.
                 // We'll add our form at the end of this; grab the root notice.
                 parentNotice = list.closest('.notice');
 
-		        // See if the form's already open...
-		        var replyForm = $('.notice-reply-form', list);
+                // See if the form's already open...
+                replyForm = $('.notice-reply-form', list);
             } else {
                 // We're replying to a parent notice; pull its threaded list
                 // and we'll add on the end of it. Will add if needed.
-                list = $(/*'ul.threaded-replies', notice*/ '#'+notice.attr('id')+' > ul.threaded-replies');
+                list = $('ul.threaded-replies', notice);
                 if (list.length == 0) {
                     SN.U.NoticeInlineReplyPlaceholder(notice);
                     list = $('ul.threaded-replies', notice);
                 } else {
-                    var placeholder = $('li.notice-reply-placeholder', notice);
+                    placeholder = $('li.notice-reply-placeholder', notice);
                     if (placeholder.length == 0) {
                         SN.U.NoticeInlineReplyPlaceholder(notice);
                     }
                 }
 
-		        // See if the form's already open...
-		        var replyForm = $('.notice-reply-form', list);
+                // See if the form's already open...
+                replyForm = $('.notice-reply-form', list);
             }
 
-            var nextStep = function() {
+            var nextStep = function () {
                 // Override...?
                 replyForm.find('input[name=inreplyto]').val(id);
                 if (stripForm) {
-                	// Don't do this for old-school reply form, as they don't come back!
-	                replyForm.find('#notice_to').attr('disabled', 'disabled').hide();
-    	            replyForm.find('#notice_private').attr('disabled', 'disabled').hide();
-    	            replyForm.find('label[for=notice_to]').hide();
-    	            replyForm.find('label[for=notice_private]').hide();
-    	        }
+                    // Don't do this for old-school reply form, as they don't come back!
+                    replyForm.find('#notice_to').prop('disabled', true).hide();
+                    replyForm.find('#notice_private').prop('disabled', true).hide();
+                    replyForm.find('label[for=notice_to]').hide();
+                    replyForm.find('label[for=notice_private]').hide();
+                }
 
                 // Set focus...
                 var text = replyForm.find('textarea');
@@ -835,12 +679,12 @@ var SN = { // StatusNet
                 if (initialText) {
                     replyto = initialText + ' ';
                 }
-                text.val(replyto + text.val().replace(RegExp(replyto, 'i'), ''));
-                text.data('initialText', $.trim(initialText + ''));
+                text.val(replyto + text.val().replace(new RegExp(replyto, 'i'), ''));
+                text.data('initialText', $.trim(initialText));
                 text.focus();
                 if (text[0].setSelectionRange) {
                     var len = text.val().length;
-                    text[0].setSelectionRange(len,len);
+                    text[0].setSelectionRange(len, len);
                 }
             };
             if (replyForm.length > 0) {
@@ -848,19 +692,20 @@ var SN = { // StatusNet
                 nextStep();
             } else {
                 // Hide the placeholder...
-                var placeholder = list.find('li.notice-reply-placeholder').hide();
+                placeholder = list.find('li.notice-reply-placeholder').hide();
 
                 // Create the reply form entry at the end
                 var replyItem = $('li.notice-reply', list);
                 if (replyItem.length == 0) {
                     replyItem = $('<li class="notice-reply"></li>');
 
-                    var intermediateStep = function(formMaster) {
+                    var intermediateStep = function (formMaster) {
                         var formEl = document._importNode(formMaster, true);
                         replyItem.append(formEl);
                         list.append(replyItem); // *after* the placeholder
 
-                        var form = replyForm = $(formEl);
+                        var form = $(formEl);
+                        replyForm = form;
                         SN.Init.NoticeFormSetup(form);
 
                         nextStep();
@@ -874,7 +719,7 @@ var SN = { // StatusNet
                         // Warning: this can have a delay, which looks bad.
                         // @fixme this fallback may or may not work
                         var url = $('#form_notice').attr('action');
-                        $.get(url, {ajax: 1}, function(data, textStatus, xhr) {
+                        $.get(url, {ajax: 1}, function (data, textStatus, xhr) {
                             intermediateStep($('form', data)[0]);
                         });
                     }
@@ -882,39 +727,39 @@ var SN = { // StatusNet
             }
         },
 
-        NoticeInlineReplyPlaceholder: function(notice) {
+        NoticeInlineReplyPlaceholder: function (notice) {
             var list = notice.find('ul.threaded-replies');
             if (list.length == 0) {
                 list = $('<ul class="notices threaded-replies xoxo"></ul>');
                 notice.append(list);
                 list = notice.find('ul.threaded-replies');
-            }/*
+            }
             var placeholder = $('<li class="notice-reply-placeholder">' +
                                     '<input class="placeholder" />' +
                                 '</li>');
             placeholder.find('input')
                 .val(SN.msg('reply_placeholder'));
-            list.append(placeholder);*/
+            list.append(placeholder);
         },
 
         /**
          * Setup function -- DOES NOT apply immediately.
          *
          * Sets up event handlers for inline reply mini-form placeholders.
-         * Uses 'live' rather than 'bind', so applies to future as well as present items.
+         * Uses 'on' rather than 'live' or 'bind', so applies to future as well as present items.
          */
-        NoticeInlineReplySetup: function() {
+        NoticeInlineReplySetup: function () {
             $('li.notice-reply-placeholder input')
-                .live('focus', function() {
+                .on('focus', function () {
                     var notice = $(this).closest('li.notice');
                     SN.U.NoticeInlineReplyTrigger(notice);
                     return false;
                 });
             $('li.notice-reply-comments a')
-                .live('click', function() {
+                .on('click', function () {
                     var url = $(this).attr('href');
                     var area = $(this).closest('.threaded-replies');
-                    $.get(url, {ajax: 1}, function(data, textStatus, xhr) {
+                    $.get(url, {ajax: 1}, function (data, textStatus, xhr) {
                         var replies = $('.threaded-replies', data);
                         if (replies.length) {
                             area.replaceWith(document._importNode(replies[0], true));
@@ -930,11 +775,11 @@ var SN = { // StatusNet
          * Sets up event handlers for repeat forms to toss up a confirmation
          * popout before submitting.
          *
-         * Uses 'live' rather than 'bind', so applies to future as well as present items.
+         * Uses 'on' rather than 'live' or 'bind', so applies to future as well as present items.
          *
          */
-        NoticeRepeat: function() {
-            $('.form_repeat').live('click', function(e) {
+        NoticeRepeat: function () {
+            $('.form_repeat').on('click', function (e) {
                 e.preventDefault();
 
                 SN.U.NoticeRepeatConfirmation($(this));
@@ -958,7 +803,7 @@ var SN = { // StatusNet
          *
          * @param {jQuery} form
          */
-        NoticeRepeatConfirmation: function(form) {
+        NoticeRepeatConfirmation: function (form) {
             var submit_i = form.find('.submit');
 
             var submit = submit_i.clone();
@@ -966,7 +811,7 @@ var SN = { // StatusNet
                 .addClass('submit_dialogbox')
                 .removeClass('submit');
             form.append(submit);
-            submit.bind('click', function() { SN.U.FormXHR(form); return false; });
+            submit.on('click', function () { SN.U.FormXHR(form); return false; });
 
             submit_i.hide();
 
@@ -976,7 +821,7 @@ var SN = { // StatusNet
                 .closest('.notice-options')
                     .addClass('opaque');
 
-            form.find('button.close').click(function(){
+            form.find('button.close').click(function () {
                 $(this).remove();
 
                 form
@@ -997,8 +842,8 @@ var SN = { // StatusNet
          * Goes through all notices currently displayed and sets up attachment
          * handling if needed.
          */
-        NoticeAttachments: function() {
-            $('.notice a.attachment').each(function() {
+        NoticeAttachments: function () {
+            $('.notice a.attachment').each(function () {
                 SN.U.NoticeWithAttachment($(this).closest('.notice'));
             });
         },
@@ -1013,17 +858,17 @@ var SN = { // StatusNet
          *
          * @param {jQuery} notice
          */
-        NoticeWithAttachment: function(notice) {
+        NoticeWithAttachment: function (notice) {
             if (notice.find('.attachment').length === 0) {
                 return;
             }
 
             var attachment_more = notice.find('.attachment.more');
             if (attachment_more.length > 0) {
-                $(attachment_more[0]).click(function() {
+                $(attachment_more[0]).click(function () {
                     var m = $(this);
                     m.addClass(SN.C.S.Processing);
-                    $.get(m.attr('href')+'/ajax', null, function(data) {
+                    $.get(m.attr('href') + '/ajax', null, function (data) {
                         m.parent('.entry-content').html($(data).find('#attachment_view .entry-content').html());
                     });
 
@@ -1045,9 +890,10 @@ var SN = { // StatusNet
          *
          * @param {jQuery} form
          */
-        NoticeDataAttach: function(form) {
+        NoticeDataAttach: function (form) {
+            var i;
             var NDA = form.find('input[type=file]');
-            NDA.change(function(event) {
+            NDA.change(function (event) {
                 form.find('.attach-status').remove();
 
                 var filename = $(this).val();
@@ -1056,9 +902,9 @@ var SN = { // StatusNet
                     return false;
                 }
 
-                var attachStatus = $('<div class="attach-status '+SN.C.S.Success+'"><code></code> <button class="close">&#215;</button></div>');
+                var attachStatus = $('<div class="attach-status ' + SN.C.S.Success + '"><code></code> <button class="close">&#215;</button></div>');
                 attachStatus.find('code').text(filename);
-                attachStatus.find('button').click(function(){
+                attachStatus.find('button').click(function () {
                     attachStatus.remove();
                     NDA.val('');
 
@@ -1066,9 +912,9 @@ var SN = { // StatusNet
                 });
                 form.append(attachStatus);
 
-                if (typeof this.files == "object") {
+                if (typeof this.files === "object") {
                     // Some newer browsers will let us fetch the files for preview.
-                    for (var i = 0; i < this.files.length; i++) {
+                    for (i = 0; i < this.files.length; i++) {
                         SN.U.PreviewAttach(form, this.files[i]);
                     }
                 }
@@ -1076,42 +922,18 @@ var SN = { // StatusNet
         },
 
         /**
-         * Show notice attach form
-         *
-         * @param {String} filename
-         */
-        NoticeDataAttachSelected: function(filename) {
-            // @fixme appending filename straight in is potentially unsafe
-            S = '<div id="'+SN.C.S.NoticeDataAttachSelected+'" class="'+SN.C.S.Success+'"><code>'+filename+'</code> <button class="close">&#215;</button></div>';
-            NDAS = $('#'+SN.C.S.NoticeDataAttachSelected);
-            if (NDAS.length > 0) {
-                NDAS.replaceWith(S);
-            }
-            else {
-                $('#'+SN.C.S.FormNotice).append(S);
-            }
-            $('#'+SN.C.S.NoticeDataAttachSelected+' button').click(function(){
-                $('#'+SN.C.S.NoticeDataAttachSelected).remove();
-                NDA.val('');
-
-                return false;
-            });
-        },
-*
-        /**
          * Get PHP's MAX_FILE_SIZE setting for this form;
          * used to apply client-side file size limit checks.
          *
          * @param {jQuery} form
          * @return int max size in bytes; 0 or negative means no limit
          */
-        maxFileSize: function(form) {
+        maxFileSize: function (form) {
             var max = $(form).find('input[name=MAX_FILE_SIZE]').attr('value');
             if (max) {
                 return parseInt(max);
-            } else {
-                return 0;
             }
+            return 0;
         },
 
         /**
@@ -1135,12 +957,12 @@ var SN = { // StatusNet
          * @todo detect pixel size?
          * @todo should we render a thumbnail to a canvas and then use the smaller image?
          */
-        PreviewAttach: function(form, file) {
+        PreviewAttach: function (form, file) {
             var tooltip = file.type + ' ' + Math.round(file.size / 1024) + 'KB';
             var preview = true;
 
             var blobAsDataURL;
-            if (typeof window.createObjectURL != "undefined") {
+            if (window.createObjectURL !== undefined) {
                 /**
                  * createObjectURL lets us reference the file directly from an <img>
                  * This produces a compact URL with an opaque reference to the file,
@@ -1151,10 +973,10 @@ var SN = { // StatusNet
                  * - Safari 5.0.2: no
                  * - Chrome 8.0.552.210: works!
                  */
-                blobAsDataURL = function(blob, callback) {
+                blobAsDataURL = function (blob, callback) {
                     callback(window.createObjectURL(blob));
-                }
-            } else if (typeof window.FileReader != "undefined") {
+                };
+            } else if (window.FileReader !== undefined) {
                 /**
                  * FileAPI's FileReader can build a data URL from a blob's contents,
                  * but it must read the file and build it asynchronously. This means
@@ -1165,13 +987,13 @@ var SN = { // StatusNet
                  * - Safari 5.0.2: no
                  * - Chrome 8.0.552.210: works!
                  */
-                blobAsDataURL = function(blob, callback) {
+                blobAsDataURL = function (blob, callback) {
                     var reader = new FileReader();
-                    reader.onload = function(event) {
+                    reader.onload = function (event) {
                         callback(reader.result);
-                    }
+                    };
                     reader.readAsDataURL(blob);
-                }
+                };
             } else {
                 preview = false;
             }
@@ -1189,7 +1011,7 @@ var SN = { // StatusNet
             }
 
             if (preview) {
-                blobAsDataURL(file, function(url) {
+                blobAsDataURL(file, function (url) {
                     var img = $('<img>')
                         .attr('title', tooltip)
                         .attr('alt', tooltip)
@@ -1217,10 +1039,10 @@ var SN = { // StatusNet
          *        hard time figuring out if it's working or fixing if it's wrong.
          *
          */
-        NoticeLocationAttach: function(form) {
+        NoticeLocationAttach: function (form) {
             // @fixme this should not be tied to the main notice form, as there may be multiple notice forms...
-            var NLat = form.find('[name=lat]')
-            var NLon = form.find('[name=lon]')
+            var NLat = form.find('[name=lat]');
+            var NLon = form.find('[name=lon]');
             var NLNS = form.find('[name=location_ns]').val();
             var NLID = form.find('[name=location_id]').val();
             var NLN = ''; // @fixme
@@ -1237,7 +1059,7 @@ var SN = { // StatusNet
                 form.find('[name=lon]').val('');
                 form.find('[name=location_ns]').val('');
                 form.find('[name=location_id]').val('');
-                form.find('[name=notice_data-geo]').attr('checked', false);
+                form.find('[name=notice_data-geo]').prop('checked', false);
 
                 $.cookie(SN.C.S.NoticeDataGeoCookie, 'disabled', { path: '/' });
 
@@ -1251,23 +1073,22 @@ var SN = { // StatusNet
 
             function getJSONgeocodeURL(geocodeURL, data) {
                 SN.U.NoticeGeoStatus(form, 'Looking up place name...');
-                $.getJSON(geocodeURL, data, function(location) {
-                    var lns, lid;
+                $.getJSON(geocodeURL, data, function (location) {
+                    var lns, lid, NLN_text;
 
-                    if (typeof(location.location_ns) != 'undefined') {
+                    if (location.location_ns !== undefined) {
                         form.find('[name=location_ns]').val(location.location_ns);
                         lns = location.location_ns;
                     }
 
-                    if (typeof(location.location_id) != 'undefined') {
+                    if (location.location_id !== undefined) {
                         form.find('[name=location_id]').val(location.location_id);
                         lid = location.location_id;
                     }
 
-                    if (typeof(location.name) == 'undefined') {
+                    if (location.name === undefined) {
                         NLN_text = data.lat + ';' + data.lon;
-                    }
-                    else {
+                    } else {
                         NLN_text = location.name;
                     }
 
@@ -1279,7 +1100,7 @@ var SN = { // StatusNet
                     form.find('[name=lon]').val(data.lon);
                     form.find('[name=location_ns]').val(lns);
                     form.find('[name=location_id]').val(lid);
-                    form.find('[name=notice_data-geo]').attr('checked', true);
+                    form.find('[name=notice_data-geo]').prop('checked', true);
 
                     var cookieValue = {
                         NLat: data.lat,
@@ -1297,20 +1118,18 @@ var SN = { // StatusNet
 
             if (check.length > 0) {
                 if ($.cookie(SN.C.S.NoticeDataGeoCookie) == 'disabled') {
-                    check.attr('checked', false);
-                }
-                else {
-                    check.attr('checked', true);
+                    check.prop('checked', false);
+                } else {
+                    check.prop('checked', true);
                 }
 
                 var NGW = form.find('.notice_data-geo_wrap');
                 var geocodeURL = NGW.attr('data-api');
 
-                label
-                    .attr('title', label.text());
+                label.attr('title', label.text());
 
-                check.change(function() {
-                    if (check.attr('checked') === true || $.cookie(SN.C.S.NoticeDataGeoCookie) === null) {
+                check.change(function () {
+                    if (check.prop('checked') === true || $.cookie(SN.C.S.NoticeDataGeoCookie) === null) {
                         label
                             .attr('title', NoticeDataGeo_text.ShareDisable)
                             .addClass('checked');
@@ -1319,7 +1138,7 @@ var SN = { // StatusNet
                             if (navigator.geolocation) {
                                 SN.U.NoticeGeoStatus(form, 'Requesting location from browser...');
                                 navigator.geolocation.getCurrentPosition(
-                                    function(position) {
+                                    function (position) {
                                         form.find('[name=lat]').val(position.coords.latitude);
                                         form.find('[name=lon]').val(position.coords.longitude);
 
@@ -1332,13 +1151,13 @@ var SN = { // StatusNet
                                         getJSONgeocodeURL(geocodeURL, data);
                                     },
 
-                                    function(error) {
+                                    function (error) {
                                         switch(error.code) {
                                             case error.PERMISSION_DENIED:
                                                 removeNoticeDataGeo('Location permission denied.');
                                                 break;
                                             case error.TIMEOUT:
-                                                //$('#'+SN.C.S.NoticeDataGeo).attr('checked', false);
+                                                //$('#' + SN.C.S.NoticeDataGeo).prop('checked', false);
                                                 removeNoticeDataGeo('Location lookup timeout.');
                                                 break;
                                         }
@@ -1348,8 +1167,7 @@ var SN = { // StatusNet
                                         timeout: 10000
                                     }
                                 );
-                            }
-                            else {
+                            } else {
                                 if (NLat.length > 0 && NLon.length > 0) {
                                     var data = {
                                         lat: NLat,
@@ -1358,30 +1176,27 @@ var SN = { // StatusNet
                                     };
 
                                     getJSONgeocodeURL(geocodeURL, data);
-                                }
-                                else {
+                                } else {
                                     removeNoticeDataGeo();
                                     check.remove();
                                     label.remove();
                                 }
                             }
-                        }
-                        else {
+                        } else {
                             var cookieValue = JSON.parse($.cookie(SN.C.S.NoticeDataGeoCookie));
 
                             form.find('[name=lat]').val(cookieValue.NLat);
                             form.find('[name=lon]').val(cookieValue.NLon);
                             form.find('[name=location_ns]').val(cookieValue.NLNS);
                             form.find('[name=location_id]').val(cookieValue.NLID);
-                            form.find('[name=notice_data-geo]').attr('checked', cookieValue.NDG);
+                            form.find('[name=notice_data-geo]').prop('checked', cookieValue.NDG);
 
                             SN.U.NoticeGeoStatus(form, cookieValue.NLN, cookieValue.NLat, cookieValue.NLon, cookieValue.NLNU);
                             label
                                 .attr('title', NoticeDataGeo_text.ShareDisable + ' (' + cookieValue.NLN + ')')
                                 .addClass('checked');
                         }
-                    }
-                    else {
+                    } else {
                         removeNoticeDataGeo();
                     }
                 }).change();
@@ -1397,13 +1212,13 @@ var SN = { // StatusNet
          * @param {String} lon (optional)
          * @param {String} url (optional)
          */
-        NoticeGeoStatus: function(form, status, lat, lon, url)
+        NoticeGeoStatus: function (form, status, lat, lon, url)
         {
             var wrapper = form.find('.geo_status_wrapper');
             if (wrapper.length == 0) {
-                wrapper = $('<div class="'+SN.C.S.Success+' geo_status_wrapper"><button class="close" style="float:right">&#215;</button><div class="geo_status"></div></div>');
-                wrapper.find('button.close').click(function() {
-                    form.find('[name=notice_data-geo]').removeAttr('checked').change();
+                wrapper = $('<div class="' + SN.C.S.Success + ' geo_status_wrapper"><button class="close" style="float:right">&#215;</button><div class="geo_status"></div></div>');
+                wrapper.find('button.close').click(function () {
+                    form.find('[name=notice_data-geo]').prop('checked', false).change();
                     return false;
                 });
                 form.append(wrapper);
@@ -1437,28 +1252,26 @@ var SN = { // StatusNet
          *
          * @fixme breaks ability to open link in new window?
          */
-        NewDirectMessage: function() {
+        NewDirectMessage: function () {
             NDM = $('.entity_send-a-message a');
-            NDM.attr({'href':NDM.attr('href')+'&ajax=1'});
-            NDM.bind('click', function() {
+            NDM.attr({'href': NDM.attr('href') + '&ajax=1'});
+            NDM.on('click', function () {
                 var NDMF = $('.entity_send-a-message form');
                 if (NDMF.length === 0) {
                     $(this).addClass(SN.C.S.Processing);
-                    $.get(NDM.attr('href'), null, function(data) {
+                    $.get(NDM.attr('href'), null, function (data) {
                         $('.entity_send-a-message').append(document._importNode($('form', data)[0], true));
                         NDMF = $('.entity_send-a-message .form_notice');
-						NDMF.find('select#to option').removeAttr('selected').filter('[value='+$('.entity_user-id dd').html()+']').attr('selected', true);
                         SN.U.FormNoticeXHR(NDMF);
                         SN.U.FormNoticeEnhancements(NDMF);
                         NDMF.append('<button class="close">&#215;</button>');
-                        $('.entity_send-a-message button').click(function(){
+                        $('.entity_send-a-message button').click(function () {
                             NDMF.hide();
                             return false;
                         });
                         NDM.removeClass(SN.C.S.Processing);
                     });
-                }
-                else {
+                } else {
                     NDMF.show();
                     $('.entity_send-a-message textarea').focus();
                 }
@@ -1475,7 +1288,7 @@ var SN = { // StatusNet
          * @param {number} day: 1 == 1
          * @return {Date}
          */
-        GetFullYear: function(year, month, day) {
+        GetFullYear: function (year, month, day) {
             var date = new Date();
             date.setFullYear(year, month, day);
 
@@ -1498,7 +1311,7 @@ var SN = { // StatusNet
             /**
              * @fixme what is this?
              */
-            Set: function(value) {
+            Set: function (value) {
                 var SNI = SN.U.StatusNetInstance.Get();
                 if (SNI !== null) {
                     value = $.extend(SNI, value);
@@ -1516,9 +1329,9 @@ var SN = { // StatusNet
             /**
              * @fixme what is this?
              */
-            Get: function() {
+            Get: function () {
                 var cookieValue = $.cookie(SN.C.S.StatusNetInstance);
-                if (cookieValue !== null) {
+                if (cookieValue !== undefined) {
                     return JSON.parse(cookieValue);
                 }
                 return null;
@@ -1527,7 +1340,7 @@ var SN = { // StatusNet
             /**
              * @fixme what is this?
              */
-            Delete: function() {
+            Delete: function () {
                 $.cookie(SN.C.S.StatusNetInstance, null);
             }
         },
@@ -1542,7 +1355,7 @@ var SN = { // StatusNet
          * @param {DOMElement} notice: HTML chunk with formatted notice
          * @return boolean
          */
-        belongsOnTimeline: function(notice) {
+        belongsOnTimeline: function (notice) {
             var action = $("body").attr('id');
             if (action == 'public') {
                 return true;
@@ -1574,38 +1387,38 @@ var SN = { // StatusNet
          *
          * @param {String} tag
          */
-		switchInputFormTab: function(tag) {
-			// The one that's current isn't current anymore
-			$('.input_form_nav_tab.current').removeClass('current');
-				if (tag == 'placeholder') {
-					// Hack: when showing the placeholder, mark the tab
-					// as current for 'Status'.
-					$('#input_form_nav_status').addClass('current');
-				} else {
-					$('#input_form_nav_'+tag).addClass('current');
-				}
+    switchInputFormTab: function (tag) {
+        // The one that's current isn't current anymore
+        $('.input_form_nav_tab.current').removeClass('current');
+            if (tag == 'placeholder') {
+                // Hack: when showing the placeholder, mark the tab
+                // as current for 'Status'.
+                $('#input_form_nav_status').addClass('current');
+            } else {
+                $('#input_form_nav_' + tag).addClass('current');
+            }
 
-				// Don't remove 'current' if we also have the "nonav" class.
-				// An example would be the message input form. removing
-				// 'current' will cause the form to vanish from the page.
-				var nonav = $('.input_form.current.nonav');
-				if (nonav.length > 0) {
-					return;
-				}
+            // Don't remove 'current' if we also have the "nonav" class.
+            // An example would be the message input form. removing
+            // 'current' will cause the form to vanish from the page.
+            var nonav = $('.input_form.current.nonav');
+            if (nonav.length > 0) {
+                return;
+            }
 
-			$('.input_form.current').removeClass('current');
-			$('#input_form_'+tag)
-					.addClass('current')
-					.find('.ajax-notice').each(function() {
-						var form = $(this);
-						SN.Init.NoticeFormSetup(form);
-					})
-					.find('.notice_data-text').focus();
-		},
+        $('.input_form.current').removeClass('current');
+        $('#input_form_' + tag)
+                .addClass('current')
+                .find('.ajax-notice').each(function () {
+                    var form = $(this);
+                    SN.Init.NoticeFormSetup(form);
+                })
+                .find('.notice_data-text').focus();
+    },
 
-        showMoreMenuItems: function(menuid) {
-            $('#'+menuid+' .more_link').remove();
-            var selector = '#'+menuid+' .extended_menu';
+        showMoreMenuItems: function (menuid) {
+            $('#' + menuid + ' .more_link').remove();
+            var selector = '#' + menuid + ' .extended_menu';
             var extended = $(selector);
             extended.removeClass('extended_menu');
             return void(0);
@@ -1621,25 +1434,25 @@ var SN = { // StatusNet
          *  - location events
          *  - file upload events
          */
-        NoticeForm: function() {
+        NoticeForm: function () {
             if ($('body.user_in').length > 0) {
                 // SN.Init.NoticeFormSetup() will get run
                 // when forms get displayed for the first time...
 
                 // Hack to initialize the placeholder at top
-                $('#input_form_placeholder input.placeholder').focus(function() {
+                $('#input_form_placeholder input.placeholder').focus(function () {
                     SN.U.switchInputFormTab("status");
                 });
 
                 // Make inline reply forms self-close when clicking out.
-                $('body').bind('click', function(e) {
+                $('body').on('click', function (e) {
                     var currentForm = $('#content .input_forms div.current');
                     if (currentForm.length > 0) {
                         if ($('#content .input_forms').has(e.target).length == 0) {
                             // If all fields are empty, switch back to the placeholder.
                             var fields = currentForm.find('textarea, input[type=text], input[type=""]');
                             var anything = false;
-                            fields.each(function() {
+                            fields.each(function () {
                                 anything = anything || $(this).val();
                             });
                             if (!anything) {
@@ -1651,7 +1464,7 @@ var SN = { // StatusNet
                     var openReplies = $('li.notice-reply');
                     if (openReplies.length > 0) {
                         var target = $(e.target);
-                        openReplies.each(function() {
+                        openReplies.each(function () {
                             // Did we click outside this one?
                             var replyItem = $(this);
                             if (replyItem.has(e.target).length == 0) {
@@ -1681,7 +1494,7 @@ var SN = { // StatusNet
          *
          * @param {jQuery} form
          */
-        NoticeFormSetup: function(form) {
+        NoticeFormSetup: function (form) {
             if (!form.data('NoticeFormSetup')) {
                 SN.U.NoticeLocationAttach(form);
                 SN.U.FormNoticeXHR(form);
@@ -1697,7 +1510,7 @@ var SN = { // StatusNet
          * - AJAX submission for fave/repeat/reply (if logged in)
          * - Attachment link extras ('more' links)
          */
-        Notices: function() {
+        Notices: function () {
             if ($('body.user_in').length > 0) {
                 var masterForm = $('.form_notice:first');
                 if (masterForm.length > 0) {
@@ -1705,7 +1518,6 @@ var SN = { // StatusNet
                 }
                 SN.U.NoticeRepeat();
                 SN.U.NoticeReply();
-                SN.U.NoticeContextRollover();
                 SN.U.NoticeInlineReplySetup();
             }
 
@@ -1718,25 +1530,25 @@ var SN = { // StatusNet
          * - AJAX submission for sub/unsub/join/leave/nudge
          * - AJAX form popup for direct-message
          */
-        EntityActions: function() {
+        EntityActions: function () {
             if ($('body.user_in').length > 0) {
-                $('.form_user_subscribe').live('click', function() { SN.U.FormXHR($(this)); return false; });
-                $('.form_user_unsubscribe').live('click', function() { SN.U.FormXHR($(this)); return false; });/*
-                $('.form_group_join').live('click', function() { SN.U.FormXHR($(this)); return false; });
-                $('.form_group_leave').live('click', function() { SN.U.FormXHR($(this)); return false; });*/
-                $('.form_user_nudge').live('click', function() { SN.U.FormXHR($(this)); return false; });
-                $('.form_peopletag_subscribe').live('click', function() { SN.U.FormXHR($(this)); return false; });
-                $('.form_peopletag_unsubscribe').live('click', function() { SN.U.FormXHR($(this)); return false; });
-                $('.form_user_add_peopletag').live('click', function() { SN.U.FormXHR($(this)); return false; });
-                $('.form_user_remove_peopletag').live('click', function() { SN.U.FormXHR($(this)); return false; });
+                $(document).on('click', '.form_user_subscribe', function () { SN.U.FormXHR($(this)); return false; });
+                $(document).on('click', '.form_user_unsubscribe', function () { SN.U.FormXHR($(this)); return false; });
+                $(document).on('click', '.form_group_join', function () { SN.U.FormXHR($(this)); return false; });
+                $(document).on('click', '.form_group_leave', function () { SN.U.FormXHR($(this)); return false; });
+                $(document).on('click', '.form_user_nudge', function () { SN.U.FormXHR($(this)); return false; });
+                $(document).on('click', '.form_peopletag_subscribe', function () { SN.U.FormXHR($(this)); return false; });
+                $(document).on('click', '.form_peopletag_unsubscribe', function () { SN.U.FormXHR($(this)); return false; });
+                $(document).on('click', '.form_user_add_peopletag', function () { SN.U.FormXHR($(this)); return false; });
+                $(document).on('click', '.form_user_remove_peopletag', function () { SN.U.FormXHR($(this)); return false; });
 
                 SN.U.NewDirectMessage();
             }
         },
 
-        ProfileSearch: function() {
+        ProfileSearch: function () {
             if ($('body.user_in').length > 0) {
-                $('.form_peopletag_edit_user_search input.submit').live('click', function() {
+                $(document).on('click', '.form_peopletag_edit_user_search input.submit', function () {
                     SN.U.FormProfileSearchXHR($(this).parents('form')); return false;
                 });
             }
@@ -1750,7 +1562,7 @@ var SN = { // StatusNet
          *
          * @fixme is this necessary? Browsers do their own form saving these days.
          */
-        Login: function() {
+        Login: function () {
             if (SN.U.StatusNetInstance.Get() !== null) {
                 var nickname = SN.U.StatusNetInstance.Get().Nickname;
                 if (nickname !== null) {
@@ -1758,7 +1570,7 @@ var SN = { // StatusNet
                 }
             }
 
-            $('#form_login').bind('submit', function() {
+            $('#form_login').on('submit', function () {
                 SN.U.StatusNetInstance.Set({Nickname: $('#form_login #nickname').val()});
                 return true;
             });
@@ -1771,51 +1583,51 @@ var SN = { // StatusNet
          * - sets event handlers for tag completion
          *
          */
-        PeopletagAutocomplete: function(txtBox) {
-            var split = function(val) {
+        PeopletagAutocomplete: function (txtBox) {
+            var split = function (val) {
                 return val.split( /\s+/ );
             }
-            var extractLast = function(term) {
+            var extractLast = function (term) {
                 return split(term).pop();
             }
 
             // don't navigate away from the field on tab when selecting an item
-            txtBox.live( "keydown", function( event ) {
+            txtBox.on( "keydown", function ( event ) {
                 if ( event.keyCode === $.ui.keyCode.TAB &&
                         $(this).data( "autocomplete" ).menu.active ) {
                     event.preventDefault();
                 }
             }).autocomplete({
                 minLength: 0,
-                source: function(request, response) {
-		            // delegate back to autocomplete, but extract the last term
-		            response($.ui.autocomplete.filter(
-			            SN.C.PtagACData, extractLast(request.term)));
-	            },
-	            focus: function() {
-	                return false;
+                source: function (request, response) {
+                    // delegate back to autocomplete, but extract the last term
+                    response($.ui.autocomplete.filter(
+                        SN.C.PtagACData, extractLast(request.term)));
                 },
-	            select: function(event, ui) {
-		            var terms = split(this.value);
-		            terms.pop();
-		            terms.push(ui.item.value);
-		            terms.push("");
-		            this.value = terms.join(" ");
-		            return false;
-	            }
-            }).data('autocomplete')._renderItem = function(ul, item) {
+                focus: function () {
+                    return false;
+                },
+                select: function (event, ui) {
+                    var terms = split(this.value);
+                    terms.pop();
+                    terms.push(ui.item.value);
+                    terms.push("");
+                    this.value = terms.join(" ");
+                    return false;
+                }
+            }).data('autocomplete')._renderItem = function (ul, item) {
                     // FIXME: with jQuery UI you cannot have it highlight the match
                     var _l = '<a class="ptag-ac-line-tag">' + item.tag
                           + ' <em class="privacy_mode">' + item.mode + '</em>'
                           + '<span class="freq">' + item.freq + '</span></a>'
 
-		            return $("<li/>")
-	                        .addClass('mode-' + item.mode)
+                    return $("<li/>")
+                            .addClass('mode-' + item.mode)
                             .addClass('ptag-ac-line')
                             .data("item.autocomplete", item)
                             .append(_l)
                             .appendTo(ul);
-	            }
+                }
         },
 
         /**
@@ -1827,10 +1639,10 @@ var SN = { // StatusNet
          *     or if it is stale.
          *
          */
-        PeopleTags: function() {
+        PeopleTags: function () {
             $('.user_profile_tags .editable').append($('<button class="peopletags_edit_button"/>'));
 
-            $('.peopletags_edit_button').live('click', function() {
+            $(document).on('click', '.peopletags_edit_button', function () {
                 var form = $(this).parents('dd').eq(0).find('form');
                 // We can buy time from the above animation
 
@@ -1839,7 +1651,7 @@ var SN = { // StatusNet
                     dataType: 'json',
                     data: {token: $('#token').val()},
                     ifModified: true,
-                    success: function(data) {
+                    success: function (data) {
                         // item.label is used to match
                         for (i=0; i < data.length; i++) {
                             data[i].label = data[i].tag;
@@ -1850,10 +1662,10 @@ var SN = { // StatusNet
                     }
                 });
 
-                $(this).parents('ul').eq(0).fadeOut(200, function() {form.fadeIn(200).find('input#tags')});
+                $(this).parents('ul').eq(0).fadeOut(200, function () {form.fadeIn(200).find('input#tags')});
             });
 
-            $('.user_profile_tags form .submit').live('click', function() {
+            $(document).on('click', '.user_profile_tags form .submit', function () {
                 SN.U.FormPeopletagsXHR($(this).parents('form')); return false;
             });
         },
@@ -1861,12 +1673,12 @@ var SN = { // StatusNet
         /**
          * Set up any generic 'ajax' form so it submits via AJAX with auto-replacement.
          */
-        AjaxForms: function() {
-            $('form.ajax').live('submit', function() {
+        AjaxForms: function () {
+            $(document).on('submit', 'form.ajax', function () {
                 SN.U.FormXHR($(this));
                 return false;
             });
-            $('form.ajax input[type=submit], form.ajax button[type=submit]').live('click', function() {
+            $(document).on('click', 'form.ajax input[type=submit]', function () {
                 // Some forms rely on knowing which submit button was clicked.
                 // Save a hidden input field which'll be picked up during AJAX
                 // submit...
@@ -1885,8 +1697,8 @@ var SN = { // StatusNet
          * on browsers that support basic FileAPI.
          */
         UploadForms: function () {
-            $('input[type=file]').change(function(event) {
-                if (typeof this.files == "object" && this.files.length > 0) {
+            $('input[type=file]').change(function (event) {
+                if (typeof this.files === "object" && this.files.length > 0) {
                     var size = 0;
                     for (var i = 0; i < this.files.length; i++) {
                         size += this.files[i].size;
@@ -1906,24 +1718,24 @@ var SN = { // StatusNet
             });
         },
 
-	CheckBoxes: function() {
-	    $("span[class='checkbox-wrapper']").addClass("unchecked");
-	    $(".checkbox-wrapper").click(function(){
-	        if($(this).children("input").attr("checked")){
-		    // uncheck
-		    $(this).children("input").attr({checked: ""});
-		    $(this).removeClass("checked");
-		    $(this).addClass("unchecked");
-		    $(this).children("label").text("Private?");
-		}else{
-		    // check
-		    $(this).children("input").attr({checked: "checked"});
-		    $(this).removeClass("unchecked");
-		    $(this).addClass("checked");
-		    $(this).children("label").text("Private");
-		}
-	    });
-	}
+        CheckBoxes: function () {
+            $("span[class='checkbox-wrapper']").addClass("unchecked");
+            $(".checkbox-wrapper").click(function () {
+                if ($(this).children("input").prop("checked")) {
+                    // uncheck
+                    $(this).children("input").prop("checked", false);
+                    $(this).removeClass("checked");
+                    $(this).addClass("unchecked");
+                    $(this).children("label").text("Private?");
+                } else {
+                    // check
+                    $(this).children("input").prop("checked", true);
+                    $(this).removeClass("unchecked");
+                    $(this).addClass("checked");
+                    $(this).children("label").text("Private");
+                }
+            });
+        }
     }
 };
 
@@ -1934,11 +1746,11 @@ var SN = { // StatusNet
  * until that's done. To load scripts asynchronously without delaying setup,
  * don't start them loading until after DOM-ready time!
  */
-$(document).ready(function(){
+$(function () {
     SN.Init.AjaxForms();
     SN.Init.UploadForms();
     SN.Init.CheckBoxes();
-    if ($('.'+SN.C.S.FormNotice).length > 0) {
+    if ($('.' + SN.C.S.FormNotice).length > 0) {
         SN.Init.NoticeForm();
     }
     if ($('#content .notices').length > 0) {

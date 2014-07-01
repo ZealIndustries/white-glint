@@ -109,23 +109,9 @@ class FacebookBridgePlugin extends Plugin
             include_once $dir . '/extlib/base_facebook.php';
             include_once $dir . '/extlib/facebook.php';
             return false;
-        case 'FacebookloginAction':
-        case 'FacebookfinishloginAction':
-        case 'FacebookadminpanelAction':
-        case 'FacebooksettingsAction':
-        case 'FacebookdeauthorizeAction':
-            include_once $dir . '/actions/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        case 'Facebookclient':
-        case 'FacebookQueueHandler':
-            include_once $dir . '/lib/' . strtolower($cls) . '.php';
-            return false;
-        case 'Notice_to_item':
-            include_once $dir . '/classes/' . $cls . '.php';
-            return false;
-        default:
-            return true;
         }
+
+        return parent::onAutoload($cls);
     }
 
     /**
@@ -559,6 +545,69 @@ ENDOFSCRIPT;
         return true;
     }
 
+    /**
+     * Add links in the user's profile block to their Facebook profile URL.
+     *
+     * @param Profile $profile The profile being shown
+     * @param Array   &$links  Writeable array of arrays (href, text, image).
+     *
+     * @return boolean hook value (true)
+     */
+
+    function onOtherAccountProfiles($profile, &$links)
+    {
+        $fuser = null;
+
+        $flink = Foreign_link::getByUserID($profile->id, FACEBOOK_SERVICE);
+
+        if (!empty($flink)) {
+
+            $fuser = $this->getFacebookUser($flink->foreign_id);
+
+            if (!empty($fuser)) {
+                $links[] = array("href" => $fuser->link,
+                                 "text" => sprintf(_("%s on Facebook"), $fuser->name),
+                                 "image" => $this->path("images/f_logo.png"));
+            }
+        }
+
+        return true;
+    }
+
+    function getFacebookUser($id) {
+
+        $key = Cache::key(sprintf("FacebookBridgePlugin:userdata:%s", $id));
+
+        $c = Cache::instance();
+
+        if ($c) {
+            $obj = $c->get($key);
+            if ($obj) {
+                return $obj;
+            }
+        }
+
+        $url = sprintf("https://graph.facebook.com/%s", $id);
+        $client = new HTTPClient();
+        $resp = $client->get($url);
+
+        if (!$resp->isOK()) {
+            return null;
+        }
+
+        $user = json_decode($resp->getBody());
+
+        if ($user->error) {
+            return null;
+        }
+
+        if ($c) {
+            $c->set($key, $user);
+        }
+
+        return $user;
+    }
+
     /*
      * Add version info for this plugin
      *
@@ -568,7 +617,7 @@ ENDOFSCRIPT;
     {
         $versions[] = array(
             'name' => 'Facebook Bridge',
-            'version' => STATUSNET_VERSION,
+            'version' => GNUSOCIAL_VERSION,
             'author' => 'Craig Andrews, Zach Copley',
             'homepage' => 'http://status.net/wiki/Plugin:FacebookBridge',
             'rawdescription' =>

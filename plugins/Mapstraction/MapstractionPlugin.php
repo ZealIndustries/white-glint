@@ -46,7 +46,7 @@ if (!defined('STATUSNET')) {
  */
 class MapstractionPlugin extends Plugin
 {
-    const VERSION = STATUSNET_VERSION;
+    const VERSION = GNUSOCIAL_VERSION;
 
     /** provider name, one of:
      'cloudmade', 'google', 'microsoft', 'openlayers', 'yahoo' */
@@ -72,29 +72,6 @@ class MapstractionPlugin extends Plugin
                     array('action' => 'usermap'),
                     array('nickname' => Nickname::DISPLAY_FMT));
         return true;
-    }
-
-    /**
-     * Hook for autoloading classes
-     *
-     * This makes sure our classes get autoloaded from our directory
-     *
-     * @param string $cls name of class being used
-     *
-     * @return boolean event handler return
-     */
-    function onAutoload($cls)
-    {
-        switch ($cls)
-        {
-        case 'AllmapAction':
-        case 'UsermapAction':
-        case 'MapAction':
-            include_once INSTALLDIR.'/plugins/Mapstraction/' . strtolower(mb_substr($cls, 0, -6)) . '.php';
-            return false;
-        default:
-            return true;
-        }
     }
 
     /**

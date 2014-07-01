@@ -15,10 +15,6 @@ class Reply extends Managed_DataObject
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
     public $replied_id;                      // int(4)
 
-    /* Static get */
-    function staticGet($k,$v=null)
-    { return Memcached_DataObject::staticGet('Reply',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -40,14 +36,10 @@ class Reply extends Managed_DataObject
                 'reply_notice_id_idx' => array('notice_id'),
                 'reply_profile_id_idx' => array('profile_id'),
                 'reply_replied_id_idx' => array('replied_id'),
+                'reply_profile_id_modified_notice_id_idx' => array('profile_id', 'modified', 'notice_id')
             ),
         );
     }    
-
-	function pkeyGet($kv)
-	{
-		return Memcached_DataObject::pkeyGet('Reply',$kv);   
-	}
 	
     /**
      * Wrapper for record insertion to update related caches

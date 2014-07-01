@@ -34,8 +34,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiprivateauth.php';
-
 /**
  * Ouputs information for a user, specified by ID or screen name.
  * The user's most recent status will be returned inline.
@@ -59,7 +57,7 @@ class ApiUserShowAction extends ApiPrivateAuthAction
      * @return boolean success flag
      *
      */
-    function prepare($args)
+    protected function prepare(array $args=array())
     {
         parent::prepare($args);
 
@@ -68,10 +66,16 @@ class ApiUserShowAction extends ApiPrivateAuthAction
         // XXX: email field deprecated in Twitter's API
 
         if (!empty($email)) {
-            $this->user = User::staticGet('email', $email);
+            $user = User::getKV('email', $email);
         } else {
-            $this->user = $this->getTargetUser($this->arg('id'));
+            $user = $this->getTargetUser($this->arg('id'));
         }
+
+        if (!($user instanceof User)) {
+            // TRANS: Client error displayed when requesting user information for a non-existing user.
+            $this->clientError(_('User not found.'), 404);
+        }
+        $this->target = $user->getProfile();
 
         return true;
     }
@@ -81,35 +85,18 @@ class ApiUserShowAction extends ApiPrivateAuthAction
      *
      * Check the format and show the user info
      *
-     * @param array $args $_REQUEST data (unused)
-     *
      * @return void
      */
-    function handle($args)
+    protected function handle()
     {
-        parent::handle($args);
-
-        if (empty($this->user)) {
-            // TRANS: Client error displayed when requesting user information for a non-existing user.
-            $this->clientError(_('User not found.'), 404, $this->format);
-            return;
-        }
+        parent::handle();
 
         if (!in_array($this->format, array('xml', 'json'))) {
             // TRANS: Client error displayed when coming across a non-supported API method.
-            $this->clientError(_('API method not found.'), $code = 404);
-            return;
+            $this->clientError(_('API method not found.'), 404);
         }
 
-        $profile = $this->user->getProfile();
-
-        if (empty($profile)) {
-            // TRANS: Error message displayed when referring to a user without a profile.
-            $this->clientError(_('User has no profile.'));
-            return;
-        }
-
-        $twitter_user = $this->twitterUserArray($this->user->getProfile(), true);
+        $twitter_user = $this->twitterUserArray($this->target, true);
 
         if ($this->format == 'xml') {
             $this->initDocument('xml');

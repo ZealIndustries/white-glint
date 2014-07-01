@@ -38,7 +38,7 @@ class UsersalmonAction extends SalmonAction
             $this->clientError(_m('No ID.'));
         }
 
-        $this->user = User::staticGet('id', $id);
+        $this->user = User::getKV('id', $id);
 
         if (empty($this->user)) {
             // TRANS: Client error displayed when referring to a non-existing user.
@@ -74,33 +74,35 @@ class UsersalmonAction extends SalmonAction
         }
 
         // Notice must either be a) in reply to a notice by this user
-        // or b) in reply to a notice to the attention of this user
-        // or c) to the attention of this user
+        // or b) to the attention of this user
+        // or c) in reply to a notice to the attention of this user
 
         $context = $this->activity->context;
-		$notice = false;
 
         if (!empty($context->replyToID)) {
-            $notice = Notice::staticGet('uri', $context->replyToID);
-        }
-
-        if (!empty($notice) &&
-            ($notice->profile_id == $this->user->id ||
-             in_array($this->user->id, $notice->getReplies())))
-        {
-            // In reply to a notice either from or mentioning this user.
-        } else if (!empty($context->attention) &&
-                   (in_array($this->user->uri, $context->attention) ||
-                    in_array($common_profile_url($this->user->nickname),
-                             $context->attention)))
-        {
-            // To the attention of this user.
+            $notice = Notice::getKV('uri', $context->replyToID);
+            if (empty($notice)) {
+                // TRANS: Client exception.
+                throw new ClientException(_m('In reply to unknown notice.'));
+            }
+            if ($notice->profile_id != $this->user->id &&
+                !in_array($this->user->id, $notice->getReplies())) {
+                // TRANS: Client exception.
+                throw new ClientException(_m('In reply to a notice not by this user and not mentioning this user.'));
+            }
+        } else if (!empty($context->attention)) {
+            if (!array_key_exists($this->user->uri, $context->attention) &&
+                !array_key_exists(common_profile_url($this->user->nickname), $context->attention)) {
+                common_log(LOG_ERR, "{$this->user->uri} not in attention list (".implode(',', array_keys($context->attention)).')');
+                // TRANS: Client exception.
+                throw new ClientException(_m('To the attention of user(s), not including this one.'));
+            }
         } else {
             // TRANS: Client exception.
             throw new ClientException(_m('Not to anyone in reply to anything.'));
         }
 
-        $existing = Notice::staticGet('uri', $this->activity->objects[0]->id);
+        $existing = Notice::getKV('uri', $this->activity->objects[0]->id);
 
         if (!empty($existing)) {
             common_log(LOG_ERR, "Not saving notice '{$existing->uri}'; already exists.");
@@ -195,7 +197,7 @@ class UsersalmonAction extends SalmonAction
                 return false;
             }
             // this is a peopletag
-            $tagged = User::staticGet('uri', $this->activity->objects[0]->id);
+            $tagged = User::getKV('uri', $this->activity->objects[0]->id);
 
             if (empty($tagged)) {
                 // TRANS: Client exception.
@@ -229,7 +231,7 @@ class UsersalmonAction extends SalmonAction
                 return false;
             }
             // this is a peopletag
-            $tagged = User::staticGet('uri', $this->activity->objects[0]->id);
+            $tagged = User::getKV('uri', $this->activity->objects[0]->id);
 
             if (empty($tagged)) {
                 // TRANS: Client exception.
@@ -279,7 +281,7 @@ class UsersalmonAction extends SalmonAction
             throw new ClientException(_m('Cannot handle that kind of object for liking/faving.'));
         }
 
-        $notice = Notice::staticGet('uri', $object->id);
+        $notice = Notice::getKV('uri', $object->id);
 
         if (empty($notice)) {
             // TRANS: Client exception. %s is an object ID.

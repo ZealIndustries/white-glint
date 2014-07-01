@@ -7,6 +7,7 @@ class User_group extends Managed_DataObject
 {
     const JOIN_POLICY_OPEN = 0;
     const JOIN_POLICY_MODERATE = 1;
+    const CACHE_WINDOW = 201;
 
     ###START_AUTOCODE
     /* the code below is auto generated do not remove the above tag */
@@ -29,16 +30,6 @@ class User_group extends Managed_DataObject
     public $join_policy;                     // tinyint
     public $force_scope;                     // tinyint
 
-    /* Static get */
-    function staticGet($k,$v=NULL) {
-        return Memcached_DataObject::staticGet('User_group',$k,$v);
-    }
-    
-    function multiGet($keyCol, $keyVals, $skipNulls=true)
-    {
-        return parent::multiGet('User_group', $keyCol, $keyVals, $skipNulls);
-    }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -47,6 +38,7 @@ class User_group extends Managed_DataObject
         return array(
             'fields' => array(
                 'id' => array('type' => 'serial', 'not null' => true, 'description' => 'unique identifier'),
+                'profile_id' => array('type' => 'int', 'not null' => true, 'description' => 'foreign key to profile table'),
 
                 'nickname' => array('type' => 'varchar', 'length' => 64, 'description' => 'nickname for addressing'),
                 'fullname' => array('type' => 'varchar', 'length' => 255, 'description' => 'display name'),
@@ -70,47 +62,38 @@ class User_group extends Managed_DataObject
             'primary key' => array('id'),
             'unique keys' => array(
                 'user_group_uri_key' => array('uri'),
+// when it's safe and everyone's run upgrade.php                'user_profile_id_key' => array('profile_id'),
+            ),
+            'foreign keys' => array(
+                'user_group_id_fkey' => array('profile', array('profile_id' => 'id')),
             ),
             'indexes' => array(
                 'user_group_nickname_idx' => array('nickname'),
+                'user_group_profile_id_idx' => array('profile_id'), //make this unique in future
             ),
         );
     }
 
-    function _streamDirect($offset, $limit, $since_id=null, $max_id=null, $images=false)
+    protected $_profile = null;
+
+    /**
+     * @return Profile
+     *
+     * @throws UserNoProfileException if user has no profile
+     */
+    public function getProfile()
     {
-        $inbox = new Group_inbox();
-
-        $inbox->group_id = $this->id;
-
-        $inbox->selectAdd();
-        $inbox->selectAdd('notice_id');
-
-        Notice::addWhereSinceId($inbox, $since_id, 'notice_id');
-        Notice::addWhereMaxId($inbox, $max_id, 'notice_id');
-
-        if ($images) {
-            $inbox->whereAdd('EXISTS (SELECT * FROM file_to_post WHERE group_inbox.notice_id = file_to_post.post_id)');
-        }
-
-        $inbox->orderBy('created DESC, notice_id DESC');
-
-        if (!is_null($offset)) {
-            $inbox->limit($offset, $limit);
-        }
-
-        $ids = array();
-
-        if ($inbox->find()) {
-            while ($inbox->fetch()) {
-                $ids[] = $inbox->notice_id;
+        if (!($this->_profile instanceof Profile)) {
+            $this->_profile = Profile::getKV('id', $this->profile_id);
+            if (!($this->_profile instanceof Profile)) {
+                throw new GroupNoProfileException($this);
             }
         }
 
-        return $ids;
+        return $this->_profile;
     }
 
-    function defaultLogo($size)
+    public static function defaultLogo($size)
     {
         static $sizenames = array(AVATAR_PROFILE_SIZE => 'profile',
                                   AVATAR_STREAM_SIZE => 'stream',
@@ -167,34 +150,52 @@ class User_group extends Managed_DataObject
         return $stream->getNotices($offset, $limit, $since_id, $max_id);
     }
 
+    function getMembers($offset=0, $limit=null) {
+        $ids = null;
+        if (is_null($limit) || $offset + $limit > User_group::CACHE_WINDOW) {
+            $ids = $this->getMemberIDs($offset,
+                                       $limit);
+        } else {
+            $key = sprintf('group:member_ids:%d', $this->id);
+            $window = self::cacheGet($key);
+            if ($window === false) {
+                $window = $this->getMemberIDs(0,
+                                              User_group::CACHE_WINDOW);
+                self::cacheSet($key, $window);
+            }
 
-    function allowedNickname($nickname)
-    {
-        static $blacklist = array('new');
-        return !in_array($nickname, $blacklist);
+            $ids = array_slice($window,
+                               $offset,
+                               $limit);
+        }
+
+        return Profile::multiGet('id', $ids);
     }
 
-    function getMembers($offset=0, $limit=null)
+    function getMemberIDs($offset=0, $limit=null)
     {
-        $qry =
-          'SELECT profile.* ' .
-          'FROM profile JOIN group_member '.
-          'ON profile.id = group_member.profile_id ' .
-          'WHERE group_member.group_id = %d ' .
-          'ORDER BY group_member.created DESC ';
+        $gm = new Group_member();
 
-        if ($limit != null) {
-            if (common_config('db','type') == 'pgsql') {
-                $qry .= ' LIMIT ' . $limit . ' OFFSET ' . $offset;
-            } else {
-                $qry .= ' LIMIT ' . $offset . ', ' . $limit;
+        $gm->selectAdd();
+        $gm->selectAdd('profile_id');
+
+        $gm->group_id = $this->id;
+
+        $gm->orderBy('created DESC');
+
+        if (!is_null($limit)) {
+            $gm->limit($offset, $limit);
+        }
+
+        $ids = array();
+
+        if ($gm->find()) {
+            while ($gm->fetch()) {
+                $ids[] = $gm->profile_id;
             }
         }
 
-        $members = new Profile();
-
-        $members->query(sprintf($qry, $this->id));
-        return $members;
+        return $ids;
     }
 
     /**
@@ -227,19 +228,35 @@ class User_group extends Managed_DataObject
         return $members;
     }
 
-    function getMemberCount()
+    public function getAdminCount()
     {
-        // XXX: WORM cache this
+        $block = new Group_member();
+        $block->group_id = $this->id;
+        $block->is_admin = 1;
 
-        $members = $this->getMembers();
-        $member_count = 0;
+        return $block->count();
+    }
 
-        /** $member->count() doesn't work. */
-        while ($members->fetch()) {
-            $member_count++;
+    public function getMemberCount()
+    {
+        $key = sprintf("group:member_count:%d", $this->id);
+
+        $cnt = self::cacheGet($key);
+
+        if (is_integer($cnt)) {
+            return (int) $cnt;
         }
 
-        return $member_count;
+        $mem = new Group_member();
+        $mem->group_id = $this->id;
+
+        // XXX: why 'distinct'?
+
+        $cnt = (int) $mem->count('distinct profile_id');
+
+        self::cacheSet($key, $cnt);
+
+        return $cnt;
     }
 
     function getBlockedCount()
@@ -262,50 +279,27 @@ class User_group extends Managed_DataObject
         return $queue->count();
     }
 
-    function getAdmins($offset=0, $limit=null)
+    function getAdmins($offset=null, $limit=null)   // offset is null because DataObject wants it, 0 would mean no results
     {
-        $qry =
-          'SELECT profile.* ' .
-          'FROM profile JOIN group_member '.
-          'ON profile.id = group_member.profile_id ' .
-          'WHERE group_member.group_id = %d ' .
-          'AND group_member.is_admin = 1 ' .
-          'ORDER BY group_member.modified ASC ';
-
-        if ($limit != null) {
-            if (common_config('db','type') == 'pgsql') {
-                $qry .= ' LIMIT ' . $limit . ' OFFSET ' . $offset;
-            } else {
-                $qry .= ' LIMIT ' . $offset . ', ' . $limit;
-            }
-        }
-
         $admins = new Profile();
+        $admins->joinAdd(array('id', 'group_member:profile_id'));
+        $admins->whereAdd(sprintf('group_member.group_id = %u AND group_member.is_admin = 1', $this->id));
+        $admins->orderBy('group_member.modified ASC');
+        $admins->limit($offset, $limit);
+        $admins->find();
 
-        $admins->query(sprintf($qry, $this->id));
         return $admins;
     }
 
-    function getBlocked($offset=0, $limit=null)
+    function getBlocked($offset=null, $limit=null)   // offset is null because DataObject wants it, 0 would mean no results
     {
-        $qry =
-          'SELECT profile.* ' .
-          'FROM profile JOIN group_block '.
-          'ON profile.id = group_block.blocked ' .
-          'WHERE group_block.group_id = %d ' .
-          'ORDER BY group_block.modified DESC ';
-
-        if ($limit != null) {
-            if (common_config('db','type') == 'pgsql') {
-                $qry .= ' LIMIT ' . $limit . ' OFFSET ' . $offset;
-            } else {
-                $qry .= ' LIMIT ' . $offset . ', ' . $limit;
-            }
-        }
-
         $blocked = new Profile();
+        $blocked->joinAdd(array('id', 'group_block:blocked'));
+        $blocked->whereAdd(sprintf('group_block.group_id = %u', $this->id));
+        $blocked->orderBy('group_block.modified DESC');
+        $blocked->limit($offset, $limit);
+        $blocked->find();
 
-        $blocked->query(sprintf($qry, $this->id));
         return $blocked;
     }
 
@@ -392,7 +386,10 @@ class User_group extends Managed_DataObject
         }
 
         foreach ($to_insert as $insalias) {
-            $alias->alias = $insalias;
+            if ($insalias === $this->nickname) {
+                continue;
+            }
+            $alias->alias = Nickname::normalize($insalias, true);
             $result = $alias->insert();
             if (!$result) {
                 common_log_db_error($alias, 'INSERT', __FILE__);
@@ -403,14 +400,14 @@ class User_group extends Managed_DataObject
         return true;
     }
 
-    static function getForNickname($nickname, $profile=null)
+    static function getForNickname($nickname, Profile $profile=null)
     {
-        $nickname = common_canonical_nickname($nickname);
+        $nickname = Nickname::normalize($nickname);
 
         // Are there any matching remote groups this profile's in?
-        if ($profile) {
-            $group = $profile->getGroups();
-            while ($group->fetch()) {
+        if ($profile instanceof Profile) {
+            $group = $profile->getGroups(0, null);
+            while ($group instanceof User_group && $group->fetch()) {
                 if ($group->nickname == $nickname) {
                     // @fixme is this the best way?
                     return clone($group);
@@ -419,14 +416,13 @@ class User_group extends Managed_DataObject
         }
 
         // If not, check local groups.
-
-        $group = Local_group::staticGet('nickname', $nickname);
-        if (!empty($group)) {
-            return User_group::staticGet('id', $group->group_id);
+        $group = Local_group::getKV('nickname', $nickname);
+        if ($group instanceof Local_group) {
+            return User_group::getKV('id', $group->group_id);
         }
-        $alias = Group_alias::staticGet('alias', $nickname);
-        if (!empty($alias)) {
-            return User_group::staticGet('id', $alias->group_id);
+        $alias = Group_alias::getKV('alias', $nickname);
+        if ($alias instanceof Group_alias) {
+            return User_group::getKV('id', $alias->group_id);
         }
         return null;
     }
@@ -533,19 +529,6 @@ class User_group extends Managed_DataObject
 
     /**
      * Returns an XML string fragment with group information as an
-     * Activity Streams <activity:subject> element.
-     *
-     * Assumes that 'activity' namespace has been previously defined.
-     *
-     * @return string
-     */
-    function asActivitySubject()
-    {
-        return $this->asActivityNoun('subject');
-    }
-
-    /**
-     * Returns an XML string fragment with group information as an
      * Activity Streams noun object with the given element type.
      *
      * Assumes that 'activity', 'georss', and 'poco' namespace has been
@@ -570,7 +553,7 @@ class User_group extends Managed_DataObject
 
     static function register($fields) {
         if (!empty($fields['userid'])) {
-            $profile = Profile::staticGet('id', $fields['userid']);
+            $profile = Profile::getKV('id', $fields['userid']);
             if ($profile && !$profile->hasRight(Right::CREATEGROUP)) {
                 common_log(LOG_WARNING, "Attempted group creation from banned user: " . $profile->nickname);
 
@@ -578,6 +561,8 @@ class User_group extends Managed_DataObject
                 throw new ClientException(_('You are not allowed to create groups on this site.'), 403);
             }
         }
+
+        $fields['nickname'] = Nickname::normalize($fields['nickname']);
 
         // MAGICALLY put fields into current scope
         // @fixme kill extract(); it makes debugging absurdly hard
@@ -598,8 +583,6 @@ class User_group extends Managed_DataObject
 
         $group = new User_group();
 
-        $group->query('BEGIN');
-
         if (empty($uri)) {
             // fill in later...
             $uri = null;
@@ -608,14 +591,33 @@ class User_group extends Managed_DataObject
             $mainpage = common_local_url('showgroup', array('nickname' => $nickname));
         }
 
-        $group->nickname    = $nickname;
-        $group->fullname    = $fullname;
-        $group->homepage    = $homepage;
-        $group->description = $description;
-        $group->location    = $location;
-        $group->uri         = $uri;
-        $group->mainpage    = $mainpage;
-        $group->created     = common_sql_now();
+        // We must create a new, incrementally assigned profile_id
+        $profile = new Profile();
+        $profile->nickname   = $nickname;
+        $profile->fullname   = $fullname;
+        $profile->profileurl = $mainpage;
+        $profile->homepage   = $homepage;
+        $profile->bio        = $description;
+        $profile->location   = $location;
+        $profile->created    = common_sql_now();
+
+        $group->nickname    = $profile->nickname;
+        $group->fullname    = $profile->fullname;
+        $group->homepage    = $profile->homepage;
+        $group->description = $profile->bio;
+        $group->location    = $profile->location;
+        $group->mainpage    = $profile->profileurl;
+        $group->created     = $profile->created;
+
+        $profile->query('BEGIN');
+        $id = $profile->insert();
+        if ($id === false) {
+            $profile->query('ROLLBACK');
+            throw new ServerException(_('Profile insertion failed'));
+        }
+
+        $group->profile_id = $id;
+        $group->uri        = $uri;
 
         if (isset($fields['join_policy'])) {
             $group->join_policy = intval($fields['join_policy']);
@@ -633,7 +635,7 @@ class User_group extends Managed_DataObject
 
             $result = $group->insert();
 
-            if (!$result) {
+            if ($result === false) {
                 common_log_db_error($group, 'INSERT', __FILE__);
                 // TRANS: Server exception thrown when creating a group failed.
                 throw new ServerException(_('Could not create group.'));
@@ -690,10 +692,10 @@ class User_group extends Managed_DataObject
                 }
             }
 
-            $group->query('COMMIT');
-
             Event::handle('EndGroupSave', array($group));
         }
+
+        $profile->query('COMMIT');
 
         return $group;
     }
@@ -706,58 +708,132 @@ class User_group extends Managed_DataObject
      * are not de-cached in the UI, including the sidebar lists on
      * GroupsAction
      */
-    function delete()
+    function delete($useWhere=false)
     {
-        if ($this->id) {
+        if (empty($this->id)) {
+            common_log(LOG_WARNING, "Ambiguous User_group->delete(); skipping related tables.");
+            return parent::delete($useWhere);
+        }
 
-            // Safe to delete in bulk for now
+        try {
+            $profile = $this->getProfile();
+            $profile->delete();
+        } catch (GroupNoProfileException $unp) {
+            common_log(LOG_INFO, "Group {$this->nickname} has no profile; continuing deletion.");
+        }
 
-            $related = array('Group_inbox',
-                             'Group_block',
-                             'Group_member',
-                             'Related_group');
+        // Safe to delete in bulk for now
 
-            Event::handle('UserGroupDeleteRelated', array($this, &$related));
+        $related = array('Group_inbox',
+                         'Group_block',
+                         'Group_member',
+                         'Related_group');
 
-            foreach ($related as $cls) {
+        Event::handle('UserGroupDeleteRelated', array($this, &$related));
 
-                $inst = new $cls();
-                $inst->group_id = $this->id;
+        foreach ($related as $cls) {
+            $inst = new $cls();
+            $inst->group_id = $this->id;
 
-                if ($inst->find()) {
-                    while ($inst->fetch()) {
-                        $dup = clone($inst);
-                        $dup->delete();
-                    }
+            if ($inst->find()) {
+                while ($inst->fetch()) {
+                    $dup = clone($inst);
+                    $dup->delete();
                 }
             }
-
-            // And related groups in the other direction...
-            $inst = new Related_group();
-            $inst->related_group_id = $this->id;
-            $inst->delete();
-
-            // Aliases and the local_group entry need to be cleared explicitly
-            // or we'll miss clearing some cache keys; that can make it hard
-            // to create a new group with one of those names or aliases.
-            $this->setAliases(array());
-            $local = Local_group::staticGet('group_id', $this->id);
-            if ($local) {
-                $local->delete();
-            }
-
-            // blow the cached ids
-            self::blow('user_group:notice_ids:%d', $this->id);
-
-        } else {
-            common_log(LOG_WARN, "Ambiguous user_group->delete(); skipping related tables.");
         }
-        parent::delete();
+
+        // And related groups in the other direction...
+        $inst = new Related_group();
+        $inst->related_group_id = $this->id;
+        $inst->delete();
+
+        // Aliases and the local_group entry need to be cleared explicitly
+        // or we'll miss clearing some cache keys; that can make it hard
+        // to create a new group with one of those names or aliases.
+        $this->setAliases(array());
+        $local = Local_group::getKV('group_id', $this->id);
+        if ($local instanceof Local_group) {
+            $local->delete();
+        }
+
+        // blow the cached ids
+        self::blow('user_group:notice_ids:%d', $this->id);
+
+        return parent::delete($useWhere);
+    }
+
+    public function update($dataObject=false)
+    {
+        // Whenever the User_group is updated, find the Local_group
+        // and update its nickname too.
+        if ($this->nickname != $dataObject->nickname) {
+            $local = Local_group::getKV('group_id', $this->id);
+            if ($local instanceof Local_group) {
+                common_debug("Updating Local_group ({$this->id}) nickname from {$dataObject->nickname} to {$this->nickname}");
+                $local->setNickname($this->nickname);
+            }
+        }
+
+        // Also make sure the Profile table is up to date!
+        $fields = array(/*group field => profile field*/
+                    'nickname'      => 'nickname',
+                    'fullname'      => 'fullname',
+                    'mainpage'      => 'profileurl',
+                    'homepage'      => 'homepage',
+                    'description'   => 'bio',
+                    'location'      => 'location',
+                    'created'       => 'created',
+                    'modified'      => 'modified',
+                    );
+        $profile = $this->getProfile();
+        $origpro = clone($profile);
+        foreach ($fields as $gf=>$pf) {
+            $profile->$pf = $this->$gf;
+        }
+        if ($profile->update($origpro) === false) {
+            throw new ServerException(_('Unable to update profile'));
+        }
+
+        return parent::update($dataObject);
     }
 
     function isPrivate()
     {
         return ($this->join_policy == self::JOIN_POLICY_MODERATE &&
                 $this->force_scope == 1);
+    }
+
+    static function groupsFromText($text, Profile $profile)
+    {
+        $groups = array();
+
+        /* extract all !group */
+        $count = preg_match_all('/(?:^|\s)!(' . Nickname::DISPLAY_FMT . ')/',
+                                strtolower($text),
+                                $match);
+
+        if (!$count) {
+            return $groups;
+        }
+
+        foreach (array_unique($match[1]) as $nickname) {
+            $group = self::getForNickname($nickname, $profile);
+            if ($group instanceof User_group && $profile->isMember($group)) {
+                $groups[] = clone($group);
+            }
+        }
+
+        return $groups;
+    }
+
+    static function idsFromText($text, Profile $profile)
+    {
+        $ids = array();
+        $groups = self::groupsFromText($text, $profile);
+        foreach ($groups as $group) {
+            $ids[$group->id] = true;
+        }
+        return array_keys($ids);
     }
 }

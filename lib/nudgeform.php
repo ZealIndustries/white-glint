@@ -119,16 +119,12 @@ class NudgeForm extends Form
      */
     function formActions()
     {
-        /*$this->out->submit('submit',
+        $this->out->submit('submit',
                            // TRANS: Button text to nudge/ping another user.
                            _m('BUTTON','Nudge'),
                            'submit',
                            null,
                            // TRANS: Button title to nudge/ping another user.
-                           _('Send a nudge to this user.'));*/
-		$this->out->element('button', array('title' => _('Send a nudge to this user.'),
-											'type' => 'submit',
-											'class' => 'submit'),
-							 _m('BUTTON','Nudge'));
+                           _('Send a nudge to this user.'));
     }
 }

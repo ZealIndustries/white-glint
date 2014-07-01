@@ -44,8 +44,8 @@ data as it comes.
 ENDOFHELP;
 
 require_once INSTALLDIR.'/scripts/commandline.inc';
-require_once dirname(dirname(__FILE__)) . '/jsonstreamreader.php';
-require_once dirname(dirname(__FILE__)) . '/twitterstreamreader.php';
+require_once dirname(dirname(__FILE__)) . '/lib/jsonstreamreader.php';
+require_once dirname(dirname(__FILE__)) . '/lib/twitterstreamreader.php';
 
 if (have_option('n')) {
     $nickname = get_option_value('n');
@@ -113,7 +113,7 @@ function siteStreamForOwner(User $user)
 }
 
 
-$user = User::staticGet('nickname', $nickname);
+$user = User::getKV('nickname', $nickname);
 global $myuser;
 $myuser = $user;
 
@@ -170,9 +170,9 @@ $stream->hookEvent('status', function($data, $context) {
         $importer = new TwitterImport();
         printf("\timporting...");
         $notice = $importer->importStatus($data);
-        if ($notice) {
+        if ($notice instanceof Notice) {
             global $myuser;
-            Inbox::insertNotice($myuser->id, $notice->id);
+            Inbox::insertNotice($notice, $myuser->id);
             printf(" %s\n", $notice->id);
         } else {
             printf(" FAIL\n");

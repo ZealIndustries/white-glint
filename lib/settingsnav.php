@@ -59,8 +59,8 @@ class SettingsNav extends Menu
         $nickname = $user->nickname;
         $name = $user->getProfile()->getBestName();
 
-        //$stub = new HomeStubNav($this->action);
-        //$this->submenu(_m('MENU','Home'), $stub);
+        $stub = new HomeStubNav($this->action);
+        $this->submenu(_m('MENU','Home'), $stub);
         
         $this->action->elementStart('ul');
         $this->action->elementStart('li');
@@ -104,15 +104,6 @@ class SettingsNav extends Menu
                                     _('URL shorteners'),
                                     $actionName == 'urlsettings');
 
-            if (common_config('oldschool', 'enabled')) {
-                $this->action->menuItem(common_local_url('oldschoolsettings'),
-                                        // TRANS: Menu item in settings navigation panel.
-                                        _m('MENU','Old school'),
-                                        // TRANS: Menu item title in settings navigation panel.
-                                        _('UI tweaks for old-school users'),
-                                        $actionName == 'oldschoolsettings');
-            }
-
             Event::handle('EndAccountSettingsNav', array(&$this->action));
 
             $haveImPlugin = false;
@@ -143,6 +134,15 @@ class SettingsNav extends Menu
                                     // TRANS: Menu item title in settings navigation panel.
                                     _('Authorized connected applications'),
                                     $actionName == 'oauthconnectionsettings');
+
+            if (common_config('oldschool', 'enabled')) {
+                $this->action->menuItem(common_local_url('oldschoolsettings'),
+                                        // TRANS: Menu item in settings navigation panel.
+                                        _m('MENU','Old school'),
+                                        // TRANS: Menu item title in settings navigation panel.
+                                        _('UI tweaks for old-school users'),
+                                        $actionName == 'oldschoolsettings');
+            }
 
             Event::handle('EndConnectSettingsNav', array(&$this->action));
         }

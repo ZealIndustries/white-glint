@@ -84,10 +84,6 @@ class SearchAction extends Action
         return null;
     }
 
-    function showNoticeForm() {
-        // remote post notice form
-    }
-
     function showContent() {
         $this->showTop();
         $this->showForm();
@@ -121,12 +117,6 @@ class SearchAction extends Action
         if ($q) {
             $this->showResults($q, $page);
         }
-    }
-
-    function showLocalNav()
-    {
-        $menu = new SearchGroupNav($this);
-        $menu->show();
     }
 
     function searchSuggestions($q) {

@@ -21,8 +21,9 @@
  * @package  Installation
  *
  * @author   Brion Vibber <brion@status.net>
+ * @author   Mikael Nordfeldth <mmn@hethane.se>
  * @license  GNU Affero General Public License http://www.gnu.org/licenses/
- * @version  0.9.x
+ * @version  1.1.x
  * @link     http://status.net
  */
 
@@ -72,6 +73,7 @@ class CliInstaller extends Installer
             '--path'     => 'path',
             '--sitename' => 'sitename',
             '--fancy'    => 'fancy',
+            '--ssl'      => 'ssl',
 
             '--dbtype'   => 'dbtype',
             '--host'     => 'host',
@@ -82,7 +84,9 @@ class CliInstaller extends Installer
             '--admin-nick' => 'adminNick',
             '--admin-pass' => 'adminPass',
             '--admin-email' => 'adminEmail',
-            '--admin-updates' => 'adminUpdates'
+            '--admin-updates' => 'adminUpdates',
+
+            '--site-profile' => 'siteProfile'
         );
         foreach ($map as $arg => $target) {
             if (substr($arg, 0, 2) == '--') {
@@ -104,6 +108,7 @@ class CliInstaller extends Installer
         $this->dbtype = 'mysql';
         $this->adminUpdates = true;
         $this->verbose = true;
+        // ssl is defaulted in lib/installer.php
 
         foreach ($options as $option) {
             $arg = $option[0];
@@ -157,6 +162,8 @@ install_cli.php - StatusNet command-line installer
     -p --path=<path>     Use <path> as path name
        --sitename        User-friendly site name (required)
        --fancy           Whether to use fancy URLs (default no)
+       --ssl             Server SSL enabled (default never), 
+                         [never | sometimes | always]
 
        --dbtype          'mysql' (default) or 'pgsql'
        --host            Database hostname (required)
@@ -169,6 +176,8 @@ install_cli.php - StatusNet command-line installer
        --admin-email     Initial email address for admin user
        --admin-updates   'yes' (default) or 'no', whether to subscribe
                          admin to update@status.net (default yes)
+       
+       --site-profile    site profile ['public', 'private' (default), 'community', 'singleuser']
        
        --skip-config     Don't write a config.php -- use with caution,
                          requires a global configuration file.

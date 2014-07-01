@@ -28,7 +28,105 @@ abstract class Managed_DataObject extends Memcached_DataObject
     /**
      * The One True Thingy that must be defined and declared.
      */
-    public static abstract function schemaDef();
+    public static function schemaDef()
+    {
+        throw new MethodNotImplementedException(__METHOD__);
+    }
+
+    /**
+     * Get an instance by key
+     *
+     * @param string $k Key to use to lookup (usually 'id' for this class)
+     * @param mixed  $v Value to lookup
+     *
+     * @return get_called_class() object if found, or null for no hits
+     *
+     */
+    static function getKV($k,$v=NULL)
+    {
+        return parent::getClassKV(get_called_class(), $k, $v);
+    }
+
+    /**
+     * Get an instance by compound key
+     *
+     * This is a utility method to get a single instance with a given set of
+     * key-value pairs. Usually used for the primary key for a compound key; thus
+     * the name.
+     *
+     * @param array $kv array of key-value mappings
+     *
+     * @return get_called_class() object if found, or null for no hits
+     *
+     */
+    static function pkeyGet(array $kv)
+    {
+        return parent::pkeyGetClass(get_called_class(), $kv);
+    }
+
+    /**
+     * Get multiple items from the database by key
+     *
+     * @param string  $keyCol    name of column for key
+     * @param array   $keyVals   key values to fetch
+     * @param boolean $skipNulls return only non-null results?
+     *
+     * @return array Array of objects, in order
+     */
+	static function multiGet($keyCol, array $keyVals, $skipNulls=true)
+	{
+	    return parent::multiGetClass(get_called_class(), $keyCol, $keyVals, $skipNulls);
+	}
+
+    /**
+     * Get multiple items from the database by key
+     *
+     * @param string  $keyCol    name of column for key
+     * @param array   $keyVals   key values to fetch
+     * @param array   $otherCols Other columns to hold fixed
+     *
+     * @return array Array mapping $keyVals to objects, or null if not found
+     */
+	static function pivotGet($keyCol, array $keyVals, array $otherCols=array())
+	{
+	    return parent::pivotGetClass(get_called_class(), $keyCol, $keyVals, $otherCols);
+	}
+
+    /**
+     * Get a multi-instance object
+     *
+     * This is a utility method to get multiple instances with a given set of
+     * values for a specific column.
+     *
+     * @param string $keyCol  key column name
+     * @param array  $keyVals array of key values
+     *
+     * @return get_called_class() object with multiple instances if found,
+     *         Exception is thrown when no entries are found.
+     *
+     */
+    static function listFind($keyCol, array $keyVals)
+    {
+        return parent::listFindClass(get_called_class(), $keyCol, $keyVals);
+    }
+
+    /**
+     * Get a multi-instance object separated into an array
+     *
+     * This is a utility method to get multiple instances with a given set of
+     * values for a specific key column. Usually used for the primary key when
+     * multiple values are desired. Result is an array.
+     *
+     * @param string $keyCol  key column name
+     * @param array  $keyVals array of key values
+     *
+     * @return array with an get_called_class() object for each $keyVals entry
+     *
+     */
+    static function listGet($keyCol, array $keyVals)
+    {
+        return parent::listGetClass(get_called_class(), $keyCol, $keyVals);
+    }
 
     /**
      * get/set an associative array of table columns
@@ -36,11 +134,9 @@ abstract class Managed_DataObject extends Memcached_DataObject
      * @access public
      * @return array (associative)
      */
-    function table()
+    public function table()
     {
-        // Hack for PHP 5.2 not supporting late static binding
-        //$table = static::schemaDef();
-        $table = call_user_func(array(get_class($this), 'schemaDef'));
+        $table = static::schemaDef();
         return array_map(array($this, 'columnBitmap'), $table['fields']);
     }
 
@@ -68,7 +164,7 @@ abstract class Managed_DataObject extends Memcached_DataObject
 
     function sequenceKey()
     {
-        $table = call_user_func(array(get_class($this), 'schemaDef'));
+        $table = static::schemaDef();
         foreach ($table['fields'] as $name => $column) {
             if ($column['type'] == 'serial') {
                 // We have a serial/autoincrement column.
@@ -92,7 +188,7 @@ abstract class Managed_DataObject extends Memcached_DataObject
 
     function keyTypes()
     {
-        $table = call_user_func(array(get_class($this), 'schemaDef'));
+        $table = static::schemaDef();
         $keys = array();
 
         if (!empty($table['unique keys'])) {
@@ -157,7 +253,7 @@ abstract class Managed_DataObject extends Memcached_DataObject
     {
         $links = array();
 
-        $table = call_user_func(array(get_class($this), 'schemaDef'));
+        $table = static::schemaDef();
 
         foreach ($table['foreign keys'] as $keyname => $keydef) {
             if (count($keydef) == 2 && is_string($keydef[0]) && is_array($keydef[1]) && count($keydef[1]) == 1) {
@@ -178,7 +274,7 @@ abstract class Managed_DataObject extends Memcached_DataObject
      */
     function _allCacheKeys()
     {
-        $table = call_user_func(array(get_class($this), 'schemaDef'));
+        $table = static::schemaDef();
         $ckeys = array();
 
         if (!empty($table['unique keys'])) {

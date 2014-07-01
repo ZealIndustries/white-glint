@@ -150,7 +150,7 @@ abstract class MicroAppPlugin extends Plugin
      * @param HTMLOutputter $out
      * @return Widget
      */
-    abstract function entryForm($out, $options=array());
+    abstract function entryForm($out);
 
     /**
      * When a notice is deleted, you'll be called here for a chance
@@ -353,7 +353,7 @@ abstract class MicroAppPlugin extends Plugin
 
             $actor = $oprofile->checkAuthorship($activity);
 
-            if (empty($actor)) {
+            if (!$actor instanceof Ostatus_profile) {
                 // TRANS: Client exception thrown when no author for an activity was found.
                 throw new ClientException(_('Cannot get author for activity.'));
             }
@@ -390,19 +390,19 @@ abstract class MicroAppPlugin extends Plugin
 
             if ($target instanceof User_group) {
                 $uri = $target->getUri();
-                if (!in_array($uri, $activity->context->attention)) {
+                if (!array_key_exists($uri, $activity->context->attention)) {
                     // @todo FIXME: please document (i18n).
                     // TRANS: Client exception thrown when ...
-                    throw new ClientException(_('Bookmark not posted to this group.'));
+                    throw new ClientException(_('Object not posted to this group.'));
                 }
             } else if ($target instanceof User) {
                 $uri      = $target->uri;
                 $original = null;
                 if (!empty($activity->context->replyToID)) {
-                    $original = Notice::staticGet('uri',
+                    $original = Notice::getKV('uri',
                                                   $activity->context->replyToID);
                 }
-                if (!in_array($uri, $activity->context->attention) &&
+                if (!array_key_exists($uri, $activity->context->attention) &&
                     (empty($original) ||
                      $original->profile_id != $target->id)) {
                     // @todo FIXME: Please document (i18n).
@@ -540,10 +540,10 @@ abstract class MicroAppPlugin extends Plugin
         return true;
     }
 
-    function onStartMakeEntryForm($tag, $out, &$form, $options)
+    function onStartMakeEntryForm($tag, $out, &$form)
     {
         if ($tag == $this->tag()) {
-            $form = $this->entryForm($out, $options);
+            $form = $this->entryForm($out);
             return false;
         }
 

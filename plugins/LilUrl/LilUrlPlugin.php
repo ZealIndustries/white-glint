@@ -49,29 +49,18 @@ class LilUrlPlugin extends UrlShortenerPlugin
         $responseBody = $this->http_post($this->serviceUrl,$data);
 
         if (!$responseBody) return;
-		
-		$p = strpos($responseBody, '<p class="success">');
-		if($p === false)
-			return;
-		$f = substr($responseBody, $p);
-		
-		$p = strpos($f, '<a href="');
-		if($p === false)
-			return;
-		$f = substr($f, $p+9);
-		
-		$p = strpos($f, '"');
-		if($p === false)
-			return;
-		$f = substr($f, 0, $p);
-		
-		return $f;
+        $y = @simplexml_load_string($responseBody);
+        if (!isset($y->body)) return;
+        $x = $y->body->p[0]->a->attributes();
+        if (isset($x['href'])) {
+            return strval($x['href']);
+        }
     }
 
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => sprintf('LilUrl (%s)', $this->shortenerName),
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Craig Andrews',
                             'homepage' => 'http://status.net/wiki/Plugin:LilUrl',
                             'rawdescription' =>

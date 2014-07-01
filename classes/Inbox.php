@@ -27,10 +27,7 @@
  * @link      http://status.net/
  */
 
-require_once INSTALLDIR.'/classes/Memcached_DataObject.php';
-
-class Inbox extends Managed_DataObject
-{
+class Inbox extends Managed_DataObject {
     const BOXCAR = 128;
     const MAX_NOTICES = 1024;
 
@@ -40,9 +37,6 @@ class Inbox extends Managed_DataObject
     public $__table = 'inbox';                           // table name
     public $user_id;                         // int(4)  primary_key not_null
     public $notice_ids;                      // blob
-
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('Inbox',$k,$v); }
 
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
@@ -62,55 +56,6 @@ class Inbox extends Managed_DataObject
     }
 
     /**
-     * Create a new inbox from existing Notice_inbox stuff
-     */
-    static function initialize($user_id)
-    {
-        $inbox = Inbox::fromNoticeInbox($user_id);
-
-        unset($inbox->fake);
-
-        $result = $inbox->insert();
-
-        if (!$result) {
-            common_log_db_error($inbox, 'INSERT', __FILE__);
-            return null;
-        }
-
-        return $inbox;
-    }
-
-    static function fromNoticeInbox($user_id)
-    {
-        $ids = array();
-
-        $ni = new Notice_inbox();
-
-        $ni->user_id = $user_id;
-        $ni->selectAdd();
-        $ni->selectAdd('notice_id');
-        $ni->orderBy('notice_id DESC');
-        $ni->limit(0, self::MAX_NOTICES);
-
-        if ($ni->find()) {
-            while($ni->fetch()) {
-                $ids[] = $ni->notice_id;
-            }
-        }
-
-        $ni->free();
-        unset($ni);
-
-        $inbox = new Inbox();
-
-        $inbox->user_id = $user_id;
-        $inbox->pack($ids);
-        $inbox->fake = true;
-
-        return $inbox;
-    }
-
-    /**
      * Append the given notice to the given user's inbox.
      * Caching updates are managed for the inbox itself.
      *
@@ -121,48 +66,46 @@ class Inbox extends Managed_DataObject
      * @param int $notice_id
      * @return boolean success
      */
-    static function insertNotice($user_id, $notice_id)
+    static function insertNotice(Notice $notice, $user_id)
     {
         // Going straight to the DB rather than trusting our caching
         // during an update. Note: not using DB_DataObject::staticGet,
         // which is unsafe to use directly (in-process caching causes
         // memory leaks, which accumulate in queue processes).
         $inbox = new Inbox();
-        if (!$inbox->get('user_id', $user_id)) {
-            $inbox = Inbox::initialize($user_id);
-        }
+        $inbox->get('user_id', $user_id);
 
         if (empty($inbox)) {
             return false;
         }
 
         $ids = $inbox->unpack();
-        if (in_array(intval($notice_id), $ids)) {
+        if (in_array(intval($notice->id), $ids)) {
             // Already in there, we probably re-ran some inbox adds
             // due to an error. Skip the dupe silently.
             return true;
         }
 
         $result = $inbox->query(sprintf('UPDATE inbox '.
-                                        'set notice_ids = concat(cast(0x%08x as binary(4)), '.
-                                        'substr(notice_ids, 1, %d)) '.
+                                        'SET notice_ids = concat(cast(0x%08x as binary(4)), '.
+                                        'SUBSTR(notice_ids, 1, %d)) '.
                                         'WHERE user_id = %d',
-                                        $notice_id,
+                                        $notice->id,
                                         4 * (self::MAX_NOTICES - 1),
                                         $user_id));
 
-        if ($result) {
+        if ($result !== false) {
             self::blow('inbox:user_id:%d', $user_id);
         }
 
         return $result;
     }
 
-    static function bulkInsert($notice_id, $user_ids)
+    static function bulkInsert(Notice $notice, array $user_ids)
     {
         foreach ($user_ids as $user_id)
         {
-            Inbox::insertNotice($user_id, $notice_id);
+            self::insertNotice($notice, $user_id);
         }
     }
 

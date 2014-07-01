@@ -80,7 +80,8 @@ class ThreadedNoticeList extends NoticeList
 		$total = count($notices);
 		$notices = array_slice($notices, 0, NOTICES_PER_PAGE);
 		
-    	self::prefill(self::_allNotices($notices));
+        $allnotices = self::_allNotices($notices);
+    	self::prefill($allnotices);
     	
         $conversations = array();
         
@@ -89,7 +90,7 @@ class ThreadedNoticeList extends NoticeList
             // Collapse repeats into their originals...
             
             if ($notice->repeat_of) {
-                $orig = Notice::staticGet('id', $notice->repeat_of);
+                $orig = Notice::getKV('id', $notice->repeat_of);
                 if ($orig) {
                     $notice = $orig;
                 }
@@ -130,7 +131,7 @@ class ThreadedNoticeList extends NoticeList
             $convId[] = $notice->conversation;
         }
         $convId = array_unique($convId);
-        $allMap = Memcached_DataObject::listGet('Notice', 'conversation', $convId);
+        $allMap = Notice::listGet('conversation', $convId);
         $allArray = array();
         foreach ($allMap as $convId => $convNotices) {
             $allArray = array_merge($allArray, $convNotices);
@@ -293,32 +294,7 @@ class ThreadedNoticeListSubItem extends NoticeListItem
 
     function showContext()
     {
-        if ($this->notice->hasConversation()) {
-            $conv = Conversation::staticGet(
-                'id',
-                $this->notice->conversation
-            );
-            $convurl = $conv->uri;
-            if (!empty($convurl)) {
-                $this->out->text(' ');
-                $this->out->element(
-                    'a',
-                    array(
-                    'href' => $convurl.'#notice-'.$this->notice->id,
-                    'class' => 'response'),
-                    // TRANS: Addition in notice list item if notice is part of a conversation.
-                    _('in context')
-                );
-            } else {
-                $msg = sprintf(
-                    "Couldn't find Conversation ID %d to make 'in context'"
-                    . "link for Notice ID %d",
-                    $this->notice->conversation,
-                    $this->notice->id
-                );
-                common_log(LOG_WARNING, $msg);
-            }
-        }
+        //
     }
 
     function getReplyProfiles()
@@ -461,7 +437,7 @@ abstract class NoticeListActorsItem extends NoticeListItem
                 // TRANS: Reference to the logged in user in favourite list.
                 array_unshift($links, _m('FAVELIST', 'You'));
             } else {
-                $profile = Profile::staticGet('id', $id);
+                $profile = Profile::getKV('id', $id);
                 if ($profile) {
                     $links[] = sprintf('<a href="%s">%s</a>',
                                        htmlspecialchars($profile->profileurl),

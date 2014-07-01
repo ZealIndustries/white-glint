@@ -16,9 +16,6 @@ class Group_member extends Managed_DataObject
     public $created;                         // datetime()   not_null
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
 
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('Group_member',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -45,13 +42,10 @@ class Group_member extends Managed_DataObject
                 // @fixme probably we want a (profile_id, created) index here?
                 'group_member_profile_id_idx' => array('profile_id'),
                 'group_member_created_idx' => array('created'),
+                'group_member_profile_id_created_idx' => array('profile_id', 'created'),
+                'group_member_group_id_created_idx' => array('group_id', 'created'),
             ),
         );
-    }
-
-    function pkeyGet($kv)
-    {
-        return Memcached_DataObject::pkeyGet('Group_member', $kv);
     }
 
     /**
@@ -107,7 +101,7 @@ class Group_member extends Managed_DataObject
 
     function getMember()
     {
-        $member = Profile::staticGet('id', $this->profile_id);
+        $member = Profile::getKV('id', $this->profile_id);
 
         if (empty($member)) {
             // TRANS: Exception thrown providing an invalid profile ID.
@@ -120,7 +114,7 @@ class Group_member extends Managed_DataObject
 
     function getGroup()
     {
-        $group  = User_group::staticGet('id', $this->group_id);
+        $group  = User_group::getKV('id', $this->group_id);
 
         if (empty($group)) {
             // TRANS: Exception thrown providing an invalid group ID.
@@ -159,7 +153,16 @@ class Group_member extends Managed_DataObject
     function asActivity()
     {
         $member = $this->getMember();
+
+        if (!$member) {
+            throw new Exception("No such member: " . $this->profile_id);
+        }
+
         $group  = $this->getGroup();
+
+        if (!$group) {
+            throw new Exception("No such group: " . $this->group_id);
+        }
 
         $act = new Activity();
 

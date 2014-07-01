@@ -103,7 +103,7 @@ class SubscribePeopletagForm extends Form
     function formActions()
     {
         // TRANS: Button text for subscribing to a list.
-        $this->out->element('button', array('type' => 'submit', 'class' => 'submit', 'id' => 'submit'), _m('BUTTON', 'Subscribe'));
+        $this->out->submit('submit', _m('BUTTON', 'Subscribe'));
 
     }
 }

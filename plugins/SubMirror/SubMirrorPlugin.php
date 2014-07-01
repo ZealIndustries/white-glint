@@ -45,32 +45,6 @@ class SubMirrorPlugin extends Plugin
         return true;
     }
 
-    /**
-     * Automatically load the actions and libraries used by the plugin
-     *
-     * @param Class $cls the class
-     *
-     * @return boolean hook return
-     *
-     */
-    function onAutoload($cls)
-    {
-        $base = dirname(__FILE__);
-        $lower = strtolower($cls);
-        $files = array("$base/lib/$lower.php",
-                       "$base/classes/$cls.php");
-        if (substr($lower, -6) == 'action') {
-            $files[] = "$base/actions/" . substr($lower, 0, -6) . ".php";
-        }
-        foreach ($files as $file) {
-            if (file_exists($file)) {
-                include_once $file;
-                return false;
-            }
-        }
-        return true;
-    }
-
     function handle($notice)
     {
         // Is anybody mirroring?
@@ -86,7 +60,7 @@ class SubMirrorPlugin extends Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'SubMirror',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Brion Vibber',
                             'homepage' => 'http://status.net/wiki/Plugin:SubMirror',
                             'rawdescription' =>
@@ -157,6 +131,10 @@ class SubMirrorPlugin extends Plugin
      */
     function onOstatus_profileSubscriberCount($oprofile, &$count)
     {
+        if (empty($oprofile) || !($oprofile instanceof Ostatus_profile)) {
+            return true;
+        }
+
         if ($oprofile->profile_id) {
             $mirror = new SubMirror();
             $mirror->subscribed = $oprofile->profile_id;
@@ -166,6 +144,7 @@ class SubMirrorPlugin extends Plugin
                 }
             }
         }
+
         return true;
     }
 

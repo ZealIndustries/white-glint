@@ -32,8 +32,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiprivateauth.php';
-
 /**
  * Returns the string "ok" in the requested format with a 200 OK HTTP status code.
  *

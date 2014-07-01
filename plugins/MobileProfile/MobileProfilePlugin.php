@@ -27,7 +27,7 @@
  * @link      http://status.net/
  */
 
-if (!defined('STATUSNET') && !defined('LACONICA')) {
+if (!defined('STATUSNET')) {
     exit(1);
 }
 
@@ -117,6 +117,7 @@ class MobileProfilePlugin extends WAP20Plugin
                     'mot',
                     'netfront',
                     'nitro',
+                    'nokia',
                     'opera mini',
                     'palm',
                     'palmsource',
@@ -145,8 +146,7 @@ class MobileProfilePlugin extends WAP20Plugin
 
                 $blacklist = array(
                     'ipad', // Larger screen handles the full theme fairly well.
-               	    'nokia'
-		 );
+                );
 
                 $httpuseragent = strtolower($_SERVER['HTTP_USER_AGENT']);
 
@@ -180,9 +180,9 @@ class MobileProfilePlugin extends WAP20Plugin
             }
         }
 
-        //if (!$this->serveMobile) {
+        if (!$this->serveMobile) {
             return true;
-        //}
+        }
 
         // @fixme $type is undefined, making this if case useless and spewing errors.
         // What's the intent?
@@ -205,15 +205,15 @@ class MobileProfilePlugin extends WAP20Plugin
         header('Content-Type: '.$type);
 
         if ($this->reallyMobile) {
-            $action->extraHeaders();
-            if (preg_match("/.*\/.*xml/", $type)) {
-                // Required for XML documents
-                $action->xw->startDocument('1.0', 'UTF-8');
-            }
-            $action->xw->writeDTD('html',
-                '-//WAPFORUM//DTD XHTML Mobile 1.0//EN',
-                $this->DTD);
 
+           $action->extraHeaders();
+           if (preg_match("/.*\/.*xml/", $type)) {
+               // Required for XML documents
+               $action->startXML();
+           }
+           $action->xw->writeDTD('html',
+                           '-//WAPFORUM//DTD XHTML Mobile 1.0//EN',
+                           $this->DTD);
 
             $language = $action->getLanguage();
 
@@ -244,7 +244,7 @@ class MobileProfilePlugin extends WAP20Plugin
         }
     }
 
-    function onStartShowStatusNetStyles($action)
+    public function onStartShowStylesheets(Action $action)
     {
         if (!$this->serveMobile) {
             return true;
@@ -252,19 +252,18 @@ class MobileProfilePlugin extends WAP20Plugin
 
         $action->primaryCssLink();
 
-        //$action->cssLink($this->path('mp-screen.css'),null,'screen');
+        $action->cssLink($this->path('mp-screen.css'),null,'screen');
         if (file_exists(Theme::file('css/mp-screen.css'))) {
             $action->cssLink('css/mp-screen.css', null, 'screen');
         }
 
-        //$action->cssLink($this->path('mp-handheld.css'),null,'handheld');
+        $action->cssLink($this->path('mp-handheld.css'),null,'handheld');
         if (file_exists(Theme::file('css/mp-handheld.css'))) {
             $action->cssLink('css/mp-handheld.css', null, 'handheld');
         }
 
         // Allow other plugins to load their styles.
-        Event::handle('EndShowStatusNetStyles', array($action));
-        Event::handle('EndShowLaconicaStyles', array($action));
+        Event::handle('EndShowStylesheets', array($action));
 
         return false;
     }
@@ -284,40 +283,25 @@ class MobileProfilePlugin extends WAP20Plugin
         }
 
         $action->elementStart('div', array('id' => 'header'));
-        $this->_showPrimaryNav($action);
-        //if (common_logged_in()) {
-        //    $action->showNoticeForm();
-        //v}
-		$action->showUserBox();
+        $this->_showLogo($action);
+        $action->showPrimaryNav();
         $action->elementEnd('div');
 
         return false;
     }
 
-    function onEndShowHeadElements($action) {
-        if (!$this->serveMobile) {
-            return true;
-        }
-
-        // Fix the zoom
-        $action->element('meta', array('name' => 'viewport', 'content' => 'width=device-width, initial-scale=1.0'));
-        $action->element('meta', array('name' => 'HandheldFriendly', 'content' => 'true'));
-
-        return true;
-    }
-
     function _showLogo($action)
     {
-        $action->elementStart('address', 'vcard');/*
+        $action->elementStart('address', 'vcard');
         if (common_config('singleuser', 'enabled')) {
             $user = User::singleUser();
             $url = common_local_url('showstream', array('nickname' => $user->nickname));
         } else {
             $url = common_local_url('public');
-        }*/
+        }
 
         $action->elementStart('a', array('class' => 'url home bookmark',
-                                         'onclick' => '$("#site_nav_global_primary").toggleClass("opened"); $("#user_info_card").removeClass("opened")'));
+                                         'href' => $url));
 
         if (common_config('site', 'mobilelogo') ||
             file_exists(Theme::file('logo.png')) ||
@@ -333,58 +317,13 @@ class MobileProfilePlugin extends WAP20Plugin
         $action->elementEnd('address');
     }
 
-    function _showPrimaryNav($action)
-    {
-        $user    = common_current_user();
-		$class = $user ? 'loggedin' : 'loggedout';
-        $this->_showLogo($action);
-        $action->elementStart('ul', array('id' => 'site_nav_global_primary', 'class' => 'nav_primary_'.$class));
-
-		// TRANS: Tooltip for main menu option "Rules".
-		$action->menuItem(common_local_url('public'),
-						_m('MENU', 'Public'));
-		// TRANS: Tooltip for main menu option "Rules".
-		$action->menuItem(common_local_url('doc', array('title' => 'faq')),
-						_m('MENU', 'FAQ'));
-		// TRANS: Tooltip for main menu option "Rules".
-		$action->menuItem(common_local_url('doc', array('title' => 'rules')),
-						_m('MENU', 'Rules'));
-		// TRANS: Tooltip for main menu option "Rules".
-		$action->menuItem(common_local_url('staff'),
-						_m('MENU', 'Staff'));
-			if ($user || !common_config('site', 'private')) {
-				$action->menuItem(common_local_url('peoplesearch'),
-								_m('Search'));
-			}
-		
-
-            if($user) {
-                if(($user->hasRole(Profile_role::ADMINISTRATOR) || $user->hasRole(Profile_role::MODERATOR)) &&
-                    Event::handle('StartAdminDropdown', array($action))) {
-
-
-                    if ($user->hasRight(Right::CONFIGURESITE)) {
-                        // TRANS: Tooltip for menu option "Admin".
-                        $tooltip = _m('TOOLTIP', 'Change site configuration');
-                        $action->menuItem(common_local_url('siteadminpanel'),
-                            // TRANS: Main menu option when logged in and site admin for access to site configuration.
-                            _m('MENU', 'Admin'), $tooltip, false, 'nav_admin');
-                    }
-
-                    Event::handle('EndAdminDropdown', array($action));
-
-                }
-            }
-        $action->elementEnd('ul');
-    }
-/*
     function onStartShowAside($action)
     {
         if ($this->serveMobile) {
             return false;
         }
     }
-*/ /*
+
     function onStartShowLocalNavBlock($action)
     {
         if ($this->serveMobile) {
@@ -392,10 +331,11 @@ class MobileProfilePlugin extends WAP20Plugin
             $action->element('a', array('href' => '#', 'id' => 'navtoggle'), 'Show Navigation');
         return true;
         }
-    }*/
+    }
 
     function onEndShowScripts($action)
     {
+        // @todo FIXME: "Show Navigation" / "Hide Navigation" needs i18n
         $action->inlineScript('
             $(function() {
                 $("#mobile-toggle-disable").click(function() {
@@ -408,10 +348,24 @@ class MobileProfilePlugin extends WAP20Plugin
                     window.location.reload();
                     return false;
                 });
+                $("#navtoggle").click(function () {
+                          $("#site_nav_local_views").fadeToggle();
+                          var text = $("#navtoggle").text();
+                          $("#navtoggle").text(
+                          text == "Show Navigation" ? "Hide Navigation" : "Show Navigation");
+                });
             });'
         );
-		if($this->serveMobile)
-			$action->script(Plugin::staticPath('MobileProfile', 'mobile.js'));
+
+        if ($this->serveMobile) {
+            $action->inlineScript('
+                $(function() {
+        	        $(".checkbox-wrapper").unbind("click");
+                });'
+            );
+        }
+
+
     }
 
 
@@ -456,7 +410,7 @@ class MobileProfilePlugin extends WAP20Plugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'MobileProfile',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Sarven Capadisli',
                             'homepage' => 'http://status.net/wiki/Plugin:MobileProfile',
                             'rawdescription' =>

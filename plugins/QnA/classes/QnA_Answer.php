@@ -56,39 +56,6 @@ class QnA_Answer extends Managed_DataObject
     public $created;     // datetime
 
     /**
-     * Get an instance by key
-     *
-     * This is a utility method to get a single instance with a given key value.
-     *
-     * @param string $k Key to use to lookup
-     * @param mixed  $v Value to lookup
-     *
-     * @return QnA_Answer object found, or null for no hits
-     *
-     */
-    function staticGet($k, $v=null)
-    {
-        return Memcached_DataObject::staticGet('QnA_Answer', $k, $v);
-    }
-
-    /**
-     * Get an instance by compound key
-     *
-     * This is a utility method to get a single instance with a given set of
-     * key-value pairs. Usually used for the primary key for a compound key; thus
-     * the name.
-     *
-     * @param array $kv array of key-value mappings
-     *
-     * @return QA_Answer object found, or null for no hits
-     *
-     */
-    function pkeyGet($kv)
-    {
-        return Memcached_DataObject::pkeyGet('QnA_Answer', $kv);
-    }
-
-    /**
      * The One True Thingy that must be defined and declared.
      */
     public static function schemaDef()
@@ -136,9 +103,9 @@ class QnA_Answer extends Managed_DataObject
      *
      * @return QnA_Answer found response or null
      */
-    function getByNotice($notice)
+    static function getByNotice($notice)
     {
-        $answer = self::staticGet('uri', $notice->uri);
+        $answer = self::getKV('uri', $notice->uri);
         if (empty($answer)) {
             throw new Exception("No answer with URI {$notice->uri}");
         }
@@ -152,12 +119,12 @@ class QnA_Answer extends Managed_DataObject
      */
     function getNotice()
     {
-        return Notice::staticGet('uri', $this->uri);
+        return Notice::getKV('uri', $this->uri);
     }
 
     static function fromNotice($notice)
     {
-        return QnA_Answer::staticGet('uri', $notice->uri);
+        return QnA_Answer::getKV('uri', $notice->uri);
     }
 
     function bestUrl()
@@ -172,7 +139,7 @@ class QnA_Answer extends Managed_DataObject
      */
     function getQuestion()
     {
-        $question = QnA_Question::staticGet('id', $this->question_id);
+        $question = QnA_Question::getKV('id', $this->question_id);
         if (empty($question)) {
             // TRANS: Exception thown when getting a question with a non-existing ID.
             // TRANS: %s is the non-existing question ID.
@@ -183,7 +150,7 @@ class QnA_Answer extends Managed_DataObject
 
     function getProfile()
     {
-        $profile = Profile::staticGet('id', $this->profile_id);
+        $profile = Profile::getKV('id', $this->profile_id);
         if (empty($profile)) {
             // TRANS: Exception thown when getting a profile with a non-existing ID.
             // TRANS: %s is the non-existing profile ID.

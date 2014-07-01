@@ -34,9 +34,6 @@ class Login_token extends Managed_DataObject
     public $created;                         // datetime()   not_null
     public $modified;                        // timestamp()   not_null default_CURRENT_TIMESTAMP
 
-    /* Static get */
-    function staticGet($k,$v=NULL) { return Memcached_DataObject::staticGet('Login_token',$k,$v); }
-
     /* the code above is auto generated do not remove the tag below */
     ###END_AUTOCODE
 
@@ -60,7 +57,7 @@ class Login_token extends Managed_DataObject
 
     function makeNew($user)
     {
-        $login_token = Login_token::staticGet('user_id', $user->id);
+        $login_token = Login_token::getKV('user_id', $user->id);
 
         if (!empty($login_token)) {
             $login_token->delete();
@@ -69,7 +66,7 @@ class Login_token extends Managed_DataObject
         $login_token = new Login_token();
 
         $login_token->user_id = $user->id;
-        $login_token->token   = common_good_rand(16);
+        $login_token->token   = common_random_hexstr(16);
         $login_token->created = common_sql_now();
 
         $result = $login_token->insert();

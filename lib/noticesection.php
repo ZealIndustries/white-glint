@@ -50,6 +50,8 @@ define('NOTICES_PER_SECTION', 6);
 
 class NoticeSection extends Section
 {
+    protected $maxchars = 140;
+
     function showContent()
     {
         $notices = $this->getNotices();
@@ -78,14 +80,14 @@ class NoticeSection extends Section
         }
         $this->out->elementStart('li', 'hentry notice');
         $this->out->elementStart('div', 'entry-title');
-        $avatar = $profile->getAvatar(AVATAR_MINI_SIZE);
         $this->out->elementStart('span', 'vcard author');
         $this->out->elementStart('a', array('title' => ($profile->fullname) ?
                                             $profile->fullname :
                                             $profile->nickname,
                                             'href' => $profile->profileurl,
                                             'class' => 'url'));
-        $this->out->element('img', array('src' => (($avatar) ? $avatar->displayUrl() :  Avatar::defaultImage(AVATAR_MINI_SIZE)),
+        $avatarUrl = $profile->avatarUrl(AVATAR_MINI_SIZE);
+        $this->out->element('img', array('src' => $avatarUrl,
                                          'width' => AVATAR_MINI_SIZE,
                                          'height' => AVATAR_MINI_SIZE,
                                          'class' => 'avatar photo',
@@ -98,7 +100,9 @@ class NoticeSection extends Section
         $this->out->elementEnd('span');
 
         $this->out->elementStart('p', 'entry-content');
-        $this->out->raw($notice->rendered);
+        $this->out->text(mb_strlen($notice->content) > $this->maxchars
+            ? mb_substr($notice->content, 0, $this->maxchars) . '[…]'
+            : $notice->content);
         $this->out->elementEnd('p');
 
         $this->out->elementStart('div', 'entry_content');

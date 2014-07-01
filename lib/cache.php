@@ -95,7 +95,7 @@ class Cache
             $base_key = self::keyize(common_config('site', 'name'));
         }
 
-        return 'statusnet:' . $base_key . ':' . $extra;
+        return 'gnusocial:' . $base_key . ':' . $extra;
     }
 
     /**
@@ -125,14 +125,12 @@ class Cache
 	
         if (empty($prefix)) {
 	    
-            $plugins     = StatusNet::getActivePlugins();
-            $names       = array();
+            $names   = array();
 	    
-            foreach ($plugins as $plugin) {
-                $names[] = $plugin[0];
+            foreach (StatusNet::getActivePlugins() as $plugin=>$attrs) {
+                $names[] = $plugin;
             }
 	    
-            $names = array_unique($names);
             asort($names);
 	    
             // Unique enough.
@@ -141,7 +139,7 @@ class Cache
 
             $build = common_config('site', 'build');
 
-            $prefix = STATUSNET_VERSION.':'.$build.':'.$uniq;
+            $prefix = GNUSOCIAL_VERSION.':'.$build.':'.$uniq;
         }
 	
         return Cache::key($prefix.':'.$extra);

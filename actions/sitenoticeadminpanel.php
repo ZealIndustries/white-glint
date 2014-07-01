@@ -86,9 +86,6 @@ class SitenoticeadminpanelAction extends AdminPanelAction
     function saveSettings()
     {
         $siteNotice = $this->trimmed('site-notice');
-        $siteNoticeTitle = $this->trimmed('site-notice-title');
-        $siteNoticeLink = $this->trimmed('site-notice-link');
-        $siteNoticeEnd = $this->trimmed('site-notice-end');
 
         // assert(all values are valid);
         // This throws an exception on validation errors
@@ -97,8 +94,7 @@ class SitenoticeadminpanelAction extends AdminPanelAction
 
         $config = new Config();
 
-        $result = Config::save('site', 'notice', $siteNotice) && Config::save('site', 'notice_title', $siteNoticeTitle)
-			&& Config::save('site', 'notice_link', $siteNoticeLink) && Config::save('site', 'notice_end', $siteNoticeEnd);
+        $result = Config::save('site', 'notice', $siteNotice);
 
         if (!$result) {
             // TRANS: Server error displayed when saving a site-wide notice was impossible.
@@ -118,13 +114,13 @@ class SitenoticeadminpanelAction extends AdminPanelAction
         }
 
         // scrub HTML input
-/* It's our site, let us use HTML :<
+
         $config = array(
             'safe' => 1,
             'deny_attribute' => 'id,style,on*'
         );
 
-        $siteNotice = htmLawed($siteNotice, $config);*/
+        $siteNotice = htmLawed($siteNotice, $config);
     }
 }
 
@@ -174,17 +170,6 @@ class SiteNoticeAdminPanelForm extends AdminForm
         $this->out->elementStart('ul', 'form_data');
 
         $this->out->elementStart('li');
-        $this->out->input(
-            'site-notice-title',
-            // TRANS: Label for site-wide notice text field in admin panel.
-            _('Site notice title'),
-            common_config('site', 'notice_title'),
-            // TRANS: Tooltip for site-wide notice text field in admin panel.
-            _('Title for site-wide notice text')
-        );
-        $this->out->elementEnd('li');
-
-        $this->out->elementStart('li');
         $this->out->textarea(
             'site-notice',
             // TRANS: Label for site-wide notice text field in admin panel.
@@ -192,28 +177,6 @@ class SiteNoticeAdminPanelForm extends AdminForm
             common_config('site', 'notice'),
             // TRANS: Tooltip for site-wide notice text field in admin panel.
             _('Site-wide notice text (255 characters maximum; HTML allowed)')
-        );
-        $this->out->elementEnd('li');
-
-        $this->out->elementStart('li');
-        $this->out->input(
-            'site-notice-link',
-            // TRANS: Label for site-wide notice text field in admin panel.
-            _('Site notice URL'),
-            common_config('site', 'notice_link'),
-            // TRANS: Tooltip for site-wide notice text field in admin panel.
-            _('URL to info page for site-wide notice')
-        );
-        $this->out->elementEnd('li');
-
-        $this->out->elementStart('li');
-        $this->out->input(
-            'site-notice-end',
-            // TRANS: Label for site-wide notice text field in admin panel.
-            _('Site notice link'),
-            common_config('site', 'notice_end'),
-            // TRANS: Tooltip for site-wide notice text field in admin panel.
-            _('Title for info page link for site-wide notice')
         );
         $this->out->elementEnd('li');
 

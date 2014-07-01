@@ -148,7 +148,7 @@ class BitlyUrlPlugin extends UrlShortenerPlugin
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => sprintf('BitlyUrl (%s)', $this->shortenerName),
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Craig Andrews, Brion Vibber',
                             'homepage' => 'http://status.net/wiki/Plugin:BitlyUrl',
                             'rawdescription' =>
@@ -203,27 +203,6 @@ class BitlyUrlPlugin extends UrlShortenerPlugin
         }
 
         return true;
-    }
-
-    /**
-     * Automatically load the actions and libraries used by the plugin
-     *
-     * @param Class $cls the class
-     *
-     * @return boolean hook return
-     *
-     */
-    function onAutoload($cls)
-    {
-        $base = dirname(__FILE__);
-        $lower = strtolower($cls);
-        switch ($lower) {
-        case 'bitlyadminpanelaction':
-            require_once "$base/$lower.php";
-            return false;
-        default:
-            return true;
-        }
     }
 
     /**

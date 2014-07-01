@@ -176,7 +176,8 @@ class Facebookclient
 
         // If it's not a reply, or if the user WANTS to send @-replies,
         // then, yeah, it can go to Facebook.
-        if (!preg_match('/@[a-zA-Z0-9_]{1,15}\b/u', $this->notice->content) ||
+
+        if (empty($this->notice->reply_to) ||
             ($this->flink->noticesync & FOREIGN_NOTICE_SEND_REPLY)) {
             return true;
         }
@@ -896,7 +897,7 @@ class Facebookclient
      */
     static function facebookStatusId($notice)
     {
-        $n2i = Notice_to_item::staticGet('notice_id', $notice->id);
+        $n2i = Notice_to_item::getKV('notice_id', $notice->id);
 
         if (empty($n2i)) {
             return null;
@@ -978,7 +979,7 @@ class Facebookclient
      */
     function streamRemove()
     {
-        $n2i = Notice_to_item::staticGet('notice_id', $this->notice->id);
+        $n2i = Notice_to_item::getKV('notice_id', $this->notice->id);
 
         if (!empty($this->flink) && !empty($n2i)) {
             try {
@@ -1033,7 +1034,7 @@ class Facebookclient
      */
     function like()
     {
-        $n2i = Notice_to_item::staticGet('notice_id', $this->notice->id);
+        $n2i = Notice_to_item::getKV('notice_id', $this->notice->id);
 
         if (!empty($this->flink) && !empty($n2i)) {
             try {
@@ -1084,7 +1085,7 @@ class Facebookclient
      */
     function unLike()
     {
-        $n2i = Notice_to_item::staticGet('notice_id', $this->notice->id);
+        $n2i = Notice_to_item::getKV('notice_id', $this->notice->id);
 
         if (!empty($this->flink) && !empty($n2i)) {
             try {

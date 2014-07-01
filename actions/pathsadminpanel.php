@@ -92,7 +92,6 @@ class PathsadminpanelAction extends AdminPanelAction
                                  'site' => array('path', 'locale_path', 'ssl', 'sslserver'),
                                  'theme' => array('server', 'dir', 'path', 'sslserver', 'sslpath'),
                                  'avatar' => array('server', 'dir', 'path'),
-                                 'background' => array('server', 'dir', 'path'),
                                  'attachments' => array('server', 'dir', 'path', 'sslserver', 'sslpath')
                                  );
 
@@ -161,12 +160,6 @@ class PathsadminpanelAction extends AdminPanelAction
             // TRANS: Client error in Paths admin panel.
             // TRANS: %s is the avatar directory that could not be written to.
             $this->clientError(sprintf(_('Avatar directory not writable: %s.'), $values['avatar']['dir']));
-        }
-
-        if (empty($values['background']['dir']) || !is_writable($values['background']['dir'])) {
-            // TRANS: Client error in Paths admin panel.
-            // TRANS: %s is the avatar directory that could not be written to.
-            $this->clientError(sprintf(_('Background directory not writable: %s.'), $values['background']['dir']));
         }
 
         // Validate locales dir
@@ -355,42 +348,6 @@ class PathsAdminPanelForm extends AdminForm
                      // TRANS: Tooltip for field label in Paths admin panel.
                      _('Directory where avatars are located.'),
                      'avatar');
-        $this->unli();
-
-        $this->out->elementEnd('ul');
-
-        $this->out->elementEnd('fieldset');
-        $this->out->elementStart('fieldset', array('id' => 'settings_background-paths'));
-        // TRANS: Fieldset legend in Paths admin panel.
-        $this->out->element('legend', null, _('Backgrounds'));
-
-        $this->out->elementStart('ul', 'form_data');
-
-        $this->li();
-        $this->input('server',
-                     // TRANS: Field label in Paths admin panel.
-                     _('Background server'),
-                     // TRANS: Tooltip for field label in Paths admin panel.
-                     _('Server for backgrounds.'),
-                     'background');
-        $this->unli();
-
-        $this->li();
-        $this->input('path',
-                     // TRANS: Field label in Paths admin panel.
-                     _('Background path'),
-                     // TRANS: Tooltip for field label in Paths admin panel.
-                     _('Web path to backgrounds.'),
-                     'background');
-        $this->unli();
-
-        $this->li();
-        $this->input('dir',
-                     // TRANS: Field label in Paths admin panel.
-                     _('Background directory'),
-                     // TRANS: Tooltip for field label in Paths admin panel.
-                     _('Directory where backgrounds are located.'),
-                     'background');
         $this->unli();
 
         $this->out->elementEnd('ul');

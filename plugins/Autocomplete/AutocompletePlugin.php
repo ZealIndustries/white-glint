@@ -39,43 +39,23 @@ class AutocompletePlugin extends Plugin
         parent::__construct();
     }
 
-    function onAutoload($cls)
-    {
-        switch ($cls)
-        {
-         case 'AutocompleteAction':
-            require_once(INSTALLDIR.'/plugins/Autocomplete/autocomplete.php');
-            return false;
-        }
-    }
-
     function onEndShowScripts($action){
         if (common_logged_in()) {
             $action->element('span', array('id' => 'autocomplete-api',
                                            'data-url' => common_local_url('autocomplete')));
-            $action->script($this->path('jquery-autocomplete/jquery.autocomplete.pack.js'));
-            $action->script($this->path('Autocomplete.js'));
-        }
-    }
-
-    function onEndShowStatusNetStyles($action)
-    {
-        if (common_logged_in()) {
-            $action->cssLink($this->path('jquery-autocomplete/jquery.autocomplete.css'));
+            $action->script($this->path('js/autocomplete.go.js'));
         }
     }
 
     function onRouterInitialized($m)
     {
-        if (common_logged_in()) {
-            $m->connect('main/autocomplete/suggest', array('action'=>'autocomplete'));
-        }
+        $m->connect('main/autocomplete/suggest', array('action'=>'autocomplete'));
     }
 
     function onPluginVersion(&$versions)
     {
         $versions[] = array('name' => 'Autocomplete',
-                            'version' => STATUSNET_VERSION,
+                            'version' => GNUSOCIAL_VERSION,
                             'author' => 'Craig Andrews',
                             'homepage' => 'http://status.net/wiki/Plugin:Autocomplete',
                             'rawdescription' =>

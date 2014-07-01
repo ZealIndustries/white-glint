@@ -34,8 +34,6 @@ if (!defined('STATUSNET')) {
     exit(1);
 }
 
-require_once INSTALLDIR . '/lib/apiauth.php';
-
 /**
  * Show a single favorite in Atom Activity Streams format.
  *
@@ -68,14 +66,14 @@ class AtompubshowfavoriteAction extends ApiAuthAction
         $profileId = $this->trimmed('profile');
         $noticeId  = $this->trimmed('notice');
 
-        $this->_profile = Profile::staticGet('id', $profileId);
+        $this->_profile = Profile::getKV('id', $profileId);
 
         if (empty($this->_profile)) {
             // TRANS: Client exception.
             throw new ClientException(_('No such profile.'), 404);
         }
 
-        $this->_notice = Notice::staticGet('id', $noticeId);
+        $this->_notice = Notice::getKV('id', $noticeId);
 
         if (empty($this->_notice)) {
             // TRANS: Client exception thrown when referencing a non-existing notice.

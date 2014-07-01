@@ -62,7 +62,7 @@ class AllrssAction extends Rss10Action
     {
         parent::prepare($args);
         $nickname   = $this->trimmed('nickname');
-        $this->user = User::staticGet('nickname', $nickname);
+        $this->user = User::getKV('nickname', $nickname);
 
         if (!$this->user) {
             // TRANS: Client error when user not found for an rss related action.
@@ -129,7 +129,6 @@ class AllrssAction extends Rss10Action
         if (!$profile) {
             return null;
         }
-        $avatar = $profile->getAvatar(AVATAR_PROFILE_SIZE);
-        return $avatar ? $avatar->url : null;
+        return $profile->avatarUrl(AVATAR_PROFILE_SIZE);
     }
 }

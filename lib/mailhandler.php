@@ -18,7 +18,6 @@
  */
 
 require_once(INSTALLDIR . '/lib/mail.php');
-require_once(INSTALLDIR . '/lib/mediafile.php');
 require_once('Mail/mimeDecode.php');
 
 // @todo FIXME: we use both Mail_mimeDecode and mailparse
@@ -74,7 +73,7 @@ class MailHandler
             $mf = null;
 
             try {
-                $mf = MediaFile::fromFileHandle($attachment, $user);
+                $mf = MediaFile::fromFilehandle($attachment, $user->getProfile());
             } catch(ClientException $ce) {
                 $this->error($from, $ce->getMessage());
             }
@@ -109,9 +108,9 @@ class MailHandler
         }
         $from = $froms[0];
         $addr = common_canonical_email($from['address']);
-        $user = User::staticGet('email', $addr);
+        $user = User::getKV('email', $addr);
         if (!$user) {
-            $user = User::staticGet('smsemail', $addr);
+            $user = User::getKV('smsemail', $addr);
         }
         return $user;
     }

@@ -84,7 +84,7 @@ class UnsubscribepeopletagAction extends Action
 
         $id = intval($this->arg('id'));
         if ($id) {
-            $this->peopletag = Profile_list::staticGet('id', $id);
+            $this->peopletag = Profile_list::getKV('id', $id);
         } else {
             // TRANS: Client error displayed when trying to perform an action without providing an ID.
             $this->clientError(_('No ID given.'), 404);
@@ -97,7 +97,7 @@ class UnsubscribepeopletagAction extends Action
             return false;
         }
 
-        $this->tagger = Profile::staticGet('id', $this->peopletag->tagger);
+        $this->tagger = Profile::getKV('id', $this->peopletag->tagger);
 
         return true;
     }
@@ -133,7 +133,7 @@ class UnsubscribepeopletagAction extends Action
             $lf = new SubscribePeopletagForm($this, $this->peopletag);
             $lf->show();
             $this->elementEnd('body');
-            $this->elementEnd('html');
+            $this->endHTML();
         } else {
             if (common_get_returnto()) {
                 common_redirect(common_get_returnto(), 303);
